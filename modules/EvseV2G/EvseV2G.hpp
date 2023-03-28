@@ -27,6 +27,8 @@ struct Conf {
     bool supported_ISO15118_2;
     std::string highlevel_authentication_mode;
     std::string tls_security;
+    std::string certs_path;
+    std::string evse_leaf_key_password;
 };
 
 class EvseV2G : public Everest::ModuleBase {

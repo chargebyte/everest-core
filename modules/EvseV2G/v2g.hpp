@@ -187,6 +187,9 @@ struct v2g_context {
     char* privateKeyFilePath;
     char* certFilePath;
 
+    std::string certs_path;
+    std::string evse_leaf_key_password;
+
     uint32_t network_read_timeout; /* in milli seconds */
 
     enum tls_security_level tls_security;

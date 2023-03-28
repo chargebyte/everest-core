@@ -47,6 +47,9 @@ void ISO15118_chargerImpl::init() {
         v2g_ctx->tls_security = TLS_SECURITY_PROHIBIT;
         dlog(DLOG_LEVEL_DEBUG, "tls_security prohibit");
     }
+
+    v2g_ctx->certs_path = mod->config.certs_path;
+    v2g_ctx->evse_leaf_key_password = mod->config.evse_leaf_key_password;
 }
 
 void ISO15118_chargerImpl::ready() {
