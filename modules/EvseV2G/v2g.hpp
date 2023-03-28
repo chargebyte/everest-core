@@ -191,6 +191,7 @@ struct v2g_context {
     std::string evse_leaf_key_password;
 
     uint32_t network_read_timeout; /* in milli seconds */
+    uint32_t network_read_timeout_tls; /* in milli seconds */
 
     enum tls_security_level tls_security;
 

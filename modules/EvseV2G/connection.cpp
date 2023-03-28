@@ -585,7 +585,7 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     mbedtls_ssl_conf_session_cache(&ctx->ssl_config, &cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
     mbedtls_ssl_conf_ciphersuites(&ctx->ssl_config, v2g_cipher_suites);
-    mbedtls_ssl_conf_read_timeout(&ctx->ssl_config, ctx->network_read_timeout);
+    mbedtls_ssl_conf_read_timeout(&ctx->ssl_config, ctx->network_read_timeout_tls);
 
     if (file_path != NULL)
         free(file_path);
