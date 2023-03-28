@@ -42,12 +42,13 @@
 #define MBEDTLS_DEBUG_LEVEL_NO_DEBUG 0
 
 mbedtls_ctr_drbg_context ctr_drbg;
+mbedtls_entropy_context entropy;
 #if defined(MBEDTLS_SSL_CACHE_C)
 mbedtls_ssl_cache_context cache;
 #endif
 
 static const int v2g_cipher_suites[] = {MBEDTLS_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256,
-                                        MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, 0};
+                                        MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256};
 
 /*!
  * \brief connection_create_socket This function creates a tcp/tls socket
@@ -111,6 +112,45 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
     return s;
 }
 
+static int connection_ssl_initialize(void)
+{
+	char random_data[64];
+	int rv;
+
+	if (generate_random_data(random_data, sizeof(random_data)) != 0) {
+		dlog(DLOG_LEVEL_ERROR, "generate_random_data failed: %s", strerror(errno));
+		return -1;
+	}
+
+	mbedtls_entropy_init(&entropy);
+
+	if ((rv = mbedtls_entropy_gather(&entropy)) != 0) {
+		char error_buf[100];
+		mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+		dlog(DLOG_LEVEL_ERROR, "mbedtls_entropy_gather returned -0x%04x - %s", -rv, error_buf);
+		mbedtls_entropy_free(&entropy);
+		return -1;
+	}
+
+	mbedtls_ctr_drbg_init(&ctr_drbg);
+
+	if ((rv = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+									(const unsigned char *)random_data, sizeof(random_data))) != 0) {
+		char error_buf[100];
+		mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+		dlog(DLOG_LEVEL_ERROR, "mbedtls_ctr_drbg_seed returned -0x%04x - %s", -rv, error_buf);
+		mbedtls_ctr_drbg_free(&ctr_drbg);
+		mbedtls_entropy_free(&entropy);
+		return -1;
+	}
+
+#if defined(MBEDTLS_SSL_CACHE_C)
+	mbedtls_ssl_cache_init(&cache);
+#endif
+
+	return 0;
+}
+
 /*!
  * \brief check_interface This function checks the interface name. The interface name is
  * configured automatically in case it is pre-initialized to “auto.
@@ -154,6 +194,7 @@ int connection_init(struct v2g_context* v2g_ctx) {
 
     if (v2g_ctx->tls_security != TLS_SECURITY_PROHIBIT) {
         v2g_ctx->local_tls_addr = static_cast<sockaddr_in6*>(calloc(1, sizeof(*v2g_ctx->local_tls_addr)));
+        connection_ssl_initialize();
         if (!v2g_ctx->local_tls_addr) {
             dlog(DLOG_LEVEL_ERROR, "Failed to allocate memory for TLS address");
             return -1;
@@ -693,7 +734,7 @@ static void* connection_handle_tls(void* data) {
     mbedtls_ssl_init(ssl);
 
     /* Code to start the ssl-key-log-tracing */
-    // Activate full debugging to receive the demanded  key-log-msgs
+    // Activate full debugging to receive the demanded key-log-msgs
 
     if (NULL != conn->ctx->tls_log_ctx.file) {
         mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_VERBOSE);
@@ -708,7 +749,9 @@ static void* connection_handle_tls(void* data) {
 
     /* get the SSL context ready */
     if ((rv = mbedtls_ssl_setup(ssl, ssl_config)) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "mbedtls_ssl_setup returned -0x%04x", -rv);
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "mbedtls_ssl_setup returned: %s (-0x%04x)", error_buf, -rv);
         goto thread_exit;
     }
     //    mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_VERBOSE);
@@ -736,10 +779,8 @@ static void* connection_handle_tls(void* data) {
                 for (pkiIdx = 0; caChain != NULL && (caChain != mbedtls_ssl_own_cert(ssl)); pkiIdx++) {
                     caChain = ssl_config->key_cert->next->cert;
                 }
-                sprintf(conn->ctx->certFilePath, "%s/%u", DEFAULT_PKI_PATH, pkiIdx);
-                sprintf(conn->ctx->privateKeyFilePath, "%s/%u", DEFAULT_KEY_PATH, pkiIdx);
 
-                dlog(DLOG_LEVEL_INFO, "Using v2g-root cert of index #%u for tls-handshake", pkiIdx);
+                dlog(DLOG_LEVEL_INFO, "Using V2G-root cert of index #%u for TLS-handshake", pkiIdx);
             }
 
             if (rv != 0) {
