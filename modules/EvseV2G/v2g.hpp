@@ -217,7 +217,6 @@ struct v2g_context {
 
     struct {
         float evse_ac_current_limit; // default is 0
-        char keyFilePw[MAX_V2G_ROOT_CERTS][MAX_KEY_PW_LEN];
     } basic_config; // This config will not reseted after beginning of a new charging session
 
     /* actual charging state */

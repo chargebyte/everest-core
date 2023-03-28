@@ -276,7 +276,6 @@ struct v2g_context* v2g_ctx_create(ISO15118_chargerImplBase* p_chargerImplBase) 
 
     /* This evse parameter will be initialized once */
     ctx->basic_config.evse_ac_current_limit = 0.0f;
-    memset(ctx->basic_config.keyFilePw, 0, sizeof(ctx->basic_config.keyFilePw));
 
     ctx->certFilePath = NULL;
     ctx->privateKeyFilePath = NULL;

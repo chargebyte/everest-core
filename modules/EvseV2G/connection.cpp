@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include <string>
 
 #ifndef SYSCONFDIR
 #define SYSCONFDIR "/etc"
@@ -468,107 +469,89 @@ static void connection_teardown(struct v2g_connection* conn) {
 static bool connection_init_tls(struct v2g_context* ctx) {
 
     int rv;
-
-    char* file_path = static_cast<char*>(
-        malloc(max(std::string(DEFAULT_PKI_PATH).size(), std::string(DEFAULT_KEY_PATH).size()) + MAX_FILE_NAME_LENGTH));
     uint8_t max_idx = 0;
-    mbedtls_x509_crt* root_crt = NULL;
 
-    /* Load supported v2g root certificates */
+    std::string v2g_root_cert_path = ctx->certs_path + "/ca/v2g/V2G_ROOT_CA.pem";
+    std::string cpo_sub1_cert_path = ctx->certs_path + "/ca/cso/CPO_SUB_CA1.pem";
+    std::string cpo_sub2_cert_path = ctx->certs_path + "/ca/cso/CPO_SUB_CA2.pem";
+    std::string evse_leaf_cert_path = ctx->certs_path + "/client/cso/SECC_LEAF.pem";
+    std::string evse_leaf_key_path = ctx->certs_path + "/client/cso/SECC_LEAF.key";
 
-    // Determine number of v2g-folders
-    DIR* d = opendir(DEFAULT_PKI_PATH); // open the path
-    struct dirent* dir;                 // for the directory entries
-
-    if (d == NULL) {
-        dlog(DLOG_LEVEL_ERROR, "Unable to open pki file path: %s", DEFAULT_PKI_PATH);
+    uint8_t num_of_v2g_root = 1;
+    mbedtls_x509_crt* root_crt = &ctx->v2g_root_crt;
+    
+    ctx->num_of_tls_crt = 1;
+    ctx->evseTlsCrt = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt) * (num_of_v2g_root));
+    ctx->evse_tls_crt_key = (mbedtls_pk_context*)malloc(sizeof(mbedtls_pk_context) * (num_of_v2g_root));
+    
+    if (ctx->evseTlsCrt == NULL || ctx->evse_tls_crt_key == NULL) {
+        dlog(DLOG_LEVEL_ERROR, "Failed to allocate memory!");
         goto error_out;
     }
 
-    while ((dir = readdir(d)) != NULL)
-        if ((dir->d_type == DT_DIR) && (std::string(dir->d_name).size() && isdigit((int)dir->d_name[0])) &&
-            ((atoi(dir->d_name) <= UINT8_MAX))) {
-            max_idx = max(max_idx, (uint8_t)(atoi(dir->d_name)));
-        }
-
-    closedir(d);
-
-    dlog(DLOG_LEVEL_INFO, "PKI folders found: %i", max_idx + 1);
-
-    ctx->num_of_tls_crt = 0;
-    ctx->evseTlsCrt = static_cast<mbedtls_x509_crt*>(malloc(sizeof(mbedtls_x509_crt) * (max_idx + 1)));
-    ctx->evse_tls_crt_key = static_cast<mbedtls_pk_context*>(malloc(sizeof(mbedtls_pk_context) * (max_idx + 1)));
-    root_crt = &ctx->v2g_root_crt;
-
-    for (uint8_t pki_idx = 0; pki_idx <= max_idx; pki_idx++) {
-        mbedtls_x509_crt_init(&ctx->evseTlsCrt[pki_idx]);
-        char v2g_root_file_name[std::string(V2G_ROOT_CRT_NAME).size() + std::string(".xxx").size() + 1];
-        sprintf(file_path, "%s/%u", DEFAULT_PKI_PATH, pki_idx);
-        bool got_file_name =
-            get_dir_filename(v2g_root_file_name, sizeof(v2g_root_file_name), file_path, V2G_ROOT_CRT_NAME);
-        if (got_file_name) {
-            sprintf(file_path, "%s/%u/%s", DEFAULT_PKI_PATH, pki_idx, v2g_root_file_name);
-            dlog(DLOG_LEVEL_TRACE, "Checking PKI root file %s", file_path);
-            if ((rv = mbedtls_x509_crt_parse_file(&ctx->v2g_root_crt, file_path)) != 0) {
-                char error_buf[100];
-                mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-                dlog(DLOG_LEVEL_ERROR, "Unable to parse v2g root certificate %s (err: -0x%04x - %s)", file_path, -rv,
-                     error_buf);
-                goto error_out;
-            }
-        } else {
-            dlog(DLOG_LEVEL_ERROR, "No file matching %s found in path %s", V2G_ROOT_CRT_NAME, file_path);
-            goto error_out;
-        }
+    /* Load supported v2g root certificates */
+    if ((rv = mbedtls_x509_crt_parse_file(root_crt, v2g_root_cert_path.c_str())) != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "Unable to parse v2g root certificate %s (err: -0x%04x - %s)", v2g_root_cert_path.c_str(), -rv,
+             error_buf);
+        goto error_out;
+    }
 
 #ifdef MBEDTLS_SSL_TRUSTED_CA_KEYS
-        /* Configure trusted ca certificates */
-        unsigned char trusted_id[20];
-        if (root_crt->next != NULL)
-            root_crt = root_crt->next;
-        mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
-        mbedtls_ssl_conf_trusted_authority(&ctx->ssl_config, trusted_id, sizeof(trusted_id),
+    /* Configure trusted ca certificates */
+    unsigned char trusted_id[20];
+    if (root_crt->next != NULL)
+        root_crt = root_crt->next;
+    mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
+    mbedtls_ssl_conf_trusted_authority(&ctx->ssl_config, trusted_id, sizeof(trusted_id),
                                            MBEDTLS_SSL_CA_ID_TYPE_CERT_SHA1_HASH);
-        // dlog(DLOG_LEVEL_ERROR, "rootCrtrootCrtrootCrtrootCrt %s", rootCrt->issuer.val.p);
+ //   dlog(DLOG_LEVEL_ERROR, "rootCrtrootCrtrootCrtrootCrt %s", root_crt->issuer.val.p);
 #endif // MBEDTLS_SSL_TRUSTED_CA_KEYS
 
-        sprintf(file_path, "%s/%u/%s", DEFAULT_KEY_PATH, pki_idx, EVSE_LEAF_KEY_FILE_NAME);
-        mbedtls_pk_init(&ctx->evse_tls_crt_key[pki_idx]);
-        rv = mbedtls_pk_parse_keyfile(&ctx->evse_tls_crt_key[pki_idx], file_path, ctx->basic_config.keyFilePw[0]);
-        if (rv != 0) {
-            char error_buf[100];
-            mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-            dlog(DLOG_LEVEL_ERROR, "mbedtls_pk_parse_keyfile returned -0x%04x - %s", -rv, error_buf);
-            goto error_out;
-        }
+    mbedtls_pk_init(&ctx->evse_tls_crt_key[0]);
+    rv = mbedtls_pk_parse_keyfile(&ctx->evse_tls_crt_key[0], evse_leaf_key_path.c_str(), ctx->evse_leaf_key_password.c_str());
+    if (rv != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "mbedtls_pk_parse_keyfile returned -0x%04x - %s", -rv, error_buf);
+        mbedtls_pk_free(&ctx->evse_tls_crt_key[0]);
+        goto error_out;
+    }
 
-        sprintf(file_path, "%s/%u", DEFAULT_PKI_PATH, pki_idx);
-        char file_names[MAX_PKI_CA_LENGTH][MAX_FILE_NAME_LENGTH] = {0};
-        uint8_t num_of_files = get_dir_numbered_file_names(file_names, file_path, "CPO_", "", 0, MAX_PKI_CA_LENGTH);
+    mbedtls_x509_crt_init(&ctx->evseTlsCrt[0]);
 
-        for (uint8_t idx = 0; idx < num_of_files; idx++) {
-            sprintf(file_path, "%s/%u/%s", DEFAULT_PKI_PATH, pki_idx, file_names[idx]);
-            dlog(DLOG_LEVEL_TRACE, "Checking PKI file %s", file_path);
+    if ((rv = mbedtls_x509_crt_parse_file(&ctx->evseTlsCrt[0], evse_leaf_cert_path.c_str())) != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "Unable to parse evse-leaf certficate %s (err: -0x%04x - %s)", evse_leaf_cert_path.c_str(),
+             -rv, error_buf);
+        mbedtls_pk_free(&ctx->evse_tls_crt_key[0]);
+        goto error_out;
+    }
+    if ((rv = mbedtls_x509_crt_parse_file(&ctx->evseTlsCrt[0], cpo_sub2_cert_path.c_str())) != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "Unable to parse CPO-sub2 certficate %s (err: -0x%04x - %s)", cpo_sub2_cert_path.c_str(),
+             -rv, error_buf);
+        mbedtls_pk_free(&ctx->evse_tls_crt_key[0]);
+        goto error_out;
+    }
+    if ((rv = mbedtls_x509_crt_parse_file(&ctx->evseTlsCrt[0], cpo_sub1_cert_path.c_str())) != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "Unable to parse CPO-sub1 certficate %s (err: -0x%04x - %s)", cpo_sub1_cert_path.c_str(),
+             -rv, error_buf);
+        mbedtls_pk_free(&ctx->evse_tls_crt_key[0]);
+        goto error_out;
+    }
 
-            if ((rv = mbedtls_x509_crt_parse_file(&ctx->evseTlsCrt[pki_idx], file_path)) != 0) {
-                char error_buf[100];
-                mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-                dlog(DLOG_LEVEL_ERROR, "Unable to parse evse-leaf certficate %s (err: -0x%04x - %s idx: %i)", file_path,
-                     -rv, error_buf, idx);
-                mbedtls_pk_free(&ctx->evse_tls_crt_key[pki_idx]);
-                goto error_out;
-            }
-        }
-
-        ctx->num_of_tls_crt++;
-
-        if ((rv = mbedtls_ssl_conf_own_cert(&ctx->ssl_config, &ctx->evseTlsCrt[pki_idx],
-                                            &ctx->evse_tls_crt_key[pki_idx])) != 0) {
-            char error_buf[100];
-            mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-            dlog(DLOG_LEVEL_ERROR, "mbedtls_ssl_conf_own_cert returned -0x%04x - %s", -rv, error_buf);
-            goto error_out;
-        }
+    if ((rv = mbedtls_ssl_conf_own_cert(&ctx->ssl_config, &ctx->evseTlsCrt[0],
+                                        &ctx->evse_tls_crt_key[0])) != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "mbedtls_ssl_conf_own_cert returned -0x%04x - %s", -rv, error_buf);
+        goto error_out;
     }
 
     if ((rv = mbedtls_ssl_config_defaults(&ctx->ssl_config, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM,
@@ -587,14 +570,10 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     mbedtls_ssl_conf_ciphersuites(&ctx->ssl_config, v2g_cipher_suites);
     mbedtls_ssl_conf_read_timeout(&ctx->ssl_config, ctx->network_read_timeout_tls);
 
-    if (file_path != NULL)
-        free(file_path);
     return true;
 
 error_out:
 
-    if (file_path != NULL)
-        free(file_path);
     return false;
 }
 
