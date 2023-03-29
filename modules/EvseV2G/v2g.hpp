@@ -184,9 +184,6 @@ struct v2g_context {
     struct sockaddr_in6* local_tcp_addr;
     struct sockaddr_in6* local_tls_addr;
 
-    char* privateKeyFilePath;
-    char* certFilePath;
-
     std::string certs_path;
     std::string evse_leaf_key_password;
 

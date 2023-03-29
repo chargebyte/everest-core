@@ -31,9 +31,6 @@
 #define SYSCONFDIR "/etc"
 #endif
 
-#define DEFAULT_PKI_PATH SYSCONFDIR "/secc/pki/certs"
-#define DEFAULT_KEY_PATH SYSCONFDIR "/secc/pki/keys"
-
 #define DEFAULT_SOCKET_BACKLOG        3
 #define DEFAULT_TCP_PORT              61341
 #define DEFAULT_TLS_PORT              64109
@@ -479,7 +476,7 @@ static bool connection_init_tls(struct v2g_context* ctx) {
 
     uint8_t num_of_v2g_root = 1;
     mbedtls_x509_crt* root_crt = &ctx->v2g_root_crt;
-    
+
     ctx->num_of_tls_crt = 1;
     ctx->evseTlsCrt = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt) * (num_of_v2g_root));
     ctx->evse_tls_crt_key = (mbedtls_pk_context*)malloc(sizeof(mbedtls_pk_context) * (num_of_v2g_root));
@@ -501,12 +498,9 @@ static bool connection_init_tls(struct v2g_context* ctx) {
 #ifdef MBEDTLS_SSL_TRUSTED_CA_KEYS
     /* Configure trusted ca certificates */
     unsigned char trusted_id[20];
-    if (root_crt->next != NULL)
-        root_crt = root_crt->next;
     mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
     mbedtls_ssl_conf_trusted_authority(&ctx->ssl_config, trusted_id, sizeof(trusted_id),
                                            MBEDTLS_SSL_CA_ID_TYPE_CERT_SHA1_HASH);
- //   dlog(DLOG_LEVEL_ERROR, "rootCrtrootCrtrootCrtrootCrt %s", root_crt->issuer.val.p);
 #endif // MBEDTLS_SSL_TRUSTED_CA_KEYS
 
     mbedtls_pk_init(&ctx->evse_tls_crt_key[0]);
@@ -694,13 +688,6 @@ static void* connection_handle_tls(void* data) {
     conn->ctx->evseTlsCrt = NULL;
     conn->ctx->evse_tls_crt_key = NULL;
 
-    if (NULL != conn->ctx->privateKeyFilePath)
-        free(conn->ctx->privateKeyFilePath);
-    if (NULL != conn->ctx->certFilePath)
-        free(conn->ctx->certFilePath);
-    conn->ctx->certFilePath = static_cast<char*>(malloc(std::string(DEFAULT_PKI_PATH).size() + 3));
-    conn->ctx->privateKeyFilePath = static_cast<char*>(malloc(std::string(DEFAULT_KEY_PATH).size() + 3));
-
     int rv = -1;
 
     dlog(DLOG_LEVEL_INFO, "Started new TLS connection thread");
@@ -835,15 +822,6 @@ thread_exit:
 
     mbedtls_x509_crt_free(&conn->ctx->v2g_root_crt);
     mbedtls_ssl_config_free(&conn->ctx->ssl_config);
-
-    if (conn->ctx->privateKeyFilePath != NULL) {
-        free(conn->ctx->privateKeyFilePath);
-        conn->ctx->privateKeyFilePath = NULL;
-    }
-    if (conn->ctx->certFilePath != NULL) {
-        free(conn->ctx->certFilePath);
-        conn->ctx->certFilePath = NULL;
-    }
 
     /* cleanup and notify lower layers */
     connection_teardown(conn);
