@@ -26,6 +26,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <string>
+#include <iostream>
+#include <fstream>
 
 #ifndef SYSCONFDIR
 #define SYSCONFDIR "/etc"
@@ -473,6 +475,18 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     std::string cpo_sub2_cert_path = ctx->certs_path + "/ca/cso/CPO_SUB_CA2.pem";
     std::string evse_leaf_cert_path = ctx->certs_path + "/client/cso/SECC_LEAF.pem";
     std::string evse_leaf_key_path = ctx->certs_path + "/client/cso/SECC_LEAF.key";
+    std::string evse_leaf_key_password_path = ctx->certs_path + "/client/cso/SECC_LEAF_PASSWORD.txt";
+
+    /* Read SECC leaf private key password*/
+    std::string secc_leaf_key_password;
+    std::fstream password_file;
+
+    password_file.open(evse_leaf_key_password_path, std::ios::in);
+
+    if (password_file.is_open()) {
+        getline(password_file, secc_leaf_key_password);
+        password_file.close();
+    }
 
     uint8_t num_of_v2g_root = 1;
     mbedtls_x509_crt* root_crt = &ctx->v2g_root_crt;
@@ -504,7 +518,7 @@ static bool connection_init_tls(struct v2g_context* ctx) {
 #endif // MBEDTLS_SSL_TRUSTED_CA_KEYS
 
     mbedtls_pk_init(&ctx->evse_tls_crt_key[0]);
-    rv = mbedtls_pk_parse_keyfile(&ctx->evse_tls_crt_key[0], evse_leaf_key_path.c_str(), ctx->evse_leaf_key_password.c_str());
+    rv = mbedtls_pk_parse_keyfile(&ctx->evse_tls_crt_key[0], evse_leaf_key_path.c_str(), secc_leaf_key_password.c_str());
     if (rv != 0) {
         char error_buf[100];
         mbedtls_strerror(rv, error_buf, sizeof(error_buf));

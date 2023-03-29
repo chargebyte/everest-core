@@ -37,14 +37,9 @@ config:
     default: prohibit
   certs_path:
     description: >-
-      Path to the V2G PnC certificates
+      Path to the V2G PKI
     type: string
     default: /etc/everest/certs
-  evse_leaf_key_password:
-    description: >-
-      Password of the EVSE leaf key file.
-    type: string
-    default: "123456"
 provides:
   charger:
     interface: ISO15118_charger
