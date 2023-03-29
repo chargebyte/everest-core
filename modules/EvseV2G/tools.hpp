@@ -122,4 +122,12 @@ uint8_t get_dir_numbered_file_names(char file_names[MAX_PKI_CA_LENGTH][MAX_FILE_
                                     const char* prefix, const char* suffix, const uint8_t offset,
                                     const uint8_t max_idx);
 
+/*!
+ * \brief get_dir_numbered_file_names This function converts a array of binary data to hex string.
+ * \param data is the array of binary data.
+ * \param len is length of the array.
+ * \return Returns the converted string.
+ */
+std::string convert_to_hex_str(const uint8_t *data, int len);
+
 #endif /* TOOLS_H */

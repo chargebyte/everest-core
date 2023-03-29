@@ -740,13 +740,24 @@ static void* connection_handle_tls(void* data) {
             /* Determine used v2g-root certificate */
             if (ssl->state == MBEDTLS_SSL_SERVER_HELLO_DONE) {
                 mbedtls_x509_crt* caChain = ssl_config->key_cert->cert;
+                mbedtls_x509_crt* root_crt = &conn->ctx->v2g_root_crt;
                 uint8_t pkiIdx;
 
                 for (pkiIdx = 0; caChain != NULL && (caChain != mbedtls_ssl_own_cert(ssl)); pkiIdx++) {
                     caChain = ssl_config->key_cert->next->cert;
+                    root_crt = root_crt->next;
                 }
 
-                dlog(DLOG_LEVEL_INFO, "Using V2G-root cert of index #%u for TLS-handshake", pkiIdx);
+                /* Log selected V2G-root cert */
+                if (root_crt != NULL) {
+                unsigned char trusted_id[20];
+                mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
+                std::string root_issuer(reinterpret_cast<const char*>(root_crt->issuer.val.p), root_crt->issuer.val.len);
+
+                dlog(DLOG_LEVEL_INFO, "Using V2G-root of issuer %s (SHA-1: 0x%s) for TLS-handshake",
+                     root_issuer.c_str(), convert_to_hex_str(reinterpret_cast<const uint8_t *> (trusted_id),
+                     sizeof(trusted_id)).c_str());
+                }
             }
 
             if (rv != 0) {

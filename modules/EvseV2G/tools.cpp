@@ -9,6 +9,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <string>
+#include <iomanip>
+#include <sstream>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -328,4 +330,14 @@ exit:
     closedir(d);
 
     return num_of_files + offset;
+}
+
+std::string convert_to_hex_str(const uint8_t *data, int len) {
+    std::stringstream sting_stream;
+    sting_stream << std::hex;
+
+    for(int idx = 0; idx < len; ++idx )
+        sting_stream << std::setw(2) << std::setfill('0') << (int)data[idx];
+
+    return sting_stream.str();
 }
