@@ -303,7 +303,7 @@ uint8_t get_dir_numbered_file_names(char file_names[MAX_PKI_CA_LENGTH][MAX_FILE_
                             strcpy(file_names[idx], dir->d_name);
                             // dlog(DLOG_LEVEL_ERROR,"Cert-file found: %s", &AFileNames[idx]);
                             num_of_files++;
-                            min_idx = min(min_idx, idx);
+                            min_idx = std::min(min_idx, idx);
                         } else {
                             dlog(DLOG_LEVEL_ERROR, "Max. file-name size exceeded. Only %i characters supported",
                                  MAX_FILE_NAME_LENGTH);

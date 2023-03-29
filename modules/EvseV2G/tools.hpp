@@ -15,20 +15,6 @@
 #define MAX_FILE_NAME_LENGTH 100
 #define MAX_PKI_CA_LENGTH    4 /* leaf up to root certificate */
 
-#define max(a, b)                                                                                                      \
-    ({                                                                                                                 \
-        __typeof__(a) _a = (a);                                                                                        \
-        __typeof__(b) _b = (b);                                                                                        \
-        _a > _b ? _a : _b;                                                                                             \
-    })
-
-#define min(a, b)                                                                                                      \
-    ({                                                                                                                 \
-        __typeof__(a) _a = (a);                                                                                        \
-        __typeof__(b) _b = (b);                                                                                        \
-        _a < _b ? _a : _b;                                                                                             \
-    })
-
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
