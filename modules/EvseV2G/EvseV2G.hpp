@@ -27,6 +27,8 @@ struct Conf {
     bool supported_ISO15118_2;
     std::string highlevel_authentication_mode;
     std::string tls_security;
+    bool tls_key_logging;
+    std::string tls_key_logging_path;
     std::string certs_path;
 };
 

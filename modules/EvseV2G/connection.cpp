@@ -692,6 +692,7 @@ static void* connection_handle_tcp(void* data) {
  */
 static void* connection_handle_tls(void* data) {
     struct v2g_connection* conn = static_cast<v2g_connection*>(data);
+    struct v2g_context* v2g_ctx = conn->ctx;
     mbedtls_ssl_config* ssl_config = conn->conn.ssl.ssl_config;
     mbedtls_net_context* client_fd = &conn->conn.ssl.tls_client_fd;
     mbedtls_ssl_context* ssl = &conn->conn.ssl.ssl_context;
@@ -710,21 +711,34 @@ static void* connection_handle_tls(void* data) {
         goto thread_exit;
     }
 
-    /* init new SSL context */
+    /* Init new SSL context */
     mbedtls_ssl_init(ssl);
 
-    /* Code to start the ssl-key-log-tracing */
-    // Activate full debugging to receive the demanded key-log-msgs
+    /* Code to start the TLS-key logging */
+    if (v2g_ctx->tls_key_logging == true) {
+        
+        if (v2g_ctx->tls_log_ctx.file != NULL) {
+            fclose(v2g_ctx->tls_log_ctx.file);
+        }
+        memset(&v2g_ctx->tls_log_ctx, 0, sizeof(v2g_ctx->tls_log_ctx));
 
-    if (NULL != conn->ctx->tls_log_ctx.file) {
-        mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_VERBOSE);
-        conn->ctx->tls_log_ctx.inClientRandom = false;
-        conn->ctx->tls_log_ctx.inMasterSecret = false;
-        conn->ctx->tls_log_ctx.hexdumpLinesToProcess = 0;
-        mbedtls_ssl_conf_dbg(ssl_config, ssl_key_log_debug_callback, &conn->ctx->tls_log_ctx);
+        std::string tls_log_path(v2g_ctx->tls_key_logging_path);
+        tls_log_path.append("/tls_session_keys.log");
 
-    } else {
-        mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_NO_DEBUG);
+        v2g_ctx->tls_log_ctx.file = fopen(tls_log_path.c_str(), "a");
+
+        if (v2g_ctx->tls_log_ctx.file == NULL) {
+            dlog(DLOG_LEVEL_INFO, "%s", "Failed to open file path for TLS key logging: %s", strerror(errno));
+            mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_NO_DEBUG);
+        }
+        else {
+            // Activate full debugging to receive the demanded key-log-msgs
+            mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_VERBOSE);
+            v2g_ctx->tls_log_ctx.inClientRandom = false;
+            v2g_ctx->tls_log_ctx.inMasterSecret = false;
+            v2g_ctx->tls_log_ctx.hexdumpLinesToProcess = 0;
+            mbedtls_ssl_conf_dbg(ssl_config, ssl_key_log_debug_callback, &v2g_ctx->tls_log_ctx);        
+        }
     }
 
     /* get the SSL context ready */
@@ -734,8 +748,6 @@ static void* connection_handle_tls(void* data) {
         dlog(DLOG_LEVEL_ERROR, "mbedtls_ssl_setup returned: %s (-0x%04x)", error_buf, -rv);
         goto thread_exit;
     }
-    //    mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_VERBOSE);
-    //    mbedtls_ssl_conf_dbg(ssl_config, mbedDlogCallback, &conn->ctx->tls_log_ctx);
 
     mbedtls_ssl_set_bio(ssl, client_fd, mbedtls_net_send, NULL, mbedtls_net_recv_timeout);
 
@@ -789,8 +801,11 @@ static void* connection_handle_tls(void* data) {
     dlog(DLOG_LEVEL_INFO, "TLS handshake succeeded");
 
     /* Deactivate tls-debug-mode after the tls-handshake, because of performance reasons */
-    if (conn->ctx->tls_log_ctx.file != NULL)
+    if (conn->ctx->tls_log_ctx.file != NULL) {
         mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_NO_DEBUG);
+        fclose(conn->ctx->tls_log_ctx.file);
+        memset(&conn->ctx->tls_log_ctx, 0, sizeof(conn->ctx->tls_log_ctx));
+    }
 
     /* check if the v2g-session is already running in another thread, if not handle v2g-connection */
     if (conn->ctx->state == 0) {
@@ -815,12 +830,6 @@ static void* connection_handle_tls(void* data) {
 
 thread_exit:
     dlog(DLOG_LEVEL_INFO, "Closing TLS connection thread");
-
-    if ((conn->ctx->end_tls_debug_by_sessionStop == true) && (conn->ctx->tls_log_ctx.file != NULL)) {
-        fclose(conn->ctx->tls_log_ctx.file);
-        memset(&conn->ctx->tls_log_ctx, 0, sizeof(conn->ctx->tls_log_ctx));
-        dlog(DLOG_LEVEL_INFO, "TLS-debug-mode is now disabled!");
-    }
 
     if (rv != 0) {
         char error_buf[100];

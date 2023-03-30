@@ -294,7 +294,7 @@ struct v2g_context* v2g_ctx_create(ISO15118_chargerImplBase* p_chargerImplBase) 
     ctx->tcp_socket = -1;
     ctx->tls_socket.fd = -1;
     memset(&ctx->tls_log_ctx, 0, sizeof(keylogDebugCtx));
-    ctx->end_tls_debug_by_sessionStop = true;
+    ctx->tls_key_logging = false;
     ctx->debugMode = false;
 
     /* according to man page, both functions never return an error */

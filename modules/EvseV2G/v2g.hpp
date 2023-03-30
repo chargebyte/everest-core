@@ -185,6 +185,7 @@ struct v2g_context {
     struct sockaddr_in6* local_tls_addr;
 
     std::string certs_path;
+    std::string tls_key_logging_path;
 
     uint32_t network_read_timeout; /* in milli seconds */
     uint32_t network_read_timeout_tls; /* in milli seconds */
@@ -202,7 +203,7 @@ struct v2g_context {
     mbedtls_x509_crt v2g_root_crt;
     mbedtls_net_context tls_socket;
     keylogDebugCtx tls_log_ctx;
-    bool end_tls_debug_by_sessionStop;
+    bool tls_key_logging;
     pthread_t tls_thread;
 
     mbedtls_x509_crt mop_root_ca_list;
