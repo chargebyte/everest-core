@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2022-2023 chargebyte GmbH
 // Copyright (C) 2022-2023 Contributors to EVerest
+#include "tools.hpp"
+#include "log.hpp"
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
+#include <iomanip>
 #include <math.h>
+#include <sstream>
 #include <stdio.h>
 #include <string>
-#include <iomanip>
-#include <sstream>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include "log.hpp"
-#include "tools.hpp"
 
 ssize_t safe_read(int fd, void* buf, size_t count) {
     for (;;) {
@@ -332,11 +332,11 @@ exit:
     return num_of_files + offset;
 }
 
-std::string convert_to_hex_str(const uint8_t *data, int len) {
+std::string convert_to_hex_str(const uint8_t* data, int len) {
     std::stringstream sting_stream;
     sting_stream << std::hex;
 
-    for(int idx = 0; idx < len; ++idx )
+    for (int idx = 0; idx < len; ++idx)
         sting_stream << std::setw(2) << std::setfill('0') << (int)data[idx];
 
     return sting_stream.str();

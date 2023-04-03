@@ -251,7 +251,8 @@ static bool check_iso1_signature(const struct iso1SignatureType* iso1_signature,
     err = mbedtls_ecp_group_load(&ecp_group, MBEDTLS_ECP_DP_SECP256R1);
 
     if (err == 0) {
-        err = mbedtls_ecdsa_verify(&ecp_group, static_cast<const unsigned char*>(digest), 32, &public_key->Q, &mpi_r, &mpi_s);
+        err = mbedtls_ecdsa_verify(&ecp_group, static_cast<const unsigned char*>(digest), 32, &public_key->Q, &mpi_r,
+                                   &mpi_s);
     }
 
     mbedtls_ecp_group_free(&ecp_group);
@@ -607,10 +608,9 @@ static bool publish_iso_payment_details_req(struct iso1PaymentDetailsReqType con
                 goto exit;
             }
 
-            if ((NULL == base64Buffer) ||
-                (0 != mbedtls_base64_encode(base64Buffer, olen, &olen,
-                                            subCertTmp->Certificate.array[idx].bytes,
-                                            static_cast<size_t>(subCertTmp->Certificate.array[idx].bytesLen)))) {
+            if ((base64Buffer == NULL) ||
+                (mbedtls_base64_encode(base64Buffer, olen, &olen, subCertTmp->Certificate.array[idx].bytes,
+                                       static_cast<size_t>(subCertTmp->Certificate.array[idx].bytesLen)) != 0)) {
                 rv = false;
                 dlog(DLOG_LEVEL_ERROR, "Unable to encode contract sub certificate #%d", idx);
                 goto exit;
@@ -1070,7 +1070,8 @@ static enum v2g_event handle_iso_payment_service_selection(struct v2g_connection
                                                                             // only the ac case... )
     } else {
         dlog(DLOG_LEVEL_INFO, "SelectedPaymentOption: ExternalPayment");
-        conn->ctx->evse_v2g_data.evse_processing[PHASE_AUTH] = (uint8_t)iso1EVSEProcessingType_Ongoing_WaitingForCustomerInteraction; // [V2G2-854]
+        conn->ctx->evse_v2g_data.evse_processing[PHASE_AUTH] =
+            (uint8_t)iso1EVSEProcessingType_Ongoing_WaitingForCustomerInteraction; // [V2G2-854]
         /* Set next expected req msg */
         conn->ctx->state = (int)
             iso_dc_state_id::WAIT_FOR_AUTHORIZATION; // [V2G-551] (iso specification describes only the ac case... )
@@ -1617,9 +1618,8 @@ static enum v2g_event handle_iso_charging_status(struct v2g_connection* conn) {
     res->ResponseCode = iso1responseCodeType_OK;
 
     res->ReceiptRequired = conn->ctx->evse_v2g_data.receipt_required;
-    res->ReceiptRequired_isUsed = (conn->ctx->session.iso_selected_payment_option == iso1paymentOptionType_Contract)
-                                      ? 1U
-                                      : 0U;
+    res->ReceiptRequired_isUsed =
+        (conn->ctx->session.iso_selected_payment_option == iso1paymentOptionType_Contract) ? 1U : 0U;
 
     if (conn->ctx->meter_info.meter_info_is_used == true) {
         res->MeterInfo.MeterID.charactersLen = conn->ctx->meter_info.meter_id.bytesLen;
@@ -1742,7 +1742,7 @@ static enum v2g_event handle_iso_certificate_installation(struct v2g_connection*
     int rv = 0;
     /* At first, publish the received ev request message to the customer mqtt interface */
     if (publish_iso_certificate_installation_exi_req(conn->buffer + V2GTP_HEADER_LENGTH,
-                                                              conn->stream.size - V2GTP_HEADER_LENGTH) == false) {
+                                                     conn->stream.size - V2GTP_HEADER_LENGTH) == false) {
         dlog(DLOG_LEVEL_ERROR, "Failed to send CertificateInstallationExiReq");
         goto exit;
     }
@@ -1765,9 +1765,10 @@ static enum v2g_event handle_iso_certificate_installation(struct v2g_connection*
         pthread_mutex_unlock(&conn->ctx->mqtt_lock);
     }
     if (conn->ctx->evse_v2g_data.cert_install_res_b64_buffer != NULL) {
-        if ((rv = mbedtls_base64_decode(conn->buffer + V2GTP_HEADER_LENGTH, DEFAULT_BUFFER_SIZE, &conn->buffer_pos,
-                                       reinterpret_cast<unsigned char*>(conn->ctx->evse_v2g_data.cert_install_res_b64_buffer),
-                                       std::string(conn->ctx->evse_v2g_data.cert_install_res_b64_buffer).size())) != 0) {
+        if ((rv = mbedtls_base64_decode(
+                 conn->buffer + V2GTP_HEADER_LENGTH, DEFAULT_BUFFER_SIZE, &conn->buffer_pos,
+                 reinterpret_cast<unsigned char*>(conn->ctx->evse_v2g_data.cert_install_res_b64_buffer),
+                 std::string(conn->ctx->evse_v2g_data.cert_install_res_b64_buffer).size())) != 0) {
             dlog(DLOG_LEVEL_ERROR, "Failed to decode base64 stream (-0x%04x)", rv);
             goto exit;
         }

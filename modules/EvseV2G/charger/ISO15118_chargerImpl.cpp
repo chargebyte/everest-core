@@ -52,8 +52,7 @@ void ISO15118_chargerImpl::init() {
     v2g_ctx->tls_key_logging_path = mod->config.tls_key_logging_path;
 
     if (mod->config.tls_key_logging == true) {
-        dlog(DLOG_LEVEL_DEBUG, "tls-key-logging enabled (path: %s)", 
-             mod->config.tls_key_logging_path.c_str());
+        dlog(DLOG_LEVEL_DEBUG, "tls-key-logging enabled (path: %s)", mod->config.tls_key_logging_path.c_str());
     }
     v2g_ctx->certs_path = mod->config.certs_path;
 }

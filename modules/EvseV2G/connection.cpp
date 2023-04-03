@@ -11,7 +11,9 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fstream>
 #include <inttypes.h>
+#include <iostream>
 #include <mbedtls/debug.h>
 #include <mbedtls/error.h>
 #include <mbedtls/sha1.h>
@@ -22,12 +24,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-#include <string>
-#include <iostream>
-#include <fstream>
 
 #ifndef SYSCONFDIR
 #define SYSCONFDIR "/etc"
@@ -112,43 +112,42 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
     return s;
 }
 
-static int connection_ssl_initialize(void)
-{
-	unsigned char random_data[64];
-	int rv;
+static int connection_ssl_initialize(void) {
+    unsigned char random_data[64];
+    int rv;
 
-	if (generate_random_data(random_data, sizeof(random_data)) != 0) {
-		dlog(DLOG_LEVEL_ERROR, "generate_random_data failed: %s", strerror(errno));
-		return -1;
-	}
+    if (generate_random_data(random_data, sizeof(random_data)) != 0) {
+        dlog(DLOG_LEVEL_ERROR, "generate_random_data failed: %s", strerror(errno));
+        return -1;
+    }
 
-	mbedtls_entropy_init(&entropy);
+    mbedtls_entropy_init(&entropy);
 
-	if ((rv = mbedtls_entropy_gather(&entropy)) != 0) {
-		char error_buf[100];
-		mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-		dlog(DLOG_LEVEL_ERROR, "mbedtls_entropy_gather returned -0x%04x - %s", -rv, error_buf);
-		mbedtls_entropy_free(&entropy);
-		return -1;
-	}
+    if ((rv = mbedtls_entropy_gather(&entropy)) != 0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "mbedtls_entropy_gather returned -0x%04x - %s", -rv, error_buf);
+        mbedtls_entropy_free(&entropy);
+        return -1;
+    }
 
-	mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
 
-	if ((rv = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-									random_data, sizeof(random_data))) != 0) {
-		char error_buf[100];
-		mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-		dlog(DLOG_LEVEL_ERROR, "mbedtls_ctr_drbg_seed returned -0x%04x - %s", -rv, error_buf);
-		mbedtls_ctr_drbg_free(&ctr_drbg);
-		mbedtls_entropy_free(&entropy);
-		return -1;
-	}
+    if ((rv = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, random_data, sizeof(random_data))) !=
+        0) {
+        char error_buf[100];
+        mbedtls_strerror(rv, error_buf, sizeof(error_buf));
+        dlog(DLOG_LEVEL_ERROR, "mbedtls_ctr_drbg_seed returned -0x%04x - %s", -rv, error_buf);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+        return -1;
+    }
 
 #if defined(MBEDTLS_SSL_CACHE_C)
-	mbedtls_ssl_cache_init(&cache);
+    mbedtls_ssl_cache_init(&cache);
 #endif
 
-	return 0;
+    return 0;
 }
 
 /*!
@@ -504,8 +503,8 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     if ((rv = mbedtls_x509_crt_parse_file(root_crt, v2g_root_cert_path.c_str())) != 0) {
         char error_buf[100];
         mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-        dlog(DLOG_LEVEL_ERROR, "Unable to parse v2g root certificate %s (err: -0x%04x - %s)", v2g_root_cert_path.c_str(), -rv,
-             error_buf);
+        dlog(DLOG_LEVEL_ERROR, "Unable to parse v2g root certificate %s (err: -0x%04x - %s)",
+             v2g_root_cert_path.c_str(), -rv, error_buf);
         goto error_out;
     }
 
@@ -514,11 +513,12 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     unsigned char trusted_id[20];
     mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
     mbedtls_ssl_conf_trusted_authority(&ctx->ssl_config, trusted_id, sizeof(trusted_id),
-                                           MBEDTLS_SSL_CA_ID_TYPE_CERT_SHA1_HASH);
+                                       MBEDTLS_SSL_CA_ID_TYPE_CERT_SHA1_HASH);
 #endif // MBEDTLS_SSL_TRUSTED_CA_KEYS
 
     mbedtls_pk_init(&ctx->evse_tls_crt_key[0]);
-    rv = mbedtls_pk_parse_keyfile(&ctx->evse_tls_crt_key[0], evse_leaf_key_path.c_str(), secc_leaf_key_password.c_str());
+    rv =
+        mbedtls_pk_parse_keyfile(&ctx->evse_tls_crt_key[0], evse_leaf_key_path.c_str(), secc_leaf_key_password.c_str());
     if (rv != 0) {
         char error_buf[100];
         mbedtls_strerror(rv, error_buf, sizeof(error_buf));
@@ -532,8 +532,8 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     if ((rv = mbedtls_x509_crt_parse_file(&ctx->evseTlsCrt[0], evse_leaf_cert_path.c_str())) != 0) {
         char error_buf[100];
         mbedtls_strerror(rv, error_buf, sizeof(error_buf));
-        dlog(DLOG_LEVEL_ERROR, "Unable to parse evse-leaf certficate %s (err: -0x%04x - %s)", evse_leaf_cert_path.c_str(),
-             -rv, error_buf);
+        dlog(DLOG_LEVEL_ERROR, "Unable to parse evse-leaf certficate %s (err: -0x%04x - %s)",
+             evse_leaf_cert_path.c_str(), -rv, error_buf);
         mbedtls_pk_free(&ctx->evse_tls_crt_key[0]);
         goto error_out;
     }
@@ -554,8 +554,7 @@ static bool connection_init_tls(struct v2g_context* ctx) {
         goto error_out;
     }
 
-    if ((rv = mbedtls_ssl_conf_own_cert(&ctx->ssl_config, &ctx->evseTlsCrt[0],
-                                        &ctx->evse_tls_crt_key[0])) != 0) {
+    if ((rv = mbedtls_ssl_conf_own_cert(&ctx->ssl_config, &ctx->evseTlsCrt[0], &ctx->evse_tls_crt_key[0])) != 0) {
         char error_buf[100];
         mbedtls_strerror(rv, error_buf, sizeof(error_buf));
         dlog(DLOG_LEVEL_ERROR, "mbedtls_ssl_conf_own_cert returned -0x%04x - %s", -rv, error_buf);
@@ -716,7 +715,6 @@ static void* connection_handle_tls(void* data) {
 
     /* Code to start the TLS-key logging */
     if (v2g_ctx->tls_key_logging == true) {
-        
         if (v2g_ctx->tls_log_ctx.file != NULL) {
             fclose(v2g_ctx->tls_log_ctx.file);
         }
@@ -730,14 +728,13 @@ static void* connection_handle_tls(void* data) {
         if (v2g_ctx->tls_log_ctx.file == NULL) {
             dlog(DLOG_LEVEL_INFO, "%s", "Failed to open file path for TLS key logging: %s", strerror(errno));
             mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_NO_DEBUG);
-        }
-        else {
+        } else {
             // Activate full debugging to receive the demanded key-log-msgs
             mbedtls_debug_set_threshold(MBEDTLS_DEBUG_LEVEL_VERBOSE);
             v2g_ctx->tls_log_ctx.inClientRandom = false;
             v2g_ctx->tls_log_ctx.inMasterSecret = false;
             v2g_ctx->tls_log_ctx.hexdumpLinesToProcess = 0;
-            mbedtls_ssl_conf_dbg(ssl_config, ssl_key_log_debug_callback, &v2g_ctx->tls_log_ctx);        
+            mbedtls_ssl_conf_dbg(ssl_config, ssl_key_log_debug_callback, &v2g_ctx->tls_log_ctx);
         }
     }
 
@@ -776,13 +773,14 @@ static void* connection_handle_tls(void* data) {
 
                 /* Log selected V2G-root cert */
                 if (root_crt != NULL) {
-                unsigned char trusted_id[20];
-                mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
-                std::string root_issuer(reinterpret_cast<const char*>(root_crt->issuer.val.p), root_crt->issuer.val.len);
+                    unsigned char trusted_id[20];
+                    mbedtls_sha1(root_crt->raw.p, root_crt->raw.len, trusted_id);
+                    std::string root_issuer(reinterpret_cast<const char*>(root_crt->issuer.val.p),
+                                            root_crt->issuer.val.len);
 
-                dlog(DLOG_LEVEL_INFO, "Using V2G-root of issuer %s (SHA-1: 0x%s) for TLS-handshake",
-                     root_issuer.c_str(), convert_to_hex_str(reinterpret_cast<const uint8_t *> (trusted_id),
-                     sizeof(trusted_id)).c_str());
+                    dlog(DLOG_LEVEL_INFO, "Using V2G-root of issuer %s (SHA-1: 0x%s) for TLS-handshake",
+                         root_issuer.c_str(),
+                         convert_to_hex_str(reinterpret_cast<const uint8_t*>(trusted_id), sizeof(trusted_id)).c_str());
                 }
             }
 

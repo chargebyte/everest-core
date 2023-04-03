@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string>
 #include <sys/time.h>
 #include <time.h>
 
@@ -114,6 +115,6 @@ uint8_t get_dir_numbered_file_names(char file_names[MAX_PKI_CA_LENGTH][MAX_FILE_
  * \param len is length of the array.
  * \return Returns the converted string.
  */
-std::string convert_to_hex_str(const uint8_t *data, int len);
+std::string convert_to_hex_str(const uint8_t* data, int len);
 
 #endif /* TOOLS_H */

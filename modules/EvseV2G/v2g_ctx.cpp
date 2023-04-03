@@ -334,7 +334,7 @@ static void v2g_ctx_free_tls(struct v2g_context* ctx) {
         mbedtls_pk_free(&ctx->evse_tls_crt_key[idx]);
         mbedtls_x509_crt_free(&ctx->evseTlsCrt[idx]);
     }
-    
+
     free(ctx->evseTlsCrt);
     ctx->evseTlsCrt = NULL;
     free(ctx->evse_tls_crt_key);

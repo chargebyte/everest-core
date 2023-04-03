@@ -187,7 +187,7 @@ struct v2g_context {
     std::string certs_path;
     std::string tls_key_logging_path;
 
-    uint32_t network_read_timeout; /* in milli seconds */
+    uint32_t network_read_timeout;     /* in milli seconds */
     uint32_t network_read_timeout_tls; /* in milli seconds */
 
     enum tls_security_level tls_security;
@@ -214,7 +214,7 @@ struct v2g_context {
 
     struct {
         float evse_ac_current_limit; // default is 0
-    } basic_config; // This config will not reseted after beginning of a new charging session
+    } basic_config;                  // This config will not reseted after beginning of a new charging session
 
     /* actual charging state */
     enum V2gMsgTypeId last_v2g_msg;    /* holds the current v2g msg type */
