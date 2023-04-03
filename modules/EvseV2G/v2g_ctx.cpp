@@ -244,8 +244,7 @@ void v2g_ctx_init_charging_values(struct v2g_context* const ctx) {
     ctx->evse_v2g_data.evse_sa_schedule_list.SAScheduleTuple.array[0].SalesTariff_isUsed =
         (unsigned int)0; // Not supported in DIN
 
-    if (NULL != ctx->evse_v2g_data.cert_install_res_b64_buffer)
-        free(ctx->evse_v2g_data.cert_install_res_b64_buffer);
+    free(ctx->evse_v2g_data.cert_install_res_b64_buffer);
     ctx->evse_v2g_data.cert_install_res_b64_buffer = NULL;
 
     // AC paramter
@@ -335,10 +334,11 @@ static void v2g_ctx_free_tls(struct v2g_context* ctx) {
         mbedtls_pk_free(&ctx->evse_tls_crt_key[idx]);
         mbedtls_x509_crt_free(&ctx->evseTlsCrt[idx]);
     }
-    if (ctx->evseTlsCrt != NULL)
-        free(ctx->evseTlsCrt);
-    if (ctx->evse_tls_crt_key != NULL)
-        free(ctx->evse_tls_crt_key);
+    
+    free(ctx->evseTlsCrt);
+    ctx->evseTlsCrt = NULL;
+    free(ctx->evse_tls_crt_key);
+    ctx->evse_tls_crt_key = NULL;
 
     mbedtls_x509_crt_free(&ctx->v2g_root_crt);
     mbedtls_ssl_config_free(&ctx->ssl_config);
@@ -360,12 +360,12 @@ void v2g_ctx_free(struct v2g_context* ctx) {
 
     v2g_ctx_free_tls(ctx);
 
-    if (ctx->local_tls_addr != NULL)
-        free(ctx->local_tls_addr);
-    if (ctx->local_tcp_addr != NULL)
-        free(ctx->local_tcp_addr);
-    if (ctx != NULL)
-        free(ctx);
+    free(ctx->local_tls_addr);
+    ctx->local_tls_addr = NULL;
+    free(ctx->local_tcp_addr);
+    ctx->local_tcp_addr = NULL;
+    free(ctx);
+    ctx = NULL;
 }
 
 void stop_timer(struct event** event_timer, char const* const timer_name, struct v2g_context* ctx) {

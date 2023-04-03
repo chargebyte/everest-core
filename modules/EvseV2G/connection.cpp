@@ -114,7 +114,7 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
 
 static int connection_ssl_initialize(void)
 {
-	char random_data[64];
+	unsigned char random_data[64];
 	int rv;
 
 	if (generate_random_data(random_data, sizeof(random_data)) != 0) {
@@ -135,7 +135,7 @@ static int connection_ssl_initialize(void)
 	mbedtls_ctr_drbg_init(&ctr_drbg);
 
 	if ((rv = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-									(const unsigned char *)random_data, sizeof(random_data))) != 0) {
+									random_data, sizeof(random_data))) != 0) {
 		char error_buf[100];
 		mbedtls_strerror(rv, error_buf, sizeof(error_buf));
 		dlog(DLOG_LEVEL_ERROR, "mbedtls_ctr_drbg_seed returned -0x%04x - %s", -rv, error_buf);
@@ -492,9 +492,9 @@ static bool connection_init_tls(struct v2g_context* ctx) {
     mbedtls_x509_crt* root_crt = &ctx->v2g_root_crt;
 
     ctx->num_of_tls_crt = 1;
-    ctx->evseTlsCrt = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt) * (num_of_v2g_root));
-    ctx->evse_tls_crt_key = (mbedtls_pk_context*)malloc(sizeof(mbedtls_pk_context) * (num_of_v2g_root));
-    
+    ctx->evseTlsCrt = static_cast<mbedtls_x509_crt*>(malloc(sizeof(mbedtls_x509_crt) * (num_of_v2g_root)));
+    ctx->evse_tls_crt_key = static_cast<mbedtls_pk_context*>(malloc(sizeof(mbedtls_pk_context) * (num_of_v2g_root)));
+
     if (ctx->evseTlsCrt == NULL || ctx->evse_tls_crt_key == NULL) {
         dlog(DLOG_LEVEL_ERROR, "Failed to allocate memory!");
         goto error_out;
@@ -845,14 +845,12 @@ thread_exit:
         mbedtls_x509_crt_free(&conn->ctx->evseTlsCrt[idx]);
     }
     conn->ctx->num_of_tls_crt = 0;
-    if (conn->ctx->evseTlsCrt != NULL) {
-        free(conn->ctx->evseTlsCrt);
-        conn->ctx->evseTlsCrt = NULL;
-    }
-    if (conn->ctx->evse_tls_crt_key != NULL) {
-        free(conn->ctx->evse_tls_crt_key);
-        conn->ctx->evse_tls_crt_key = NULL;
-    }
+
+    free(conn->ctx->evseTlsCrt);
+    conn->ctx->evseTlsCrt = NULL;
+
+    free(conn->ctx->evse_tls_crt_key);
+    conn->ctx->evse_tls_crt_key = NULL;
 
     mbedtls_x509_crt_free(&conn->ctx->v2g_root_crt);
     mbedtls_ssl_config_free(&conn->ctx->ssl_config);
