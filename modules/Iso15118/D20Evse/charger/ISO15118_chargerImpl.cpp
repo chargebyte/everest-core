@@ -151,7 +151,18 @@ void ISO15118_chargerImpl::handle_setup(
 
 void ISO15118_chargerImpl::handle_session_setup(std::vector<types::iso15118_charger::PaymentOption>& payment_options,
                                                 bool& supported_certificate_service) {
-    // your code for cmd session_setup goes here
+    
+    std::vector<iso15118::message_20::Authorization> auth_services;
+
+    for (auto& option : payment_options) {
+        if (option == types::iso15118_charger::PaymentOption::ExternalPayment) {
+            auth_services.push_back(iso15118::message_20::Authorization::EIM);
+        } else if (option == types::iso15118_charger::PaymentOption::Contract) {
+            auth_services.push_back(iso15118::message_20::Authorization::PnC);
+        }
+    }
+
+    controller->setup_session(auth_services, supported_certificate_service);
 }
 
 void ISO15118_chargerImpl::handle_certificate_response(
@@ -215,10 +226,8 @@ void ISO15118_chargerImpl::handle_update_dc_present_values(
     types::iso15118_charger::DC_EVSEPresentVoltage_Current& present_voltage_current) {
 
     float voltage = present_voltage_current.EVSEPresentVoltage;
-    float current = 0;
-    if (present_voltage_current.EVSEPresentCurrent.has_value()) {
-        current = present_voltage_current.EVSEPresentCurrent.value();
-    }
+    float current = present_voltage_current.EVSEPresentCurrent.value_or(0);
+
     controller->send_control_event(iso15118::d20::PresentVoltageCurrent{voltage, current});
 }
 

@@ -26,6 +26,7 @@ active_modules:
       session_logging_path: /tmp/everest-logs
       charge_mode: DC
       hack_allow_bpt_with_iso2: true
+      payment_enable_contract: false
     connections:
       bsp:
         - module_id: yeti_driver
