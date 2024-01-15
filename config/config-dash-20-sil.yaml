@@ -1,8 +1,6 @@
 active_modules:
   iso15118_charger:
     module: D20Evse
-    config_module:
-      device: enp2s0
     # config_module:
     #   private_key_password: "failed"
     #   enable_ssl_logging: true
