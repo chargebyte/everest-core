@@ -1,6 +1,8 @@
 active_modules:
   iso15118_charger:
     module: D20Evse
+    config_module:
+      device: enp2s0
     # config_module:
     #   private_key_password: "failed"
     #   enable_ssl_logging: true
@@ -18,7 +20,6 @@ active_modules:
     config_module:
       connector_id: 1
       country_code: DE
-      rcd_enabled: true
       evse_id: DE*PNX*E12345*1
       evse_id_din: 49A80737A45678
       session_logging: true
@@ -50,6 +51,8 @@ active_modules:
     module: JsDCSupplySimulator
   yeti_driver:
     module: JsYetiSimulator
+    config_module:
+      connector_id: 1
   slac:
     module: JsSlacSimulator
   imd:
