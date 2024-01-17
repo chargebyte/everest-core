@@ -151,7 +151,7 @@ void ISO15118_chargerImpl::handle_setup(
 
 void ISO15118_chargerImpl::handle_session_setup(std::vector<types::iso15118_charger::PaymentOption>& payment_options,
                                                 bool& supported_certificate_service) {
-    
+
     std::vector<iso15118::message_20::Authorization> auth_services;
 
     for (auto& option : payment_options) {
@@ -201,7 +201,7 @@ void ISO15118_chargerImpl::handle_receipt_is_required(bool& receipt_required) {
 }
 
 void ISO15118_chargerImpl::handle_stop_charging(bool& stop) {
-    // your code for cmd stop_charging goes here
+    controller->send_control_event(iso15118::d20::StopCharging{stop});
 }
 
 void ISO15118_chargerImpl::handle_update_ac_max_current(double& max_current) {
