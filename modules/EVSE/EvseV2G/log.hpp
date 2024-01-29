@@ -18,13 +18,6 @@ typedef enum dloglevel_t {
 } dloglevel_t;
 
 /**
- * @brief Internal: Issue a log message. Please use the dlog() macro instead.
- *
- * @return void
- */
-void dlog_func(const dloglevel_t loglevel, const char* format, ...);
-
-/**
  * @brief Issue a log message.
  *
  * @param[in] level the log level this message belongs to (type enum dloglevel)
@@ -32,10 +25,5 @@ void dlog_func(const dloglevel_t loglevel, const char* format, ...);
  *
  * @return void
  */
-// this is a macro, so that when dlog() is used, it gets expanded at the caller's location
-#define dlog(level, ...)                                                                                               \
-    do {                                                                                                               \
-        dlog_func((level), ##__VA_ARGS__);                                                                             \
-    } while (0)
-
+void dlog(const dloglevel_t loglevel, const char* format, ...);
 #endif /* LOG_H */
