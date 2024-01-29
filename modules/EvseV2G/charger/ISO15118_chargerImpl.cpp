@@ -266,7 +266,7 @@ void ISO15118_chargerImpl::handle_certificate_response(
         v2g_ctx->evse_v2g_data.cert_install_res_b64_buffer = std::string(exi_stream_status.exiResponse.value());
     }
     v2g_ctx->evse_v2g_data.cert_install_status =
-        (exi_stream_status.status == types::iso15118_charger::Status::Accepted) ? true : false;
+        (exi_stream_status.status == types::iso15118_charger::Status::Accepted);
     pthread_cond_signal(&v2g_ctx->mqtt_cond);
     /* unlock */
     pthread_mutex_unlock(&v2g_ctx->mqtt_lock);

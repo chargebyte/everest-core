@@ -195,7 +195,7 @@ static bool load_contract_root_cert(mbedtls_x509_crt* contract_root_crt, const c
         }
     }
 
-    return (rv != 0) ? false : true;
+    return (rv == 0);
 }
 
 /*!
