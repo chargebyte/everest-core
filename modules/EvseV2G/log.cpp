@@ -16,26 +16,12 @@ void dlog_func(const dloglevel_t loglevel, const char* format, ...) {
     va_list args;
 
     va_start(args, format);
+    char output[1024] = "\0";
 
-    // print the user given part
-    // strip possible newline character from user-given string
-    // FIXME: could be skipped
-    if (format) {
-        size_t formatlen = std::string(format).size();
-        format_copy = static_cast<char*>(calloc(1, formatlen + 1)); // additional byte for terminating \0
-        memcpy(format_copy, format, formatlen);
-        if ((formatlen >= 1) && (format_copy[formatlen - 1] == '\n')) {
-            format_copy[formatlen - 1] = '\0';
-        }
-    }
-    char output[256];
-    if (format_copy != NULL) {
-        vsnprintf(output, sizeof(output), format_copy, args);
+    if (format != NULL) {
+        vsnprintf(output, sizeof(output), format, args);
     }
     va_end(args);
-    if (format_copy) {
-        free(format_copy);
-    }
 
     switch (loglevel) {
     case DLOG_LEVEL_ERROR:

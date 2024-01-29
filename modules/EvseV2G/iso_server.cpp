@@ -211,15 +211,15 @@ static int debug_verify_cert(void* data, mbedtls_x509_crt* crt, int depth, uint3
     char buf[1024];
     ((void)data);
 
-    dlog(DLOG_LEVEL_INFO, "\nVerify requested for (Depth %d):\n", depth);
+    dlog(DLOG_LEVEL_INFO, "Verify requested for (Depth %d):", depth);
     mbedtls_x509_crt_info(buf, sizeof(buf) - 1, "", crt);
     dlog(DLOG_LEVEL_INFO, "%s", buf);
 
     if ((*flags) == 0)
-        dlog(DLOG_LEVEL_INFO, "  This certificate has no flags\n");
+        dlog(DLOG_LEVEL_INFO, "  This certificate has no flags");
     else {
         mbedtls_x509_crt_verify_info(buf, sizeof(buf), "  ! ", *flags);
-        dlog(DLOG_LEVEL_INFO, "%s\n", buf);
+        dlog(DLOG_LEVEL_INFO, "%s", buf);
     }
 
     return (0);
