@@ -10,8 +10,7 @@
 #include <sys/time.h>          // for gettimeofday()
 #include <time.h>              // for strftime()
 
-// FIXME: inline?
-void dlog_func(const dloglevel_t loglevel, const char* format, ...) {
+void dlog(const dloglevel_t loglevel, const char* format, ...) {
     char* format_copy = NULL;
     va_list args;
 
