@@ -156,11 +156,9 @@ void ISO15118_chargerImpl::handle_setup(
 void ISO15118_chargerImpl::handle_session_setup(std::vector<types::iso15118_charger::PaymentOption>& payment_options,
                                                 bool& supported_certificate_service) {
     if (v2g_ctx->hlc_pause_active != true) {
-
         v2g_ctx->evse_v2g_data.payment_option_list_len = 0;
 
         for (auto option : payment_options) {
-
             if (option == types::iso15118_charger::PaymentOption::Contract) {
                 v2g_ctx->evse_v2g_data.payment_option_list[v2g_ctx->evse_v2g_data.payment_option_list_len] =
                     iso1paymentOptionType_Contract;
@@ -169,10 +167,16 @@ void ISO15118_chargerImpl::handle_session_setup(std::vector<types::iso15118_char
                 v2g_ctx->evse_v2g_data.payment_option_list[v2g_ctx->evse_v2g_data.payment_option_list_len] =
                     iso1paymentOptionType_ExternalPayment;
                 v2g_ctx->evse_v2g_data.payment_option_list_len++;
-            } else if (v2g_ctx->evse_v2g_data.payment_option_list_len == 0) {
-                dlog(DLOG_LEVEL_WARNING, "Unable to configure PaymentOptions %s",
+            } else {
+                dlog(DLOG_LEVEL_WARNING, "Unable to configure PaymentOption %s",
                      types::iso15118_charger::payment_option_to_string(option).c_str());
             }
+        }
+
+        if (v2g_ctx->evse_v2g_data.payment_option_list_len == 0) {
+            dlog(DLOG_LEVEL_ERROR, "No valid PaymentOptions configured, falling back to ExternalPayment");
+            v2g_ctx->evse_v2g_data.payment_option_list[0] = iso1paymentOptionType_ExternalPayment;
+            v2g_ctx->evse_v2g_data.payment_option_list_len = 1;
         }
     }
 
