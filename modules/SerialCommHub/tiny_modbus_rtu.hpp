@@ -8,6 +8,8 @@
 #define TINY_MODBUS_RTU
 
 #include <chrono>
+#include <ostream>
+#include <stdexcept>
 #include <stdint.h>
 #include <termios.h>
 
@@ -34,13 +36,15 @@ constexpr int MODBUS_MAX_REPLY_SIZE = 255 + 6;
 constexpr int MODBUS_MIN_REPLY_SIZE = 5;
 constexpr int MODBUS_BASE_PAYLOAD_SIZE = 8;
 
-enum class Parity : uint8_t {
+enum class Parity : uint8_t
+{
     NONE = 0,
     ODD = 1,
     EVEN = 2
 };
 
-enum FunctionCode : uint8_t {
+enum FunctionCode : uint8_t
+{
     READ_COILS = 0x01,
     READ_DISCRETE_INPUTS = 0x02,
     READ_MULTIPLE_HOLDING_REGISTERS = 0x03,
@@ -49,6 +53,35 @@ enum FunctionCode : uint8_t {
     WRITE_SINGLE_HOLDING_REGISTER = 0x06,
     WRITE_MULTIPLE_COILS = 0x0F,
     WRITE_MULTIPLE_HOLDING_REGISTERS = 0x10,
+};
+
+std::string FunctionCode_to_string(FunctionCode fc);
+std::string FunctionCode_to_string_with_hex(FunctionCode fc);
+std::ostream& operator<<(std::ostream& os, const FunctionCode& fc);
+
+class TinyModbusException : public std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+class TimeoutException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
+};
+class ShortPacketException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
+};
+class AddressMismatchException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
+};
+class FunctionCodeMismatchException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
+};
+class ChecksumErrorException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
+};
+class IncompletePacketException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
+};
+class ModbusException : public TinyModbusException {
+    using TinyModbusException::TinyModbusException;
 };
 
 class TinyModbusRTU {
