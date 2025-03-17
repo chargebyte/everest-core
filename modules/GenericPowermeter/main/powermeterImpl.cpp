@@ -21,7 +21,7 @@ void powermeterImpl::init() {
 
     std::size_t found = this->config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
-        EVLOG_error << "Error! Substring \"..\" not allowed in model name!";
+        EVLOG_error << "Error! Substring \"..\" not allowed in given model name '" << this->config.model << "'!";
         throw std::runtime_error("Incorrect model name in GenericPowermeter config");
     } else {
         // FIXME (aw): path validation?
@@ -32,9 +32,9 @@ void powermeterImpl::init() {
             this->init_register_assignments(std::move(powermeter_registers));
             this->init_default_values();
         } catch (const std::exception& e) {
-            EVLOG_error << "opening file \"" << this->config.model << ".yaml\" from path " << model
+            EVLOG_error << "Opening file \"" << this->config.model << ".yaml\" from path \"" << model
                         << "\" failed: " << e.what();
-            throw std::runtime_error("Module \"GenericPowermeter\" could not be initialized!");
+            throw std::runtime_error("Module GenericPowermeter could not be initialized!");
         }
     }
 }
@@ -289,7 +289,7 @@ bool powermeterImpl::assign_register_data(const json& registers, const Powermete
             }
         }
     } catch (const std::exception& e) {
-        EVLOG_error << "assigning configuration data for register \"" << register_selector << "\" failed: " << e.what();
+        EVLOG_error << "Assigning configuration data for register \"" << register_selector << "\" failed: " << e.what();
         return false;
     }
 
@@ -324,7 +324,9 @@ powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const 
         break;
 
     default:
-        throw std::runtime_error("Incorrect Modbus RTU function code!");
+        std::stringstream ss;
+        ss << "Incorrect Modbus RTU function code " << function_code << "!";
+        throw std::runtime_error(ss.str());
         break;
     }
     return REGISTER_TYPE_UNDEFINED;
