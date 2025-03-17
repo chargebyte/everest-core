@@ -382,6 +382,12 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         // FIXME: handle empty register_message here (instead of in merge_register_values_into_element())
         //        and emit an error
 
+        if (not register_message.value.has_value()) {
+            EVLOG_error << "Error! Received Modbus message is empty";
+            // discard this response, and produce no meter reading
+            return;
+        }
+
         int16_t exponent{0};
         if (exponent_message.value.has_value()) {
             exponent = exponent_message.value.value()[0];
@@ -512,10 +518,8 @@ void powermeterImpl::process_response(const RegisterData& register_data,
 
 float powermeterImpl::merge_register_values_into_element(const RegisterData& reg_data, const int16_t exponent,
                                                          const types::serial_comm_hub_requests::Result& reg_message) {
-    if (not reg_message.value.has_value()) {
-        EVLOG_error << "Error! Received message is empty!";
-        return 0.f;
-    }
+    // the caller ensures that a value is given
+    assert(reg_message.value.has_value());
 
     uint32_t value{0};
     auto& reg_value = reg_message.value.value();
