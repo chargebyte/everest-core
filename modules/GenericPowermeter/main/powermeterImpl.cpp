@@ -371,8 +371,10 @@ void powermeterImpl::process_response(const RegisterData& register_data,
                                       const types::serial_comm_hub_requests::Result register_message,
                                       const types::serial_comm_hub_requests::Result exponent_message) {
 
+    // Note: SerialCommHub currently always returns a register_message.value if StatusCodeEnum::Success
     if ((register_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) ||
-        (exponent_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success)) {
+        (exponent_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) ||
+        not register_message.value.has_value()) {
         // error: message sending failed
         EVLOG_error << "Failed read from Modbus, ignoring";
         output_error_with_content(register_message);
@@ -395,16 +397,8 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         meter_is_unavailable = false;
     }
 
-    // FIXME: handle empty register_message here (instead of in merge_register_values_into_element())
-    //        and emit an error
-
-    if (not register_message.value.has_value()) {
-        EVLOG_error << "Error! Received Modbus message is empty";
-        // discard this response, and produce no meter reading
-        return;
-    }
-
     int16_t exponent{0};
+    // Note: SerialCommHub currently always returns an exponent_message.value if StatusCodeEnum::Success
     if (exponent_message.value.has_value()) {
         exponent = exponent_message.value.value()[0];
     }
