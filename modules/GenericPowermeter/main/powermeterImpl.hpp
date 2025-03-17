@@ -113,8 +113,8 @@ private:
 
     void init_default_values();
     void init_register_assignments(const json& loaded_registers);
-    int assign_register_data(const json& registers, const PowermeterRegisters register_type,
-                             const std::string& register_selector);
+    bool assign_register_data(const json& registers, const PowermeterRegisters register_type,
+                              const std::string& register_selector);
     void assign_register_sublevel_data(const json& registers, const PowermeterRegisters& register_type,
                                        const std::string& register_selector, const std::string& sublevel_selector,
                                        const uint8_t offset);

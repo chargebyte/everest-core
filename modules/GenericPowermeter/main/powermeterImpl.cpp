@@ -239,14 +239,14 @@ void powermeterImpl::init_default_values() {
 }
 
 void powermeterImpl::init_register_assignments(const json& loaded_registers) {
-    uint8_t failed = 0;
-    failed += assign_register_data(loaded_registers, ENERGY_WH_IMPORT_TOTAL, "energy_Wh_import");
-    failed += assign_register_data(loaded_registers, ENERGY_WH_EXPORT_TOTAL, "energy_Wh_export");
-    failed += assign_register_data(loaded_registers, POWER_W_TOTAL, "power_W");
-    failed += assign_register_data(loaded_registers, VOLTAGE_V_DC, "voltage_V");
-    failed += assign_register_data(loaded_registers, REACTIVE_POWER_VAR_TOTAL, "reactive_power_VAR");
-    failed += assign_register_data(loaded_registers, CURRENT_A_DC, "current_A");
-    failed += assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
+    bool failed{false};
+    failed |= assign_register_data(loaded_registers, ENERGY_WH_IMPORT_TOTAL, "energy_Wh_import");
+    failed |= assign_register_data(loaded_registers, ENERGY_WH_EXPORT_TOTAL, "energy_Wh_export");
+    failed |= assign_register_data(loaded_registers, POWER_W_TOTAL, "power_W");
+    failed |= assign_register_data(loaded_registers, VOLTAGE_V_DC, "voltage_V");
+    failed |= assign_register_data(loaded_registers, REACTIVE_POWER_VAR_TOTAL, "reactive_power_VAR");
+    failed |= assign_register_data(loaded_registers, CURRENT_A_DC, "current_A");
+    failed |= assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
 
     if (failed) {
         EVLOG_error << "Could not load powermeter configuration!\n";
@@ -256,8 +256,8 @@ void powermeterImpl::init_register_assignments(const json& loaded_registers) {
     }
 }
 
-int powermeterImpl::assign_register_data(const json& registers, const PowermeterRegisters register_type,
-                                         const std::string& register_selector) {
+bool powermeterImpl::assign_register_data(const json& registers, const PowermeterRegisters register_type,
+                                          const std::string& register_selector) {
     try {
         if (registers.contains(register_selector)) {
             if (registers.at(register_selector).at("num_registers") > 0) {
@@ -291,10 +291,10 @@ int powermeterImpl::assign_register_data(const json& registers, const Powermeter
         }
     } catch (const std::exception& e) {
         EVLOG_error << "assigning configuration data for register \"" << register_selector << "\" failed: " << e.what();
-        return -1;
+        return false;
     }
 
-    return 0;
+    return true;
 }
 
 void powermeterImpl::assign_register_sublevel_data(const json& registers, const PowermeterRegisters& register_type,
