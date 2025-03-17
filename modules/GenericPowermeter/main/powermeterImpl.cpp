@@ -379,6 +379,9 @@ void powermeterImpl::process_response(const RegisterData& register_data,
             meter_is_unavailable = false;
         }
 
+        // FIXME: handle empty register_message here (instead of in merge_register_values_into_element())
+        //        and emit an error
+
         int16_t exponent{0};
         if (exponent_message.value.has_value()) {
             exponent = exponent_message.value.value()[0];
