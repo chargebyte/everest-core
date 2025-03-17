@@ -16,20 +16,20 @@ namespace main {
 
 void powermeterImpl::init() {
 
-    std::size_t found = config.model.find(".."); // check for invalid path
+    std::size_t found = this->config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
         EVLOG_error << "Error! Substring \"..\" not allowed in model name!";
         throw std::runtime_error("Incorrect model name in GenericPowermeter config");
     } else {
         // FIXME (aw): path validation?
-        auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", config.model);
+        auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
 
         try {
             json powermeter_registers = Everest::load_yaml(model);
             this->init_register_assignments(std::move(powermeter_registers));
             this->init_default_values();
         } catch (const std::exception& e) {
-            EVLOG_error << "opening file \"" << config.model << ".yaml\" from path " << model
+            EVLOG_error << "opening file \"" << this->config.model << ".yaml\" from path " << model
                         << "\" failed: " << e.what();
             throw std::runtime_error("Module \"GenericPowermeter\" could not be initialized!");
         }
@@ -39,7 +39,7 @@ void powermeterImpl::init() {
 void powermeterImpl::ready() {
     std::thread([this] {
         while (true) {
-            read_powermeter_values();
+            this->read_powermeter_values();
             sleep(1);
         }
     }).detach();
@@ -238,13 +238,13 @@ void powermeterImpl::init_default_values() {
 
 void powermeterImpl::init_register_assignments(const json& loaded_registers) {
     bool failed{false};
-    failed |= assign_register_data(loaded_registers, ENERGY_WH_IMPORT_TOTAL, "energy_Wh_import");
-    failed |= assign_register_data(loaded_registers, ENERGY_WH_EXPORT_TOTAL, "energy_Wh_export");
-    failed |= assign_register_data(loaded_registers, POWER_W_TOTAL, "power_W");
-    failed |= assign_register_data(loaded_registers, VOLTAGE_V_DC, "voltage_V");
-    failed |= assign_register_data(loaded_registers, REACTIVE_POWER_VAR_TOTAL, "reactive_power_VAR");
-    failed |= assign_register_data(loaded_registers, CURRENT_A_DC, "current_A");
-    failed |= assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
+    failed |= this->assign_register_data(loaded_registers, ENERGY_WH_IMPORT_TOTAL, "energy_Wh_import");
+    failed |= this->assign_register_data(loaded_registers, ENERGY_WH_EXPORT_TOTAL, "energy_Wh_export");
+    failed |= this->assign_register_data(loaded_registers, POWER_W_TOTAL, "power_W");
+    failed |= this->assign_register_data(loaded_registers, VOLTAGE_V_DC, "voltage_V");
+    failed |= this->assign_register_data(loaded_registers, REACTIVE_POWER_VAR_TOTAL, "reactive_power_VAR");
+    failed |= this->assign_register_data(loaded_registers, CURRENT_A_DC, "current_A");
+    failed |= this->assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
 
     if (failed) {
         EVLOG_error << "Could not load powermeter configuration!";
@@ -260,14 +260,14 @@ bool powermeterImpl::assign_register_data(const json& registers, const Powermete
                 RegisterData data = {};
                 data.type = register_type;
                 data.start_register = registers.at(register_selector).at("start_register");
-                data.start_register_function = select_modbus_function(
+                data.start_register_function = this->select_modbus_function(
                     (const uint8_t)registers.at(register_selector).at("function_code_start_reg"));
                 data.num_registers = registers.at(register_selector).at("num_registers");
                 data.exponent_register = registers.at(register_selector).at("exponent_register");
-                data.exponent_register_function =
-                    select_modbus_function((const uint8_t)registers.at(register_selector).at("function_code_exp_reg"));
+                data.exponent_register_function = this->select_modbus_function(
+                    (const uint8_t)registers.at(register_selector).at("function_code_exp_reg"));
                 data.multiplier = registers.at(register_selector).at("multiplier");
-                pm_configuration.push_back(data);
+                this->pm_configuration.push_back(data);
             }
             if (registers.at(register_selector).contains("L1")) {
                 if (registers.at(register_selector).at("L1").at("num_registers") > 0) {
@@ -300,14 +300,14 @@ void powermeterImpl::assign_register_sublevel_data(const json& registers, const 
     RegisterData sublevel_data = {};
     sublevel_data.type = static_cast<PowermeterRegisters>((register_type + offset) % NUM_PM_REGISTERS);
     sublevel_data.start_register = registers.at(register_selector).at(sublevel_selector).at("start_register");
-    sublevel_data.start_register_function = select_modbus_function(
+    sublevel_data.start_register_function = this->select_modbus_function(
         (const uint8_t)registers.at(register_selector).at(sublevel_selector).at("function_code_start_reg"));
     sublevel_data.num_registers = registers.at(register_selector).at(sublevel_selector).at("num_registers");
     sublevel_data.exponent_register = registers.at(register_selector).at(sublevel_selector).at("exponent_register");
-    sublevel_data.exponent_register_function = select_modbus_function(
+    sublevel_data.exponent_register_function = this->select_modbus_function(
         (const uint8_t)registers.at(register_selector).at(sublevel_selector).at("function_code_exp_reg"));
     sublevel_data.multiplier = registers.at(register_selector).at(sublevel_selector).at("multiplier");
-    pm_configuration.push_back(sublevel_data);
+    this->pm_configuration.push_back(sublevel_data);
 }
 
 powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const uint8_t function_code) {
@@ -329,33 +329,33 @@ powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const 
 
 void powermeterImpl::read_powermeter_values() {
     for (auto& register_data : this->pm_configuration) {
-        readRegister(register_data);
+        this->read_register(register_data);
     }
     this->pm_last_values.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
     this->publish_powermeter(this->pm_last_values);
 }
 
-void powermeterImpl::readRegister(const RegisterData& register_config) {
+void powermeterImpl::read_register(const RegisterData& register_config) {
 
     types::serial_comm_hub_requests::Result register_response{};
     types::serial_comm_hub_requests::Result exponent_response{};
 
     if (register_config.start_register_function == READ_HOLDING_REGISTER) {
         register_response = mod->r_serial_comm_hub->call_modbus_read_holding_registers(
-            config.powermeter_device_id, register_config.start_register, register_config.num_registers);
+            this->config.powermeter_device_id, register_config.start_register, register_config.num_registers);
     } else if (register_config.start_register_function == READ_INPUT_REGISTER) {
         register_response = mod->r_serial_comm_hub->call_modbus_read_input_registers(
-            config.powermeter_device_id, register_config.start_register - config.modbus_base_address,
+            this->config.powermeter_device_id, register_config.start_register - config.modbus_base_address,
             register_config.num_registers);
     }
 
     if (register_config.exponent_register != 0) {
         if (register_config.exponent_register_function == READ_HOLDING_REGISTER) {
             exponent_response = mod->r_serial_comm_hub->call_modbus_read_holding_registers(
-                config.powermeter_device_id, register_config.exponent_register, register_config.num_registers);
+                this->config.powermeter_device_id, register_config.exponent_register, register_config.num_registers);
         } else if (register_config.exponent_register_function == READ_INPUT_REGISTER) {
             exponent_response = mod->r_serial_comm_hub->call_modbus_read_input_registers(
-                config.powermeter_device_id, register_config.exponent_register - config.modbus_base_address,
+                this->config.powermeter_device_id, register_config.exponent_register - config.modbus_base_address,
                 register_config.num_registers);
         }
     }
