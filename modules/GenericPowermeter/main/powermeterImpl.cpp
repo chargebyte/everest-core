@@ -386,8 +386,6 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         int16_t exponent{0};
         if (exponent_message.value.has_value()) {
             exponent = exponent_message.value.value()[0];
-        } else {
-            exponent = 0.0;
         }
 
         if (register_data.type == ENERGY_WH_IMPORT_TOTAL) {
