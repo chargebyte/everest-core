@@ -14,6 +14,9 @@ namespace fs = std::filesystem;
 namespace module {
 namespace main {
 
+using namespace std::chrono_literals;
+constexpr auto reading_interval{1s};
+
 void powermeterImpl::init() {
 
     std::size_t found = this->config.model.find(".."); // check for invalid path
@@ -40,7 +43,7 @@ void powermeterImpl::ready() {
     std::thread([this] {
         while (true) {
             this->read_powermeter_values();
-            sleep(1);
+            std::this_thread::sleep_for(reading_interval);
         }
     }).detach();
 }
