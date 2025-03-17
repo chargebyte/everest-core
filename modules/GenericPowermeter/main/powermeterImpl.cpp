@@ -19,6 +19,7 @@ void powermeterImpl::init() {
     std::size_t found = config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
         EVLOG_error << "Error! Substring \"..\" not allowed in model name!";
+        throw std::runtime_error("Incorrect model name in GenericPowermeter config");
     } else {
         // FIXME (aw): path validation?
         auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", config.model);
