@@ -36,15 +36,12 @@ void powermeterImpl::init() {
 }
 
 void powermeterImpl::ready() {
-    if (this->config_loaded_successfully) {
-        std::thread t([this] {
-            while (true) {
-                read_powermeter_values();
-                sleep(1);
-            }
-        });
-        t.detach();
-    }
+    std::thread([this] {
+        while (true) {
+            read_powermeter_values();
+            sleep(1);
+        }
+    }).detach();
 }
 
 types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transaction(std::string& transaction_id) {
@@ -250,9 +247,7 @@ void powermeterImpl::init_register_assignments(const json& loaded_registers) {
 
     if (failed) {
         EVLOG_error << "Could not load powermeter configuration!";
-        this->config_loaded_successfully = false;
-    } else {
-        this->config_loaded_successfully = true;
+        throw std::runtime_error("Could not load GenericPowermeter configuration");
     }
 }
 
