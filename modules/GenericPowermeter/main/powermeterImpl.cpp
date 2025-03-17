@@ -19,6 +19,7 @@ void powermeterImpl::init() {
     std::size_t found = this->config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
         EVLOG_error << fmt::format("Error! Substring \"..\" not allowed in given model name '{}'!", this->config.model);
+        throw std::runtime_error("Incorrect model name in GenericPowermeter config");
     } else {
         auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
 
@@ -35,15 +36,12 @@ void powermeterImpl::init() {
 }
 
 void powermeterImpl::ready() {
-    if (this->config_loaded_successfully) {
-        std::thread t([this] {
-            while (true) {
-                this->read_powermeter_values();
-                sleep(1);
-            }
-        });
-        t.detach();
-    }
+    std::thread([this] {
+        while (true) {
+            this->read_powermeter_values();
+            sleep(1);
+        }
+    }).detach();
 }
 
 types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transaction(std::string& transaction_id) {
@@ -248,9 +246,9 @@ void powermeterImpl::init_register_assignments(const json& loaded_registers) {
     failed |= not this->assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
 
     if (failed) {
-        EVLOG_error << "Could not load powermeter configuration!";
+        EVLOG_error << "Could not load powermeter model configuration!";
+        throw std::runtime_error("Could not load GenericPowermeter model configuration");
     }
-    this->config_loaded_successfully = not failed;
 }
 
 bool powermeterImpl::assign_register_data(const json& registers, const PowermeterRegisters register_type,
