@@ -20,7 +20,6 @@ void powermeterImpl::init() {
     if (found != std::string::npos) {
         EVLOG_error << "Error! Substring \"..\" not allowed in model name!\n";
     } else {
-        // FIXME (aw): path validation?
         auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
 
         try {
