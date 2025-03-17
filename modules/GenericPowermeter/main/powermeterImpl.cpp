@@ -18,7 +18,7 @@ void powermeterImpl::init() {
 
     std::size_t found = config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
-        EVLOG_error << "Error! Substring \"..\" not allowed in model name!\n";
+        EVLOG_error << "Error! Substring \"..\" not allowed in model name!";
     } else {
         // FIXME (aw): path validation?
         auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", config.model);
@@ -249,7 +249,7 @@ void powermeterImpl::init_register_assignments(const json& loaded_registers) {
     failed |= assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
 
     if (failed) {
-        EVLOG_error << "Could not load powermeter configuration!\n";
+        EVLOG_error << "Could not load powermeter configuration!";
         this->config_loaded_successfully = false;
     } else {
         this->config_loaded_successfully = true;
@@ -325,7 +325,7 @@ powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const 
         break;
 
     default:
-        throw std::runtime_error("Incorrect Modbus RTU function code!\n");
+        throw std::runtime_error("Incorrect Modbus RTU function code!");
         break;
     }
     return REGISTER_TYPE_UNDEFINED;
@@ -513,7 +513,7 @@ void powermeterImpl::process_response(const RegisterData& register_data,
 float powermeterImpl::merge_register_values_into_element(const RegisterData& reg_data, const int16_t exponent,
                                                          const types::serial_comm_hub_requests::Result& reg_message) {
     if (not reg_message.value.has_value()) {
-        EVLOG_error << "Error! Received message is empty!\n";
+        EVLOG_error << "Error! Received message is empty!";
         return 0.f;
     }
 
@@ -546,7 +546,7 @@ void powermeterImpl::output_error_with_content(const types::serial_comm_hub_requ
     }
 
     EVLOG_debug << "received error response: " << status_code_enum_to_string(response.status_code) << " (" << ss.str()
-                << ")\n";
+                << ")";
 }
 
 } // namespace main
