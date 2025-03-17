@@ -347,9 +347,7 @@ void powermeterImpl::readRegister(const RegisterData& register_config) {
     if (register_config.start_register_function == READ_HOLDING_REGISTER) {
         register_response = mod->r_serial_comm_hub->call_modbus_read_holding_registers(
             config.powermeter_device_id, register_config.start_register, register_config.num_registers);
-    }
-
-    if (register_config.start_register_function == READ_INPUT_REGISTER) {
+    } else if (register_config.start_register_function == READ_INPUT_REGISTER) {
         register_response = mod->r_serial_comm_hub->call_modbus_read_input_registers(
             config.powermeter_device_id, register_config.start_register - config.modbus_base_address,
             register_config.num_registers);
@@ -359,9 +357,7 @@ void powermeterImpl::readRegister(const RegisterData& register_config) {
         if (register_config.exponent_register_function == READ_HOLDING_REGISTER) {
             exponent_response = mod->r_serial_comm_hub->call_modbus_read_holding_registers(
                 config.powermeter_device_id, register_config.exponent_register, register_config.num_registers);
-        }
-
-        if (register_config.exponent_register_function == READ_INPUT_REGISTER) {
+        } else if (register_config.exponent_register_function == READ_INPUT_REGISTER) {
             exponent_response = mod->r_serial_comm_hub->call_modbus_read_input_registers(
                 config.powermeter_device_id, register_config.exponent_register - config.modbus_base_address,
                 register_config.num_registers);
