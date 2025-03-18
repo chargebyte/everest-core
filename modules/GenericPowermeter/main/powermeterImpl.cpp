@@ -375,7 +375,19 @@ void powermeterImpl::process_response(const RegisterData& register_data,
                                       const types::serial_comm_hub_requests::Result register_message,
                                       const types::serial_comm_hub_requests::Result exponent_message) {
 
-    if (register_message.status_code == types::serial_comm_hub_requests::StatusCodeEnum::Success) {
+    if (register_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) {
+        // error: message sending failed
+        output_error_with_content(register_message);
+
+        // let's warn the user about the meter's unavailability once only
+        // (since we keep trying communicating an 'error' is not justified)
+        if (!meter_is_unavailable) {
+            EVLOG_warning << "Lost communication with power meter.";
+            meter_is_unavailable = true;
+        }
+
+        return;
+    } else {
         // in case the meter was unavailable before and now the query succeeded,
         // we can tell the user about this good news and reset our flag
         if (meter_is_unavailable) {
@@ -499,16 +511,6 @@ void powermeterImpl::process_response(const RegisterData& register_data,
             freq.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
             this->pm_last_values.frequency_Hz = freq;
         } else {
-        }
-    } else {
-        // error: message sending failed
-        output_error_with_content(register_message);
-
-        // let's warn the user about the meter's unavailability once only
-        // (since we keep trying communicating an 'error' is not justified)
-        if (!meter_is_unavailable) {
-            EVLOG_warning << "Lost communication with power meter.";
-            meter_is_unavailable = true;
         }
     }
 }
