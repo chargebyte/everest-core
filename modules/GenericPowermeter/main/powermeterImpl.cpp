@@ -375,9 +375,11 @@ void powermeterImpl::process_response(const RegisterData& register_data,
                                       const types::serial_comm_hub_requests::Result register_message,
                                       const types::serial_comm_hub_requests::Result exponent_message) {
 
-    if (register_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) {
+    if ((register_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) ||
+        (exponent_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success)) {
         // error: message sending failed
         output_error_with_content(register_message);
+        output_error_with_content(exponent_message);
 
         // let's warn the user about the meter's unavailability once only
         // (since we keep trying communicating an 'error' is not justified)
