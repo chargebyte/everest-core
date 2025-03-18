@@ -524,26 +524,21 @@ void powermeterImpl::process_response(const RegisterData& register_data,
 
 float powermeterImpl::merge_register_values_into_element(const RegisterData& reg_data, const int16_t exponent,
                                                          const types::serial_comm_hub_requests::Result& reg_message) {
-    if (reg_message.value.has_value()) {
-        uint32_t value{0};
-        auto& reg_value = reg_message.value.value();
-        if (reg_data.num_registers == 1 && reg_value.size() == 1) {
-            value = reg_value.at(0);
-        } else if (reg_data.num_registers == 2 && reg_value.size() == 2) {
-            value += reg_value.at(0) << 16;
-            value += reg_value.at(1);
-        } else {
-            throw std::runtime_error("Values of more than 2 registers in size are currently not supported!");
-        }
-
-        auto val = *reinterpret_cast<float*>(&value);
-        auto val_scaled = float(val * reg_data.multiplier * pow(10.0, exponent));
-
-        return val_scaled;
+    uint32_t value{0};
+    auto& reg_value = reg_message.value.value();
+    if (reg_data.num_registers == 1 && reg_value.size() == 1) {
+        value = reg_value.at(0);
+    } else if (reg_data.num_registers == 2 && reg_value.size() == 2) {
+        value += reg_value.at(0) << 16;
+        value += reg_value.at(1);
     } else {
-        EVLOG_error << "Error! Received message is empty!\n";
+        throw std::runtime_error("Values of more than 2 registers in size are currently not supported!");
     }
-    return 0.0;
+
+    auto val = *reinterpret_cast<float*>(&value);
+    auto val_scaled = float(val * reg_data.multiplier * pow(10.0, exponent));
+
+    return val_scaled;
 }
 
 void powermeterImpl::output_error_with_content(const types::serial_comm_hub_requests::Result& response) {
