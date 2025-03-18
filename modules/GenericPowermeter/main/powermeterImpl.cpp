@@ -16,16 +16,16 @@ namespace main {
 
 void powermeterImpl::init() {
 
-    std::size_t found = this->config.model.find(".."); // check for invalid path
+    const std::size_t found = this->config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
         EVLOG_error << fmt::format("Error! Substring \"..\" not allowed in given model name '{}'!", this->config.model);
         throw std::runtime_error("Incorrect model name in GenericPowermeter config");
     }
 
-    auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
+    const auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
 
     try {
-        json powermeter_registers = Everest::load_yaml(model);
+        const json powermeter_registers = Everest::load_yaml(model);
         this->init_register_assignments(std::move(powermeter_registers));
         this->init_default_values();
     } catch (const std::exception& e) {
@@ -329,7 +329,7 @@ powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const 
 }
 
 void powermeterImpl::read_powermeter_values() {
-    for (auto& register_data : this->pm_configuration) {
+    for (const auto& register_data : this->pm_configuration) {
         this->read_register(register_data);
     }
     this->pm_last_values.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
@@ -518,7 +518,7 @@ void powermeterImpl::process_response(const RegisterData& register_data,
 float powermeterImpl::merge_register_values_into_element(const RegisterData& reg_data, const int16_t exponent,
                                                          const types::serial_comm_hub_requests::Result& reg_message) {
     uint32_t value{0};
-    auto& reg_value = reg_message.value.value();
+    const auto& reg_value = reg_message.value.value();
     if (reg_data.num_registers == 1 && reg_value.size() == 1) {
         value = reg_value.at(0);
     } else if (reg_data.num_registers == 2 && reg_value.size() == 2) {
@@ -528,8 +528,8 @@ float powermeterImpl::merge_register_values_into_element(const RegisterData& reg
         throw std::runtime_error("Values of more than 2 registers in size are currently not supported!");
     }
 
-    auto val = *reinterpret_cast<float*>(&value);
-    auto val_scaled = float(val * reg_data.multiplier * pow(10.0, exponent));
+    const auto val = *reinterpret_cast<float*>(&value);
+    const auto val_scaled = float(val * reg_data.multiplier * pow(10.0, exponent));
 
     return val_scaled;
 }
