@@ -18,7 +18,7 @@ void powermeterImpl::init() {
 
     std::size_t found = this->config.model.find(".."); // check for invalid path
     if (found != std::string::npos) {
-        EVLOG_error << "Error! Substring \"..\" not allowed in model name!\n";
+        EVLOG_error << fmt::format("Error! Substring \"..\" not allowed in given model name '{}'!", this->config.model);
     } else {
         auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
 
@@ -248,7 +248,7 @@ void powermeterImpl::init_register_assignments(const json& loaded_registers) {
     failed |= not this->assign_register_data(loaded_registers, FREQUENCY_HZ_L1, "frequency_Hz");
 
     if (failed) {
-        EVLOG_error << "Could not load powermeter configuration!\n";
+        EVLOG_error << "Could not load powermeter configuration!";
     }
     this->config_loaded_successfully = not failed;
 }
@@ -287,7 +287,7 @@ bool powermeterImpl::assign_register_data(const json& registers, const Powermete
             }
         }
     } catch (const std::exception& e) {
-        EVLOG_error << "assigning configuration data for register \"" << register_selector << "\" failed: " << e.what();
+        EVLOG_error << "Assigning configuration data for register \"" << register_selector << "\" failed: " << e.what();
         return false;
     }
 
@@ -322,7 +322,7 @@ powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const 
         break;
 
     default:
-        throw std::runtime_error("Incorrect Modbus RTU function code!\n");
+        throw std::runtime_error(fmt::format("Incorrect Modbus RTU function code {}!", function_code));
         break;
     }
     return REGISTER_TYPE_UNDEFINED;
@@ -546,7 +546,7 @@ void powermeterImpl::output_error_with_content(const types::serial_comm_hub_requ
     }
 
     EVLOG_debug << "received error response: " << status_code_enum_to_string(response.status_code) << " (" << ss.str()
-                << ")\n";
+                << ")";
 }
 
 } // namespace main
