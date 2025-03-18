@@ -389,6 +389,18 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         return;
     }
 
+    // SerialCommHub implementation should be preventing this in case of StatusCodeEnum::Success
+    if ((not register_message.value.has_value()) or (not exponent_message.value.has_value())) {
+        EVLOG_warning << "Power meter reading returned an empty value, skipping";
+        return;
+    }
+
+    // SerialCommHub implementation should be preventing this in case of StatusCodeEnum::Success
+    if (register_message.value.value().size() == 0 or exponent_message.value.value().size() == 0) {
+        EVLOG_warning << "Power meter reading returned an empty value, skipping";
+        return;
+    }
+
     // in case the meter was unavailable before and now the query succeeded,
     // we can tell the user about this good news and reset our flag
     if (meter_is_unavailable) {
@@ -396,12 +408,7 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         meter_is_unavailable = false;
     }
 
-    int16_t exponent{0};
-    if (exponent_message.value.has_value()) {
-        exponent = exponent_message.value.value()[0];
-    } else {
-        exponent = 0.0;
-    }
+    const int16_t exponent = exponent_message.value.value()[0];
 
     if (register_data.type == ENERGY_WH_IMPORT_TOTAL) {
         types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
