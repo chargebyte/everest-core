@@ -387,131 +387,131 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         }
 
         return;
+    }
+
+    // in case the meter was unavailable before and now the query succeeded,
+    // we can tell the user about this good news and reset our flag
+    if (meter_is_unavailable) {
+        EVLOG_info << "Communication with power meter restored.";
+        meter_is_unavailable = false;
+    }
+
+    int16_t exponent{0};
+    if (exponent_message.value.has_value()) {
+        exponent = exponent_message.value.value()[0];
     } else {
-        // in case the meter was unavailable before and now the query succeeded,
-        // we can tell the user about this good news and reset our flag
-        if (meter_is_unavailable) {
-            EVLOG_info << "Communication with power meter restored.";
-            meter_is_unavailable = false;
-        }
+        exponent = 0.0;
+    }
 
-        int16_t exponent{0};
-        if (exponent_message.value.has_value()) {
-            exponent = exponent_message.value.value()[0];
-        } else {
-            exponent = 0.0;
-        }
-
-        if (register_data.type == ENERGY_WH_IMPORT_TOTAL) {
-            types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
-            energy_in.total = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_import = energy_in;
-        } else if (register_data.type == ENERGY_WH_IMPORT_L1) {
-            types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
-            energy_in.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_import = energy_in;
-        } else if (register_data.type == ENERGY_WH_IMPORT_L2) {
-            types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
-            energy_in.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_import = energy_in;
-        } else if (register_data.type == ENERGY_WH_IMPORT_L3) {
-            types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
-            energy_in.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_import = energy_in;
-        } else if (register_data.type == ENERGY_WH_EXPORT_TOTAL) {
-            types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
-            energy_out.total = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_export = energy_out;
-        } else if (register_data.type == ENERGY_WH_EXPORT_L1) {
-            types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
-            energy_out.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_export = energy_out;
-        } else if (register_data.type == ENERGY_WH_EXPORT_L2) {
-            types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
-            energy_out.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_export = energy_out;
-        } else if (register_data.type == ENERGY_WH_EXPORT_L3) {
-            types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
-            energy_out.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.energy_Wh_export = energy_out;
-        } else if (register_data.type == POWER_W_TOTAL) {
-            types::units::Power power = this->pm_last_values.power_W.value();
-            power.total = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.power_W = power;
-        } else if (register_data.type == POWER_W_L1) {
-            types::units::Power power = this->pm_last_values.power_W.value();
-            power.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.power_W = power;
-        } else if (register_data.type == POWER_W_L2) {
-            types::units::Power power = this->pm_last_values.power_W.value();
-            power.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.power_W = power;
-        } else if (register_data.type == POWER_W_L3) {
-            types::units::Power power = this->pm_last_values.power_W.value();
-            power.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.power_W = power;
-        } else if (register_data.type == VOLTAGE_V_DC) {
-            types::units::Voltage volt = this->pm_last_values.voltage_V.value();
-            volt.DC = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.voltage_V = volt;
-        } else if (register_data.type == VOLTAGE_V_L1) {
-            types::units::Voltage volt = this->pm_last_values.voltage_V.value();
-            volt.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.voltage_V = volt;
-        } else if (register_data.type == VOLTAGE_V_L2) {
-            types::units::Voltage volt = this->pm_last_values.voltage_V.value();
-            volt.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.voltage_V = volt;
-        } else if (register_data.type == VOLTAGE_V_L3) {
-            types::units::Voltage volt = this->pm_last_values.voltage_V.value();
-            volt.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.voltage_V = volt;
-        } else if (register_data.type == REACTIVE_POWER_VAR_TOTAL) {
-            types::units::ReactivePower var = this->pm_last_values.VAR.value();
-            var.total = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.VAR = var;
-        } else if (register_data.type == REACTIVE_POWER_VAR_L1) {
-            types::units::ReactivePower var = this->pm_last_values.VAR.value();
-            var.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.VAR = var;
-        } else if (register_data.type == REACTIVE_POWER_VAR_L2) {
-            types::units::ReactivePower var = this->pm_last_values.VAR.value();
-            var.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.VAR = var;
-        } else if (register_data.type == REACTIVE_POWER_VAR_L3) {
-            types::units::ReactivePower var = this->pm_last_values.VAR.value();
-            var.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.VAR = var;
-        } else if (register_data.type == CURRENT_A_DC) {
-            types::units::Current amp = this->pm_last_values.current_A.value();
-            amp.DC = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.current_A = amp;
-        } else if (register_data.type == CURRENT_A_L1) {
-            types::units::Current amp = this->pm_last_values.current_A.value();
-            amp.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.current_A = amp;
-        } else if (register_data.type == CURRENT_A_L2) {
-            types::units::Current amp = this->pm_last_values.current_A.value();
-            amp.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.current_A = amp;
-        } else if (register_data.type == CURRENT_A_L3) {
-            types::units::Current amp = this->pm_last_values.current_A.value();
-            amp.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.current_A = amp;
-        } else if (register_data.type == FREQUENCY_HZ_L1) {
-            types::units::Frequency freq = this->pm_last_values.frequency_Hz.value();
-            freq.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.frequency_Hz = freq;
-        } else if (register_data.type == FREQUENCY_HZ_L2) {
-            types::units::Frequency freq = this->pm_last_values.frequency_Hz.value();
-            freq.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.frequency_Hz = freq;
-        } else if (register_data.type == FREQUENCY_HZ_L3) {
-            types::units::Frequency freq = this->pm_last_values.frequency_Hz.value();
-            freq.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
-            this->pm_last_values.frequency_Hz = freq;
-        } else {
-        }
+    if (register_data.type == ENERGY_WH_IMPORT_TOTAL) {
+        types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
+        energy_in.total = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_import = energy_in;
+    } else if (register_data.type == ENERGY_WH_IMPORT_L1) {
+        types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
+        energy_in.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_import = energy_in;
+    } else if (register_data.type == ENERGY_WH_IMPORT_L2) {
+        types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
+        energy_in.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_import = energy_in;
+    } else if (register_data.type == ENERGY_WH_IMPORT_L3) {
+        types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
+        energy_in.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_import = energy_in;
+    } else if (register_data.type == ENERGY_WH_EXPORT_TOTAL) {
+        types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
+        energy_out.total = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_export = energy_out;
+    } else if (register_data.type == ENERGY_WH_EXPORT_L1) {
+        types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
+        energy_out.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_export = energy_out;
+    } else if (register_data.type == ENERGY_WH_EXPORT_L2) {
+        types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
+        energy_out.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_export = energy_out;
+    } else if (register_data.type == ENERGY_WH_EXPORT_L3) {
+        types::units::Energy energy_out = this->pm_last_values.energy_Wh_export.value();
+        energy_out.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.energy_Wh_export = energy_out;
+    } else if (register_data.type == POWER_W_TOTAL) {
+        types::units::Power power = this->pm_last_values.power_W.value();
+        power.total = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.power_W = power;
+    } else if (register_data.type == POWER_W_L1) {
+        types::units::Power power = this->pm_last_values.power_W.value();
+        power.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.power_W = power;
+    } else if (register_data.type == POWER_W_L2) {
+        types::units::Power power = this->pm_last_values.power_W.value();
+        power.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.power_W = power;
+    } else if (register_data.type == POWER_W_L3) {
+        types::units::Power power = this->pm_last_values.power_W.value();
+        power.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.power_W = power;
+    } else if (register_data.type == VOLTAGE_V_DC) {
+        types::units::Voltage volt = this->pm_last_values.voltage_V.value();
+        volt.DC = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.voltage_V = volt;
+    } else if (register_data.type == VOLTAGE_V_L1) {
+        types::units::Voltage volt = this->pm_last_values.voltage_V.value();
+        volt.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.voltage_V = volt;
+    } else if (register_data.type == VOLTAGE_V_L2) {
+        types::units::Voltage volt = this->pm_last_values.voltage_V.value();
+        volt.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.voltage_V = volt;
+    } else if (register_data.type == VOLTAGE_V_L3) {
+        types::units::Voltage volt = this->pm_last_values.voltage_V.value();
+        volt.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.voltage_V = volt;
+    } else if (register_data.type == REACTIVE_POWER_VAR_TOTAL) {
+        types::units::ReactivePower var = this->pm_last_values.VAR.value();
+        var.total = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.VAR = var;
+    } else if (register_data.type == REACTIVE_POWER_VAR_L1) {
+        types::units::ReactivePower var = this->pm_last_values.VAR.value();
+        var.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.VAR = var;
+    } else if (register_data.type == REACTIVE_POWER_VAR_L2) {
+        types::units::ReactivePower var = this->pm_last_values.VAR.value();
+        var.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.VAR = var;
+    } else if (register_data.type == REACTIVE_POWER_VAR_L3) {
+        types::units::ReactivePower var = this->pm_last_values.VAR.value();
+        var.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.VAR = var;
+    } else if (register_data.type == CURRENT_A_DC) {
+        types::units::Current amp = this->pm_last_values.current_A.value();
+        amp.DC = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.current_A = amp;
+    } else if (register_data.type == CURRENT_A_L1) {
+        types::units::Current amp = this->pm_last_values.current_A.value();
+        amp.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.current_A = amp;
+    } else if (register_data.type == CURRENT_A_L2) {
+        types::units::Current amp = this->pm_last_values.current_A.value();
+        amp.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.current_A = amp;
+    } else if (register_data.type == CURRENT_A_L3) {
+        types::units::Current amp = this->pm_last_values.current_A.value();
+        amp.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.current_A = amp;
+    } else if (register_data.type == FREQUENCY_HZ_L1) {
+        types::units::Frequency freq = this->pm_last_values.frequency_Hz.value();
+        freq.L1 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.frequency_Hz = freq;
+    } else if (register_data.type == FREQUENCY_HZ_L2) {
+        types::units::Frequency freq = this->pm_last_values.frequency_Hz.value();
+        freq.L2 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.frequency_Hz = freq;
+    } else if (register_data.type == FREQUENCY_HZ_L3) {
+        types::units::Frequency freq = this->pm_last_values.frequency_Hz.value();
+        freq.L3 = this->merge_register_values_into_element(register_data, exponent, register_message);
+        this->pm_last_values.frequency_Hz = freq;
+    } else {
     }
 }
 
