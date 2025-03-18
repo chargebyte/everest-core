@@ -3,6 +3,8 @@
 
 #include "powermeterImpl.hpp"
 #include <fmt/core.h>
+#include <functional>
+#include <optional>
 #include <thread>
 #include <utils/date.hpp>
 #include <utils/yaml_loader.hpp>
@@ -339,7 +341,7 @@ void powermeterImpl::read_powermeter_values() {
 void powermeterImpl::read_register(const RegisterData& register_config) {
 
     types::serial_comm_hub_requests::Result register_response{};
-    types::serial_comm_hub_requests::Result exponent_response{};
+    std::optional<types::serial_comm_hub_requests::Result> exponent_response;
 
     if (register_config.start_register_function == READ_HOLDING_REGISTER) {
         register_response = mod->r_serial_comm_hub->call_modbus_read_holding_registers(
@@ -359,18 +361,25 @@ void powermeterImpl::read_register(const RegisterData& register_config) {
                 this->config.powermeter_device_id, register_config.exponent_register - this->config.modbus_base_address,
                 register_config.num_registers);
         }
+        this->process_response(register_config, std::move(register_response), std::move(exponent_response));
+    } else {
+        // no exponent
+        this->process_response(register_config, std::move(register_response), std::nullopt);
     }
-
-    this->process_response(register_config, std::move(register_response), std::move(exponent_response));
 }
 
-void powermeterImpl::process_response(const RegisterData& register_data,
-                                      const types::serial_comm_hub_requests::Result register_message,
-                                      const types::serial_comm_hub_requests::Result exponent_message) {
+void powermeterImpl::process_response(
+    const RegisterData& register_data, const types::serial_comm_hub_requests::Result& register_message,
+    std::optional<std::reference_wrapper<const types::serial_comm_hub_requests::Result>> exponent_message) {
 
-    if (register_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) {
+    if ((register_message.status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success) ||
+        (exponent_message &&
+         exponent_message->get().status_code != types::serial_comm_hub_requests::StatusCodeEnum::Success)) {
         // error: message sending failed
         output_error_with_content(register_message);
+        if (exponent_message) {
+            output_error_with_content(exponent_message.value());
+        }
 
         // let's warn the user about the meter's unavailability once only
         // (since we keep trying communicating an 'error' is not justified)
@@ -383,14 +392,20 @@ void powermeterImpl::process_response(const RegisterData& register_data,
     }
 
     // SerialCommHub implementation should be preventing this in case of StatusCodeEnum::Success
-    if ((not register_message.value.has_value()) or (not exponent_message.value.has_value())) {
+    if (not register_message.value.has_value()) {
+        EVLOG_warning << "Power meter reading returned without a value, skipping";
+        return;
+    }
+    if (exponent_message and not exponent_message->get().value.has_value()) {
+        EVLOG_warning << "Power meter reading returned without an exponent value, skipping";
+        return;
+    }
+    if (register_message.value.value().size() == 0) {
         EVLOG_warning << "Power meter reading returned an empty value, skipping";
         return;
     }
-
-    // SerialCommHub implementation should be preventing this in case of StatusCodeEnum::Success
-    if (register_message.value.value().size() == 0 or exponent_message.value.value().size() == 0) {
-        EVLOG_warning << "Power meter reading returned an empty value, skipping";
+    if (exponent_message and exponent_message->get().value.value().size() == 0) {
+        EVLOG_warning << "Power meter reading returned an empty exponent value, skipping";
         return;
     }
 
@@ -401,7 +416,10 @@ void powermeterImpl::process_response(const RegisterData& register_data,
         meter_is_unavailable = false;
     }
 
-    const int16_t exponent = exponent_message.value.value()[0];
+    int16_t exponent = 0;
+    if (exponent_message) {
+        exponent_message->get().value.value()[0];
+    }
 
     if (register_data.type == ENERGY_WH_IMPORT_TOTAL) {
         types::units::Energy energy_in = this->pm_last_values.energy_Wh_import;
