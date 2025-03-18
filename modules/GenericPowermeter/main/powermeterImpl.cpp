@@ -20,18 +20,18 @@ void powermeterImpl::init() {
     if (found != std::string::npos) {
         EVLOG_error << fmt::format("Error! Substring \"..\" not allowed in given model name '{}'!", this->config.model);
         throw std::runtime_error("Incorrect model name in GenericPowermeter config");
-    } else {
-        auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
+    }
 
-        try {
-            json powermeter_registers = Everest::load_yaml(model);
-            this->init_register_assignments(std::move(powermeter_registers));
-            this->init_default_values();
-        } catch (const std::exception& e) {
-            EVLOG_error << "opening file \"" << this->config.model << ".yaml\" from path " << model
-                        << "\" failed: " << e.what();
-            throw std::runtime_error("Module \"GenericPowermeter\" could not be initialized!");
-        }
+    auto model = this->mod->info.paths.share / MODELS_SUB_DIR / fmt::format("{}.yaml", this->config.model);
+
+    try {
+        json powermeter_registers = Everest::load_yaml(model);
+        this->init_register_assignments(std::move(powermeter_registers));
+        this->init_default_values();
+    } catch (const std::exception& e) {
+        EVLOG_error << "opening file \"" << this->config.model << ".yaml\" from path " << model
+                    << "\" failed: " << e.what();
+        throw std::runtime_error("Module \"GenericPowermeter\" could not be initialized!");
     }
 }
 
