@@ -123,7 +123,7 @@ template <>
 void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_params,
                                   const iso15118::d20::DcTransferLimits& evse_limits,
                                   const dt::DC_CPDReqEnergyTransferMode& ev_limits) {
-    // As per the OCPP 2.1 spec we should use the MIN/MAX function between EV and EVSE
+    // As per the OCPP 2.1 spec (2.109) we should use the MIN/MAX function between EV and EVSE
     out_params.min_charge_power = std::max(dt::from_RationalNumber(evse_limits.charge_limits.power.min),
                                            dt::from_RationalNumber(ev_limits.min_charge_power));
     out_params.max_charge_power = std::min(dt::from_RationalNumber(evse_limits.charge_limits.power.max),
@@ -170,7 +170,25 @@ template <>
 void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_params,
                                   const iso15118::d20::AcTransferLimits& evse_limits,
                                   const dt::AC_CPDReqEnergyTransferMode& ev_limits) {
-    // TODO:
+    // As per the OCPP 2.1 spec (2.109) we should use the MIN/MAX function between EV and EVSE
+    out_params.min_charge_power = std::max(dt::from_RationalNumber(evse_limits.charge_power.min),
+                                           dt::from_RationalNumber(ev_limits.min_charge_power));
+    out_params.max_charge_power = std::min(dt::from_RationalNumber(evse_limits.charge_power.max),
+                                           dt::from_RationalNumber(ev_limits.max_charge_power));
+
+    if (evse_limits.charge_power_L2.has_value() && ev_limits.max_charge_power_L2.has_value()) {
+        out_params.min_charge_power = std::max(dt::from_RationalNumber(evse_limits.charge_power_L2.value().min),
+                                               dt::from_RationalNumber(ev_limits.min_charge_power_L2.value()));
+        out_params.max_charge_power = std::min(dt::from_RationalNumber(evse_limits.charge_power_L2.value().max),
+                                               dt::from_RationalNumber(ev_limits.max_charge_power_L2.value()));
+    }
+
+    if (evse_limits.charge_power_L3.has_value() && ev_limits.max_charge_power_L3.has_value()) {
+        out_params.min_charge_power = std::max(dt::from_RationalNumber(evse_limits.charge_power_L3.value().min),
+                                               dt::from_RationalNumber(ev_limits.min_charge_power_L3.value()));
+        out_params.max_charge_power = std::min(dt::from_RationalNumber(evse_limits.charge_power_L3.value().max),
+                                               dt::from_RationalNumber(ev_limits.max_charge_power_L3.value()));
+    }
 }
 
 template <>
@@ -181,7 +199,34 @@ void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_pa
     fill_v2x_charging_parameters<iso15118::d20::AcTransferLimits, dt::AC_CPDReqEnergyTransferMode>(
         out_params, evse_limits, static_cast<const dt::AC_CPDReqEnergyTransferMode&>(ev_limits));
 
-    // TODO:
+    if (evse_limits.discharge_power.has_value()) {
+        const auto& evse_discharge_limits = evse_limits.discharge_power.value();
+
+        out_params.min_discharge_power = std::max(dt::from_RationalNumber(evse_discharge_limits.min),
+                                                  dt::from_RationalNumber(ev_limits.min_discharge_power));
+        out_params.max_discharge_power = std::min(dt::from_RationalNumber(evse_discharge_limits.max),
+                                                  dt::from_RationalNumber(ev_limits.max_discharge_power));
+    }
+
+    if (evse_limits.discharge_power_L2.has_value() && ev_limits.min_discharge_power_L2.has_value() &&
+        ev_limits.max_discharge_power_L2.has_value()) {
+        const auto& evse_discharge_limits = evse_limits.discharge_power_L2.value();
+
+        out_params.min_discharge_power = std::max(dt::from_RationalNumber(evse_discharge_limits.min),
+                                                  dt::from_RationalNumber(ev_limits.min_discharge_power_L2.value()));
+        out_params.max_discharge_power = std::min(dt::from_RationalNumber(evse_discharge_limits.max),
+                                                  dt::from_RationalNumber(ev_limits.max_discharge_power_L2.value()));
+    }
+
+    if (evse_limits.discharge_power_L3.has_value() && ev_limits.min_discharge_power_L3.has_value() &&
+        ev_limits.max_discharge_power_L3.has_value()) {
+        const auto& evse_discharge_limits = evse_limits.discharge_power_L3.value();
+
+        out_params.min_discharge_power = std::max(dt::from_RationalNumber(evse_discharge_limits.min),
+                                                  dt::from_RationalNumber(ev_limits.min_discharge_power_L3.value()));
+        out_params.max_discharge_power = std::min(dt::from_RationalNumber(evse_discharge_limits.max),
+                                                  dt::from_RationalNumber(ev_limits.max_discharge_power_L3.value()));
+    }
 }
 
 template <>
