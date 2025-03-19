@@ -168,6 +168,24 @@ void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_pa
 
 template <>
 void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_params,
+                                  const iso15118::d20::AcTransferLimits& evse_limits,
+                                  const dt::AC_CPDReqEnergyTransferMode& ev_limits) {
+    // TODO:
+}
+
+template <>
+void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_params,
+                                  const iso15118::d20::AcTransferLimits& evse_limits,
+                                  const dt::BPT_AC_CPDReqEnergyTransferMode& ev_limits) {
+    // Fill in the common data
+    fill_v2x_charging_parameters<iso15118::d20::AcTransferLimits, dt::AC_CPDReqEnergyTransferMode>(
+        out_params, evse_limits, static_cast<const dt::AC_CPDReqEnergyTransferMode&>(ev_limits));
+
+    // TODO:
+}
+
+template <>
+void fill_v2x_charging_parameters(types::iso15118::V2XChargingParameters& out_params,
                                   const dt::Scheduled_SEReqControlMode& ev_control_mode) {
     out_params.ev_target_energy_request = convert_from_optional<float>(ev_control_mode.target_energy);
     out_params.ev_min_energy_request = convert_from_optional<float>(ev_control_mode.min_energy);
@@ -364,6 +382,12 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
                     fill_v2x_charging_parameters(v2x_charging_parameters, *dc_evse_limits, *dc_ev_limits);
                 } else if (const auto* dc_ev_limits = std::get_if<dt::BPT_DC_CPDReqEnergyTransferMode>(&ev_limits)) {
                     fill_v2x_charging_parameters(v2x_charging_parameters, *dc_evse_limits, *dc_ev_limits);
+                }
+            } else if (const auto* ac_evse_limits = std::get_if<iso15118::d20::AcTransferLimits>(&evse_limits)) {
+                if (const auto* ac_ev_limits = std::get_if<dt::AC_CPDReqEnergyTransferMode>(&ev_limits)) {
+                    fill_v2x_charging_parameters(v2x_charging_parameters, *ac_evse_limits, *ac_ev_limits);
+                } else if (const auto* ac_ev_limits = std::get_if<dt::BPT_AC_CPDReqEnergyTransferMode>(&ev_limits)) {
+                    fill_v2x_charging_parameters(v2x_charging_parameters, *ac_evse_limits, *ac_ev_limits);
                 }
             } else {
                 EVLOG_error << "Invalid type received for EVSE limits! Not sending 'ChargingNeeds'.";
