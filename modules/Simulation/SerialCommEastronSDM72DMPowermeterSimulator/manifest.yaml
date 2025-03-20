@@ -1,0 +1,10 @@
+description: >-
+    Simulate the SerialCommHub responses for an Eastron_SDM72DM-V2 device
+provides:
+    main:
+        description: Implementation of serial communication hub
+        interface: serial_communication_hub
+metadata:
+  license: https://opensource.org/licenses/Apache-2.0
+  authors:
+    - chargebyte GmbH
