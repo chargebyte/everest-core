@@ -31,6 +31,14 @@ serial_communication_hubImpl::handle_modbus_read_input_registers(int& target_dev
         return result;
     }
 
+    if (not this->mod->delayed_ready) {
+        EVLOG_warning << "Behaving as not ready for register " << first_register_address;
+        // EVLOG_warning << "Behaving as short read for register " << first_register_address;
+        // result.value = {0};
+        // result.status_code = types::serial_comm_hub_requests::StatusCodeEnum::Success;
+        return result;
+    }
+
     switch (first_register_address) {
     case 0:
         result.value = {17255, 45023};

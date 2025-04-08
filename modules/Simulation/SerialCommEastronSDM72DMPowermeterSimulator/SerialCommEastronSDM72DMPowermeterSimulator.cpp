@@ -9,6 +9,14 @@ void SerialCommEastronSDM72DMPowermeterSimulator::init() {
 }
 
 void SerialCommEastronSDM72DMPowermeterSimulator::ready() {
+    std::thread t([this]() {
+        EVLOG_info << "Delaying ready";
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        this->delayed_ready = true;
+        EVLOG_info << "Delayed ready is available";
+    });
+    t.detach();
+
     invoke_ready(*p_main);
 }
 
