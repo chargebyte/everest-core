@@ -331,14 +331,25 @@ powermeterImpl::ModbusFunctionType powermeterImpl::select_modbus_function(const 
 }
 
 void powermeterImpl::read_powermeter_values() {
+    static bool pm_values_are_complete{false};
+    bool all_pm_registers_success{true};
     for (const auto& register_data : this->pm_configuration) {
-        this->read_register(register_data);
+        all_pm_registers_success &= this->read_register(register_data);
     }
+    if (all_pm_registers_success) {
+        pm_values_are_complete = true;
+    }
+
+    if (not pm_values_are_complete) {
+        EVLOG_warning << "No complete set of power meter values has been acquired yet. Not publishing.";
+        return;
+    }
+
     this->pm_last_values.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
     this->publish_powermeter(this->pm_last_values);
 }
 
-void powermeterImpl::read_register(const RegisterData& register_config) {
+bool powermeterImpl::read_register(const RegisterData& register_config) {
 
     types::serial_comm_hub_requests::Result register_response{};
     std::optional<types::serial_comm_hub_requests::Result> exponent_response;
@@ -361,14 +372,14 @@ void powermeterImpl::read_register(const RegisterData& register_config) {
                 this->config.powermeter_device_id, register_config.exponent_register - this->config.modbus_base_address,
                 register_config.num_registers);
         }
-        this->process_response(register_config, std::move(register_response), std::move(exponent_response));
+        return this->process_response(register_config, std::move(register_response), std::move(exponent_response));
     } else {
         // no exponent
-        this->process_response(register_config, std::move(register_response), std::nullopt);
+        return this->process_response(register_config, std::move(register_response), std::nullopt);
     }
 }
 
-void powermeterImpl::process_response(
+bool powermeterImpl::process_response(
     const RegisterData& register_data, const types::serial_comm_hub_requests::Result& register_message,
     std::optional<std::reference_wrapper<const types::serial_comm_hub_requests::Result>> exponent_message) {
 
@@ -388,25 +399,25 @@ void powermeterImpl::process_response(
             meter_is_unavailable = true;
         }
 
-        return;
+        return false;
     }
 
     // SerialCommHub implementation should be preventing this in case of StatusCodeEnum::Success
     if (not register_message.value.has_value()) {
         EVLOG_warning << "Power meter reading returned without a value, skipping";
-        return;
+        return false;
     }
     if (exponent_message and not exponent_message->get().value.has_value()) {
         EVLOG_warning << "Power meter reading returned without an exponent value, skipping";
-        return;
+        return false;
     }
     if (register_message.value.value().size() == 0) {
         EVLOG_warning << "Power meter reading returned an empty value, skipping";
-        return;
+        return false;
     }
     if (exponent_message and exponent_message->get().value.value().size() == 0) {
         EVLOG_warning << "Power meter reading returned an empty exponent value, skipping";
-        return;
+        return false;
     }
 
     // in case the meter was unavailable before and now the query succeeded,
@@ -531,6 +542,8 @@ void powermeterImpl::process_response(
         this->pm_last_values.frequency_Hz = freq;
     } else {
     }
+
+    return true;
 }
 
 float powermeterImpl::merge_register_values_into_element(const RegisterData& reg_data, const int16_t exponent,

@@ -121,11 +121,11 @@ private:
                                        const uint8_t offset);
     powermeterImpl::ModbusFunctionType select_modbus_function(const uint8_t function_code);
     void read_powermeter_values();
-    void read_register(const RegisterData& register_config);
+    bool read_register(const RegisterData& register_config);
     // void process_response(const RegisterData& message_type,
     //                       const types::serial_comm_hub_requests::Result register_message,
     //                       const types::serial_comm_hub_requests::Result exponent_message);
-    void process_response(
+    bool process_response(
         const RegisterData& register_data, const types::serial_comm_hub_requests::Result& register_message,
         std::optional<std::reference_wrapper<const types::serial_comm_hub_requests::Result>> exponent_message);
     float merge_register_values_into_element(const RegisterData& reg_data, const int16_t exponent,
