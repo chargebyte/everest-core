@@ -30,8 +30,8 @@ void powermeterImpl::init() {
         this->init_default_values();
     } catch (const std::exception& e) {
         EVLOG_error << "opening file \"" << this->config.model << ".yaml\" from path " << model
-                    << "\" failed: " << e.what();
-        throw std::runtime_error("Module \"GenericPowermeter\" could not be initialized!");
+                    << " failed: " << e.what();
+        throw std::runtime_error(fmt::format("Module \"GenericPowermeter\" could not be initialized: {}", e.what()));
     }
 }
 
