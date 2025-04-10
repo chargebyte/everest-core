@@ -39,6 +39,8 @@ void powermeterImpl::ready() {
     std::thread([this] {
         while (true) {
             this->read_powermeter_values();
+            // Note: reading the power meter values may take several seconds already, so the complete loop
+            // time of this function will be well beyond the sleep time given below.
             sleep(1);
         }
     }).detach();
