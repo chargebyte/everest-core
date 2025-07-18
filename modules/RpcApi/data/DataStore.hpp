@@ -5,6 +5,7 @@
 
 #include "GenericInfoStore.hpp"
 #include "SessionInfo.hpp"
+#include <everest/logging.hpp>
 
 namespace data {
 
@@ -12,7 +13,7 @@ enum class EVSEStatusField {
     ActiveConnectorId,
     ChargingAllowed,
     State,
-    EVSEError,
+    ErrorPresent,
     ChargeProtocol,
     ChargingDurationS,
     ChargedEnergyWh,
@@ -89,6 +90,15 @@ private:
         if (this->data_is_valid) {
             return; // No need to update if data is already valid
         }
+
+        // check only ChargingDurationS and ChargedEnergyWh
+        // If both are set, we consider the data valid
+        if (field_status[EVSEStatusField::ChargingDurationS] == true &&
+            field_status[EVSEStatusField::ChargedEnergyWh] == true) {
+            this->data_is_valid = true;
+            return;
+        }
+
         // Check if all fields are set
         for (const auto& [field, is_set] : field_status) {
             if (!is_set) {
@@ -106,7 +116,7 @@ public:
             {EVSEStatusField::ActiveConnectorId, false},
             {EVSEStatusField::ChargingAllowed, false},
             {EVSEStatusField::State, false},
-            {EVSEStatusField::EVSEError, false},
+            {EVSEStatusField::ErrorPresent, false},
             {EVSEStatusField::ChargeProtocol, false},
             {EVSEStatusField::ChargingDurationS, false},
             {EVSEStatusField::ChargedEnergyWh, false},
@@ -156,18 +166,20 @@ public:
             this->notify_data_changed();
         }
     }
-    // set the EVSE error
-    void set_evse_error(types::json_rpc_api::EVSEErrorEnum evse_error) {
+
+    // set EVSE errors
+    void set_error_present(const bool error_present) {
         std::unique_lock<std::mutex> data_lock(this->data_mutex);
-        field_status[EVSEStatusField::EVSEError] = true; // Mark field as set
+        field_status[EVSEStatusField::ErrorPresent] = true; // Mark field as set
         update_data_is_valid();
         // check if data has changed
-        if (this->dataobj.evse_error != evse_error) {
-            this->dataobj.evse_error = evse_error;
+        if (this->dataobj.error_present != error_present) {
+            this->dataobj.error_present = error_present;
             data_lock.unlock();
             this->notify_data_changed();
         }
     }
+
     // set the charge protocol 
     void set_charge_protocol(types::json_rpc_api::ChargeProtocolEnum charge_protocol) {
         std::unique_lock<std::mutex> data_lock(this->data_mutex);
