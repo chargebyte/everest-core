@@ -50,18 +50,15 @@ public:
     RpcApi() = delete;
     RpcApi(const ModuleInfo& info, std::unique_ptr<emptyImplBase> p_main,
            std::vector<std::unique_ptr<evse_managerIntf>> r_evse_manager,
-           std::vector<std::unique_ptr<error_historyIntf>> r_error_history,
            std::vector<std::unique_ptr<external_energy_limitsIntf>> r_evse_energy_sink, Conf& config) :
         ModuleBase(info),
         p_main(std::move(p_main)),
         r_evse_manager(std::move(r_evse_manager)),
-        r_error_history(std::move(r_error_history)),
         r_evse_energy_sink(std::move(r_evse_energy_sink)),
         config(config){};
 
     const std::unique_ptr<emptyImplBase> p_main;
     const std::vector<std::unique_ptr<evse_managerIntf>> r_evse_manager;
-    const std::vector<std::unique_ptr<error_historyIntf>> r_error_history;
     const std::vector<std::unique_ptr<external_energy_limitsIntf>> r_evse_energy_sink;
     const Conf& config;
 
@@ -81,13 +78,16 @@ private:
 
     // ev@211cfdbe-f69a-4cd6-a4ec-f8aaa3d1b6c8:v1
     // insert your private definitions here
+    std::atomic<bool> running{true};
     data::DataStoreCharger data;
     std::unique_ptr<server::WebSocketServer> m_websocket_server;
     std::unique_ptr<rpc::RpcHandler> m_rpc_handler;
     std::unique_ptr<request_interface::RequestHandlerInterface> m_request_handler;
+    std::vector<std::thread> api_threads;
 
     void check_evse_session_event(data::DataStoreEvse& evse_data, const types::evse_manager::SessionEvent& session_event);
     void subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evse_manager, data::DataStoreEvse& evse_data);
+    void start_error_history_polling_thread();
     void meterdata_var_to_datastore(const types::powermeter::Powermeter& powermeter, data::MeterDataStore& meter_data);
     void hwcaps_var_to_datastore(const types::evse_board_support::HardwareCapabilities& hwcaps,
                                  data::HardwareCapabilitiesStore& hw_caps_data);
