@@ -125,14 +125,6 @@ private:
             return; // No need to update if data is already valid
         }
 
-        // check only ChargingDurationS and ChargedEnergyWh
-        // If both are set, we consider the data valid
-        if (field_status[EVSEStatusField::ChargingDurationS] == true &&
-            field_status[EVSEStatusField::ChargedEnergyWh] == true) {
-            this->data_is_valid = true;
-            return;
-        }
-
         // Check if all fields are set
         for (const auto& [field, is_set] : field_status) {
             if (!is_set) {
