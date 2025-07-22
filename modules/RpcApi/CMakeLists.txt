@@ -37,6 +37,7 @@ target_sources(${MODULE_NAME}
         "data/GenericInfoStore.cpp"
         "data/SessionInfo.cpp"
         "helpers/Conversions.cpp"
+        "helpers/ErrorHandler.cpp"
         "rpc/RpcHandler.cpp"
         "rpc/notifications/ChargePoint.cpp"
         "rpc/notifications/Evse.cpp"

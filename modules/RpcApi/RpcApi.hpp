@@ -78,7 +78,6 @@ private:
 
     // ev@211cfdbe-f69a-4cd6-a4ec-f8aaa3d1b6c8:v1
     // insert your private definitions here
-    std::atomic<bool> running{true};
     data::DataStoreCharger data;
     std::unique_ptr<server::WebSocketServer> m_websocket_server;
     std::unique_ptr<rpc::RpcHandler> m_rpc_handler;
@@ -87,7 +86,7 @@ private:
 
     void check_evse_session_event(data::DataStoreEvse& evse_data, const types::evse_manager::SessionEvent& session_event);
     void subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evse_manager, data::DataStoreEvse& evse_data);
-    void start_error_history_polling_thread();
+    void subscribe_global_errors();
     void meterdata_var_to_datastore(const types::powermeter::Powermeter& powermeter, data::MeterDataStore& meter_data);
     void hwcaps_var_to_datastore(const types::evse_board_support::HardwareCapabilities& hwcaps,
                                  data::HardwareCapabilitiesStore& hw_caps_data);
