@@ -38,6 +38,7 @@ target_sources(${MODULE_NAME}
         "data/SessionInfo.cpp"
         "helpers/Conversions.cpp"
         "rpc/RpcHandler.cpp"
+        "rpc/notifications/ChargePoint.cpp"
         "rpc/notifications/Evse.cpp"
         "server/TransportInterface.cpp"
         "server/WebsocketServer.cpp"
