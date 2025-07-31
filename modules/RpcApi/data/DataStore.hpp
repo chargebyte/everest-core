@@ -157,6 +157,7 @@ public:
         set_discharged_energy_wh(0.0f);
         set_error_present(false);
         set_charging_allowed(true);
+        set_available(true);
     }
 
     // Example set method using the enum
