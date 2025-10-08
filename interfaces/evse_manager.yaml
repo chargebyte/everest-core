@@ -90,6 +90,23 @@ cmds:
     result:
       description: Returns true if successful
       type: boolean
+  reinit_charging_session:
+    description: >-
+      Performs a reinitialization sequence on the EVSE. A running HLC session is terminated and the CP side is switched
+      to a 100% duty cycles. If the charging session has been paused, the state transition is executed directly,
+      as defined in the “reinit_state_transition” and “reinit_duration”
+      parameters. The state transition serves to reinitialize the vehicle-side implementation so that a new session is
+      requested by the EV side.
+      Both parameters “reinit_state_transition” and “reinit_duration” of reinit_configuration are optional,
+      but if one is specified, the other must also be specified; otherwise, the result will be false.
+    arguments:
+      reinit_configuration:
+        description: Configuration for reinitialization of a charging session
+        type: object
+        $ref: /evse_manager#/ReinitConfiguration
+    result:
+      description: Returns true if successful
+      type: boolean
   force_unlock:
     description: >-
       Forces connector to unlock connector now. During normal operation, connector
