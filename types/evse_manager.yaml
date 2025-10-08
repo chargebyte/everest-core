@@ -562,6 +562,83 @@ types:
           $ref: /evse_manager#/Connector
         minItems: 1
         maxItems: 128
+  ReinitConfiguration:
+    description: Configuration for reinitialization of a charging session
+    type: object
+    additionalProperties: false
+    required:
+      - reinit_state_transition
+      - reinit_duration
+    properties:
+      reinit_state_transition:
+        description: State transition to use for reinitialization of a charging session
+        type: object
+        $ref: /evse_manager#/ReinitStateEnum
+      reinit_duration:
+        description: Duration of the reinitialization state transition in seconds
+        type: integer
+  ReinitStateEnum:
+    description: >-
+      State to use for reinitialization or AC phase switching
+        CPStateE: CP State E (0V). This state appears as an unplug event on the Control Pilot line for the EV.
+        CPStateF: CP State F (-12V), 0% duty cycle
+        CPStateX1: CP powered on with 100% duty cycle
+    type: string
+    enum:
+      - CPStateE
+      - CPStateF
+      - CPStateX1
+  PhaseSwitchConfiguration:
+    description: Configuration for phase switching while charging
+    type: object
+    additionalProperties: false
+    required:
+      - reinit_configuration
+    properties:
+      reinit_configuration:
+        description: Configuration for reinitialization when switching phases
+        type: object
+        $ref: /evse_manager#/ReinitConfiguration
+  ACChargingSessionConfiguration:
+    description: Configuration of AC charging sessions
+    type: object
+    additionalProperties: false
+    required:
+      - allow_isod20
+      - allow_isod2
+      - allow_isod2_fake_dc
+    properties:
+      allow_isod20:
+        description: Allow ISO/DIS 15118-20 sessions
+        type: boolean
+      allow_isod2:
+        description: Allow ISO/DIS 15118-2 sessions
+        type: boolean
+      allow_isod2_fake_dc:
+        description: Allow ISO/DIS 15118-2 sessions with fake DC
+        type: boolean
+      disable_isod2_fake_dc_after_replug:
+        description: Disable ISO/DIS 15118-2 sessions with fake DC after a replug
+        type: boolean
+      reinit_configuration:
+        description: Configuration for reinitialization of a charging session
+        type: object
+        $ref: /evse_manager#/ReinitConfiguration
+      phase_switch_configuration:
+        description: Configuration for phase switching while charging
+        type: object
+        $ref: /evse_manager#/PhaseSwitchConfiguration
+      mac_filter:
+        description:  >-
+          List of MAC addresses where the AC charging session configuration applies.
+          The MAC should have the format “XX:XX:XX:XX:XX:XX” for a full 48-bit address, or “XX:XX:XX”
+          for an Organizationally Unique Identifier (OUI, first 3 octets).
+          It is not necessary to specify a complete 48-bit address; specifying an OUI will apply the
+          configuration to all MAC addresses with that prefix.
+        type: array
+        items:
+          type: string
+          pattern: ^[A-Fa-f0-9]{2}(:[A-Fa-f0-9]{2}){2,5}$
   PlugAndChargeConfiguration:
     description: Configuration for contract authorization
     type: object
