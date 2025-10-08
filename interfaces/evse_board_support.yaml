@@ -62,6 +62,7 @@ cmds:
         type: boolean
   evse_replug:
     description: >-
+      Deprecated and will be removed in future versions.
       Optional, in case of doubt do not implement.
       Special command initiate a virtual replug sequence without restarting
       session. Emits a EvseReplugStarted event if supported and started. BSP will
