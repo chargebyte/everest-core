@@ -112,6 +112,19 @@ cmds:
     result:
       description: Returns true if the signal was used by the evse manager implementation
       type: boolean
+  set_ac_charging_session_configuration:
+    description: >-
+      Sets the configuration required for AC charging sessions. This includes
+      configuration of supported protocols (e.g. DIN70121, ISO15118-2), reinit behavior,
+      etc.
+    arguments:
+      ac_charging_session_configuration:
+        description: The AC charging session configuration object
+        type: object
+        $ref: /evse_manager#/ACChargingSessionConfiguration
+    result:
+      description: Returns true if the configuration was successfully applied, false otherwise.
+      type: boolean
   set_plug_and_charge_configuration:
     description: >-
       Sets the configuration required for ISO15118 to handle contract authorization.
