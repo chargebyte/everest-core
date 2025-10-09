@@ -86,6 +86,11 @@ void EvseManager::init() {
     if (config.autocharge_use_slac_instead_of_hlc and slac_enabled and config.enable_autocharge) {
         r_slac[0]->subscribe_ev_mac_address([this](const std::string& token) {
             p_token_provider->publish_provided_token(create_autocharge_token(token, config.connector_id));
+
+            // publish ev_info to notify connected modules about the EV MAC address
+            Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
+            ev_info.mac = token;
+            p_evse->publish_ev_info(ev_info);
         });
     }
 
