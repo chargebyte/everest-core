@@ -268,7 +268,7 @@ FSMSimpleState::HandleEventReturnType WaitForLinkState::handle_event(AllocatorTy
             return sa.PASS_ON;
         }
     } else if (ev == Event::RETRY_MATCHING) {
-        ctx.log_info("Link could not be established, resetting...");
+        ctx.log_info("Link could not be established");
         // Notify higher layers to on CP signal
         return sa.create_simple<FailedState>(ctx);
     } else if (ev == Event::RESET) {
