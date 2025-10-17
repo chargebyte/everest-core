@@ -118,13 +118,11 @@ void MatchingState::handle_slac_message(slac::messages::HomeplugMessage& msg) {
 }
 
 static bool validate_cm_slac_parm_req(const slac::messages::cm_slac_parm_req& msg) {
-    constexpr uint8_t CM_SLAC_PARM_APPLICATION_TYPE = 0x00; // EV/EVSE matching
-    constexpr uint8_t CM_SLAC_PARM_SECURITY_TYPE = 0x00;    // no security
 
-    if (msg.application_type not_eq CM_SLAC_PARM_APPLICATION_TYPE) {
+    if (msg.application_type not_eq slac::defs::COMMON_APPLICATION_TYPE) {
         return false;
     }
-    if (msg.security_type not_eq CM_SLAC_PARM_SECURITY_TYPE) {
+    if (msg.security_type not_eq slac::defs::COMMON_SECURITY_TYPE) {
         return false;
     }
 
@@ -162,9 +160,35 @@ void MatchingState::handle_cm_slac_parm_req(const slac::messages::cm_slac_parm_r
     ctx.signal_cm_slac_parm_req(tmp_ev_mac);
 }
 
-void MatchingState::handle_cm_start_atten_char_ind(const slac::messages::cm_start_atten_char_ind& msg) {
-    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
+static bool validate_cm_start_atten_char_ind(const slac::messages::cm_start_atten_char_ind& msg) {
 
+    if (msg.application_type not_eq slac::defs::COMMON_APPLICATION_TYPE) {
+        return false;
+    }
+    if (msg.security_type not_eq slac::defs::COMMON_SECURITY_TYPE) {
+        return false;
+    }
+    if (msg.num_sounds == 0) { // Don't be strict to the ISO 15118-3
+        return false;
+    }
+    if (msg.timeout == 0) { // Don't be strict to the ISO 15118-3
+        return false;
+    }
+    if (msg.resp_type not_eq slac::defs::CM_SLAC_PARM_CNF_RESP_TYPE) {
+        return false;
+    }
+
+    return true;
+}
+
+void MatchingState::handle_cm_start_atten_char_ind(const slac::messages::cm_start_atten_char_ind& msg) {
+
+    if (not validate_cm_start_atten_char_ind(msg)) {
+        ctx.log_info("Invalid CM_START_ATTEN_CHAR_IND received, ignoring");
+        return;
+    }
+
+    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);    
     if (!session) {
         ctx.log_info("No session found for CM_START_ATTEN_CHAR_IND");
         return;
@@ -182,9 +206,26 @@ void MatchingState::handle_cm_start_atten_char_ind(const slac::messages::cm_star
     session->set_next_timeout(slac::defs::TT_EVSE_MATCH_MNBC_MS);
 }
 
-void MatchingState::handle_cm_mnbc_sound_ind(const slac::messages::cm_mnbc_sound_ind& msg) {
-    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
+static bool validate_cm_mnbc_sound_ind(const slac::messages::cm_mnbc_sound_ind& msg) {
 
+    if (msg.application_type not_eq slac::defs::COMMON_APPLICATION_TYPE) {
+        return false;
+    }
+    if (msg.security_type not_eq slac::defs::COMMON_SECURITY_TYPE) {
+        return false;
+    }
+
+    return true;
+}
+
+void MatchingState::handle_cm_mnbc_sound_ind(const slac::messages::cm_mnbc_sound_ind& msg) {
+
+    if (not validate_cm_mnbc_sound_ind(msg)) {
+        ctx.log_info("Invalid CM_MNBC_SOUND_IND received, ignoring");
+        return;
+    }
+
+    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
     if (!session) {
         ctx.log_info("No session found for CM_MNBC_SOUND_IND");
         return;
@@ -244,9 +285,29 @@ void MatchingState::handle_cm_atten_profile_ind(const slac::messages::cm_atten_p
     session->set_next_timeout(FINALIZE_SOUNDING_DELAY_MS);
 }
 
-void MatchingState::handle_cm_atten_char_rsp(const slac::messages::cm_atten_char_rsp& msg) {
-    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
+static bool validate_cm_atten_char_rsp(const slac::messages::cm_atten_char_rsp& msg) {
 
+    if (msg.application_type not_eq slac::defs::COMMON_APPLICATION_TYPE) {
+        return false;
+    }
+    if (msg.security_type not_eq slac::defs::COMMON_SECURITY_TYPE) {
+        return false;
+    }
+    if (msg.result not_eq slac::defs::CM_ATTEN_CHAR_RSP_RESULT) {
+        return false;
+    }
+
+    return true;
+}
+
+void MatchingState::handle_cm_atten_char_rsp(const slac::messages::cm_atten_char_rsp& msg) {
+
+    if (not validate_cm_atten_char_rsp(msg)) {
+        ctx.log_info("Invalid CM_ATTEN_CHAR_RSP received, ignoring");
+        return;
+    }
+
+    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
     if (!session) {
         ctx.log_info("No session found for CM_ATTEN_CHAR_RSP");
         return;
@@ -276,9 +337,29 @@ void MatchingState::handle_cm_validate_req(const slac::messages::cm_validate_req
     ctx.send_slac_message(tmp_ev_mac, validate_cnf);
 }
 
-void MatchingState::handle_cm_slac_match_req(const slac::messages::cm_slac_match_req& msg) {
-    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
+static bool validate_cm_slac_match_req(const slac::messages::cm_slac_match_req& msg) {
 
+    if (msg.application_type not_eq slac::defs::COMMON_APPLICATION_TYPE) {
+        return false;
+    }
+    if (msg.security_type not_eq slac::defs::COMMON_SECURITY_TYPE) {
+        return false;
+    }
+    if (msg.mvf_length not_eq slac::defs::CM_SLAC_MATCH_REQ_MVF_LENGTH) {
+        return false;
+    }
+
+    return true;
+}
+
+void MatchingState::handle_cm_slac_match_req(const slac::messages::cm_slac_match_req& msg) {
+
+    if (not validate_cm_slac_match_req(msg)) {
+        ctx.log_info("Invalid CM_SLAC_MATCH_REQ received, ignoring");
+        return;
+    }
+
+    auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
     if (!session) {
         ctx.log_info("No session found for CM_SLAC_MATCH_REQ");
         return;
