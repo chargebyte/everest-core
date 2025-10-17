@@ -171,7 +171,8 @@ void MatchingState::handle_cm_start_atten_char_ind(const slac::messages::cm_star
     }
 
     if (session->state != MatchingSubState::WAIT_FOR_START_ATTEN_CHAR) {
-        session_log(ctx, *session, "needs to be in state WAIT_FOR_START_ATTEN_CHAR for CM_START_ATTEN_CHAR_IND");
+        if (session-> state != MatchingSubState::SOUNDING)
+            session_log(ctx, *session, "needs to be in state WAIT_FOR_START_ATTEN_CHAR for CM_START_ATTEN_CHAR_IND");
         return;
     }
 
