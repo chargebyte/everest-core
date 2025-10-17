@@ -16,7 +16,7 @@ static auto create_cm_set_key_req(uint8_t const* session_nmk) {
     slac::messages::cm_set_key_req set_key_req;
 
     set_key_req.key_type = slac::defs::CM_SET_KEY_REQ_KEY_TYPE_NMK;
-    set_key_req.my_nonce = 0xAAAAAAAA;
+    set_key_req.my_nonce = 0x00000000;
     set_key_req.your_nonce = 0x00000000;
     set_key_req.pid = slac::defs::CM_SET_KEY_REQ_PID_HLE;
     set_key_req.prn = htole16(slac::defs::CM_SET_KEY_REQ_PRN_UNUSED);
