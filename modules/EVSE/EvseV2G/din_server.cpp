@@ -607,6 +607,19 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
         res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSENotification = din_EVSENotificationType_StopCharging;
         res->DC_EVSEChargeParameter.DC_EVSEStatus.NotificationMaxDelay = 0;
     }
+    /* If fake HLC DC is active, try to stop the charging session over EVSENotification and EVSEStatusCode first.
+     * If the EV is ignoring the shutdown request, stop the charging session in the next response message with a failed response code.
+     */
+    else if (conn->ctx->is_dc_charger == false) {
+        if (conn->ctx->last_v2g_msg == V2G_AUTHORIZATION_MSG) {
+            dlog(DLOG_LEVEL_INFO, "Initiate stop of the fake HLC DIN DC session");
+            res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSENotification = din_EVSENotificationType_StopCharging;
+            res->DC_EVSEChargeParameter.DC_EVSEStatus.NotificationMaxDelay = 0;
+            res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode = din_DC_EVSEStatusCodeType_EVSE_Shutdown;
+        } else {
+            res->ResponseCode = din_responseCodeType_FAILED;
+        }
+    }
 
     /* Check the current response code and check if no external error has occurred */
     nextEvent = utils::din_validate_response_code(&res->ResponseCode, conn);
