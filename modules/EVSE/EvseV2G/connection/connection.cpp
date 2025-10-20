@@ -430,7 +430,6 @@ static void* connection_handle_tcp(void* data) {
     if (close(conn->conn.socket_fd) == -1) {
         dlog(DLOG_LEVEL_ERROR, "close() failed: %s", strerror(errno));
     }
-    dlog(DLOG_LEVEL_INFO, "TCP connection closed gracefully");
 
     if (rv != ERROR_SESSION_ALREADY_STARTED) {
         /* cleanup and notify lower layers */
