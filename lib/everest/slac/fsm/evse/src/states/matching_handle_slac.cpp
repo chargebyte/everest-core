@@ -3,6 +3,8 @@
 #include "matching_handle_slac.hpp"
 
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 #include "../misc.hpp"
 
@@ -403,6 +405,19 @@ void MatchingState::finalize_sounding(MatchingSession& session) {
     ctx.send_slac_message(session.ev_mac, atten_char);
 
     session.set_next_timeout(slac::defs::TT_MATCH_RESPONSE_MS);
+
+    int aag_overall_sum = 0;
+    for (size_t i = 0; i < slac::defs::AAG_LIST_LEN; ++i) {
+        aag_overall_sum += atten_char.attenuation_profile.aag[i];
+    }
+    std::ostringstream ss;
+    ss << "Average attenuation: " << std::fixed << std::setprecision(1)
+       << (static_cast<double>(aag_overall_sum) / slac::defs::AAG_LIST_LEN) << " dB";
+    if (ctx.slac_config.sounding_atten_adjustment != 0) {
+        ss << " plus offset " << std::to_string(ctx.slac_config.sounding_atten_adjustment) << " dB";
+    }
+    ss << ", from " << std::to_string(slac::defs::AAG_LIST_LEN) << " groups, " << session.captured_sounds << " sounds";
+    ctx.log_info(ss.str());
 }
 
 } // namespace slac::fsm::evse
