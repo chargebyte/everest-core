@@ -420,12 +420,12 @@ static void* connection_handle_tcp(void* data) {
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    if (shutdown(conn->conn.socket_fd, SHUT_RDWR) == -1) {
+    if (shutdown(conn->conn.socket_fd, SHUT_RDWR) == 0) {
+        // Waiting for client closing the connection
+        std::this_thread::sleep_for(std::chrono::seconds(3));       
+    } else {
         dlog(DLOG_LEVEL_ERROR, "shutdown() failed: %s", strerror(errno));
     }
-
-    // Waiting for client closing the connection
-    std::this_thread::sleep_for(std::chrono::seconds(3));
 
     if (close(conn->conn.socket_fd) == -1) {
         dlog(DLOG_LEVEL_ERROR, "close() failed: %s", strerror(errno));
