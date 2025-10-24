@@ -178,9 +178,8 @@ static void check_iso2_charging_profile_values(iso2_PowerDeliveryReqType* req, i
                              req->ChargingProfile.ProfileEntry.array[ev_idx].ChargingProfileEntryMaxPower.Multiplier)) >
                         (evse_p_max_schedule->PMaxScheduleEntry.array[evse_idx].PMax.Value *
                          pow(10, evse_p_max_schedule->PMaxScheduleEntry.array[evse_idx].PMax.Multiplier))) {
-                        res->ResponseCode = iso2_responseCodeType_FAILED_ChargingProfileInvalid; // [V2G2-224]
-                        // [V2G2-225] [V2G2-478]
-                        //  setting response code is commented because some EVs do not support schedules correctly
+                        res->ResponseCode =
+                            iso2_responseCodeType_FAILED_ChargingProfileInvalid; // [V2G2-224] [V2G2-225] [V2G2-478]
                         dlog(DLOG_LEVEL_WARNING,
                              "EV's charging profile is invalid (ChargingProfileEntryMaxPower too high)!");
                         break;
@@ -188,7 +187,7 @@ static void check_iso2_charging_profile_values(iso2_PowerDeliveryReqType* req, i
                 }
                 /* If the last EVSE element is reached and ChargingProfileEntryStart time doesn't fit */
                 else if (evse_idx == (evse_p_max_schedule->PMaxScheduleEntry.arrayLen - 1)) {
-                    // res->ResponseCode = iso2_responseCodeType_FAILED_ChargingProfileInvalid; // EV charing profile
+                    // res->ResponseCode = iso2_responseCodeType_FAILED_ChargingProfileInvalid; // EV charging profile
                     // time exceeds EVSE provided schedule
                     //  setting response code is commented because some EVs do not support schedules correctly
                     dlog(DLOG_LEVEL_WARNING,
