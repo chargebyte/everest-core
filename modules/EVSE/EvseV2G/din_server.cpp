@@ -500,14 +500,14 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
     res->ResponseCode = din_responseCodeType_OK; // [V2G-DC-388]
     res->AC_EVSEChargeParameter_isUsed = 0u;
 
-    if (((req->EVRequestedEnergyTransferType != din_EVRequestedEnergyTransferType_DC_core) &&
-         (req->EVRequestedEnergyTransferType != din_EVRequestedEnergyTransferType_DC_extended)) ||
-        conn->ctx->evse_v2g_data.charge_service.SupportedEnergyTransferMode.EnergyTransferMode.array[0] !=
+    if (((req->EVRequestedEnergyTransferType == din_EVRequestedEnergyTransferType_DC_core) ||
+         (req->EVRequestedEnergyTransferType == din_EVRequestedEnergyTransferType_DC_extended)) &&
+        conn->ctx->evse_v2g_data.charge_service.SupportedEnergyTransferMode.EnergyTransferMode.array[0] ==
             (iso2_EnergyTransferModeType)req->EVRequestedEnergyTransferType) {
-        res->ResponseCode = din_responseCodeType_FAILED_WrongEnergyTransferType; // [V2G-DC-397] Failed reponse code is
-                                                                                 // logged at the end of the function
-    } else {
-        log_selected_energy_transfer_type((int)req->EVRequestedEnergyTransferType);
+    	log_selected_energy_transfer_type((int)req->EVRequestedEnergyTransferType);
+    } else if (conn->ctx->is_fake_dc == false) {
+    	res->ResponseCode = din_responseCodeType_FAILED_WrongEnergyTransferType; // [V2G-DC-397] Failed reponse code is
+    	                                                                         // logged at the end of the function
     }
 
     res->ResponseCode = (req->AC_EVChargeParameter_isUsed == (unsigned int)1)
@@ -607,10 +607,11 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
         res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSENotification = din_EVSENotificationType_StopCharging;
         res->DC_EVSEChargeParameter.DC_EVSEStatus.NotificationMaxDelay = 0;
     }
+
     /* If fake HLC DC is active, try to stop the charging session over EVSENotification and EVSEStatusCode first.
      * If the EV is ignoring the shutdown request, stop the charging session in the next response message with a failed response code.
      */
-    else if (conn->ctx->is_dc_charger == false) {
+    if (conn->ctx->is_fake_dc) {
         if (conn->ctx->last_v2g_msg == V2G_AUTHORIZATION_MSG) {
             dlog(DLOG_LEVEL_INFO, "Initiate stop of the fake HLC DIN DC session");
             res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSENotification = din_EVSENotificationType_StopCharging;
@@ -626,7 +627,8 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
 
     /* Set next expected req msg */
     if (res->EVSEProcessing == din_EVSEProcessingType_Finished) {
-        if (res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode != din_DC_EVSEStatusCodeType_EVSE_Ready) {
+        if ((res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode != din_DC_EVSEStatusCodeType_EVSE_Ready) &&
+            (conn->ctx->is_fake_dc == false)) {
             dlog(DLOG_LEVEL_WARNING,
                  "EVSE wants to finish charge parameter phase, but status code is not set to 'ready' (1)");
         }

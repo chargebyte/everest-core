@@ -336,6 +336,10 @@ void ISO15118_chargerImpl::handle_update_energy_transfer_modes(
                 break;
             }
         }
+
+        if (mod->config.supported_DIN70121 == true and v2g_ctx->is_dc_charger == false) {
+            v2g_ctx->is_fake_dc = true;
+        }
     }
 }
 
