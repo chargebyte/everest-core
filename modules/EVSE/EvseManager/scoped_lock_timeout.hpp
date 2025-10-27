@@ -242,6 +242,10 @@ public:
 template <typename mutex_type> class scoped_lock_timeout {
 public:
     explicit scoped_lock_timeout(mutex_type& __m, MutexDescription description) : mutex(__m) {
+        if (mutex.p_id == pthread_self()) { // FIXME use pthread_equal()
+            // locking a mutex already locked by the same thread, would lead to deadlock
+            return;
+        }
         if (not mutex.try_lock_for(deadlock_timeout)) {
 #ifdef EVEREST_USE_BACKTRACES
             request_backtrace(pthread_self());
@@ -249,15 +253,9 @@ public:
             // Give some time for other timeouts to report their state and backtraces
             std::this_thread::sleep_for(std::chrono::seconds(10));
 
-            std::string different_thread;
-            if (mutex.p_id not_eq pthread_self()) {
-                different_thread = " from a different thread.";
-            } else {
-                different_thread = " from the same thread";
-            }
-
             EVLOG_AND_THROW(EverestTimeoutError("Mutex deadlock detected: Failed to lock " + to_string(description) +
-                                                ", mutex held by " + to_string(mutex.description) + different_thread));
+                                                ", mutex held by " + to_string(mutex.description) +
+                                                " from a different thread."));
 #endif
         } else {
             locked = true;
@@ -271,6 +269,9 @@ public:
     ~scoped_lock_timeout() {
         if (locked) {
             mutex.unlock();
+            mutex.p_id = -1; // make invalid FIXME - POSIX.1 allows an implementation wide freedom in choosing the type
+                             // used to represent a thread ID; for example, representation using either an arithmetic
+                             // type or a structure is permitted.
         }
     }
 
