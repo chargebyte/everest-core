@@ -6,6 +6,7 @@
 #include "everest/exceptions.hpp"
 #include "everest/logging.hpp"
 #include <mutex>
+#include <optional>
 #include <signal.h>
 
 #include "backtrace.hpp"
@@ -244,45 +245,42 @@ static std::string to_string(MutexDescription d) {
 }
 
 class timed_mutex_traceable : public std::timed_mutex {
-#ifdef EVEREST_USE_BACKTRACES
 public:
     MutexDescription description;
-    pthread_t p_id;
-#endif
+    std::optional<pthread_t> p_id;
 };
 
 template <typename mutex_type> class scoped_lock_timeout {
 public:
     explicit scoped_lock_timeout(mutex_type& __m, MutexDescription description) : mutex(__m) {
+        if (mutex.p_id.has_value() && pthread_equal(mutex.p_id.value(), pthread_self())) {
+            // locking a mutex already locked by the same thread, would lead to deadlock
+            EVLOG_warning << "Trying to lock " + to_string(description) + " while mutex already held by " +
+                                 to_string(mutex.description) + " from the same thread - ignoring.";
+            return;
+        }
         if (not mutex.try_lock_for(deadlock_timeout)) {
 #ifdef EVEREST_USE_BACKTRACES
             request_backtrace(pthread_self());
-            request_backtrace(mutex.p_id);
+            request_backtrace(mutex.p_id.value());
             // Give some time for other timeouts to report their state and backtraces
             std::this_thread::sleep_for(std::chrono::seconds(10));
 
-            std::string different_thread;
-            if (mutex.p_id not_eq pthread_self()) {
-                different_thread = " from a different thread.";
-            } else {
-                different_thread = " from the same thread";
-            }
-
             EVLOG_AND_THROW(EverestTimeoutError("Mutex deadlock detected: Failed to lock " + to_string(description) +
-                                                ", mutex held by " + to_string(mutex.description) + different_thread));
+                                                ", mutex held by " + to_string(mutex.description) +
+                                                " from a different thread."));
 #endif
         } else {
             locked = true;
-#ifdef EVEREST_USE_BACKTRACES
             mutex.description = description;
             mutex.p_id = pthread_self();
-#endif
         }
     }
 
     ~scoped_lock_timeout() {
         if (locked) {
             mutex.unlock();
+            mutex.p_id = std::nullopt;
         }
     }
 
