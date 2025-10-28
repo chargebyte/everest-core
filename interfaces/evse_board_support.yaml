@@ -27,23 +27,11 @@ cmds:
       is re-enabled (state X1).
   pwm_F:
     description: Turns PWM off with Error F (constant negative voltage)
-  cp_power_off:
+  cp_state_E:
     description: >-
-      Sets the Control Pilot line to 0 V (state E), disabling power output.
-      Typically used to simulate that no charger is connected to the EV.
+      Sets the Control Pilot line to 0 V (state E) by disabling the power output or shorting to ground.
+      This state is typically used to simulate that no charger is connected to the EV.
       Note: This command requires hardware support for setting Control Pilot to 0 V (state E).
-      If the hardware does not support this functionality, the implementation should return false.
-    result:
-      description: Returns true if successful, false otherwise.
-      type: boolean
-  cp_power_on:
-    description: >-
-      Releases the Control Pilot line from 0 V (state E) to normal operation.
-      Note: This command requires hardware support for setting Control Pilot to 0 V (state E).
-      If the hardware does not support this functionality, the implementation should return false.
-    result:
-      description: Returns true if successful, false otherwise.
-      type: boolean
   allow_power_on:
     description: >-
       Sets allow_power_on flag. If false, Relais must never be switched
