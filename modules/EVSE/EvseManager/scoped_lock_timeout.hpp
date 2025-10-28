@@ -233,11 +233,9 @@ static std::string to_string(MutexDescription d) {
 }
 
 class timed_mutex_traceable : public std::timed_mutex {
-#ifdef EVEREST_USE_BACKTRACES
 public:
     MutexDescription description;
     std::optional<pthread_t> p_id;
-#endif
 };
 
 template <typename mutex_type> class scoped_lock_timeout {
@@ -262,10 +260,8 @@ public:
 #endif
         } else {
             locked = true;
-#ifdef EVEREST_USE_BACKTRACES
             mutex.description = description;
             mutex.p_id = pthread_self();
-#endif
         }
     }
 
