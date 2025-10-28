@@ -12,7 +12,9 @@ cmds:
         description: 'True: enabled, false: disabled.'
         type: boolean
   pwm_on:
-    description: Turns PWM on with duty cycle (in percent)
+    description: >-
+      Turns PWM on with duty cycle (in percent). If Control Pilot state E is active, the Control Pilot
+      output is re-enabled and the PWM signal is generated with the given duty cycle.
     arguments:
       value:
         description: PWM duty cycle (>0, <100)
@@ -20,7 +22,9 @@ cmds:
         minimum: 0
         maximum: 100
   pwm_off:
-    description: Turns PWM off (constant high voltage)
+    description: >-
+      Turns PWM off (constant high voltage). If Control Pilot state E is active, the Control Pilot output
+      is re-enabled (state X1).
   pwm_F:
     description: Turns PWM off with Error F (constant negative voltage)
   cp_power_off:
