@@ -6,6 +6,7 @@
 #include "everest/exceptions.hpp"
 #include "everest/logging.hpp"
 #include <mutex>
+#include <optional>
 #include <signal.h>
 
 #include "backtrace.hpp"
@@ -235,14 +236,14 @@ class timed_mutex_traceable : public std::timed_mutex {
 #ifdef EVEREST_USE_BACKTRACES
 public:
     MutexDescription description;
-    pthread_t p_id;
+    std::optional<pthread_t> p_id;
 #endif
 };
 
 template <typename mutex_type> class scoped_lock_timeout {
 public:
     explicit scoped_lock_timeout(mutex_type& __m, MutexDescription description) : mutex(__m) {
-        if (mutex.p_id == pthread_self()) { // FIXME use pthread_equal()
+        if (mutex.p_id.has_value() && pthread_equal(mutex.p_id.value(), pthread_self())) {
             // locking a mutex already locked by the same thread, would lead to deadlock
             EVLOG_warning << "Trying to lock " + to_string(description) + " while mutex already held by " +
                                  to_string(mutex.description) + " from the same thread - ignoring.";
@@ -251,7 +252,7 @@ public:
         if (not mutex.try_lock_for(deadlock_timeout)) {
 #ifdef EVEREST_USE_BACKTRACES
             request_backtrace(pthread_self());
-            request_backtrace(mutex.p_id);
+            request_backtrace(mutex.p_id.value());
             // Give some time for other timeouts to report their state and backtraces
             std::this_thread::sleep_for(std::chrono::seconds(10));
 
@@ -271,9 +272,7 @@ public:
     ~scoped_lock_timeout() {
         if (locked) {
             mutex.unlock();
-            mutex.p_id = -1; // make invalid FIXME - POSIX.1 allows an implementation wide freedom in choosing the type
-                             // used to represent a thread ID; for example, representation using either an arithmetic
-                             // type or a structure is permitted.
+            mutex.p_id = std::nullopt;
         }
     }
 
