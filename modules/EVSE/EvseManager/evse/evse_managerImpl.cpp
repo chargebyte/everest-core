@@ -418,6 +418,10 @@ bool evse_managerImpl::handle_stop_transaction(types::evse_manager::StopTransact
     return mod->charger->cancel_transaction(request);
 };
 
+bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
+    return false;
+}
+
 bool evse_managerImpl::handle_external_ready_to_start_charging() {
     if (mod->config.external_ready_to_start_charging) {
         EVLOG_info << "Received external ready to start charging command.";
