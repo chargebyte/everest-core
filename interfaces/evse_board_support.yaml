@@ -26,7 +26,9 @@ cmds:
       Turns PWM off (constant high voltage). If Control Pilot state E is active, the Control Pilot output
       is re-enabled (state X1).
   pwm_F:
-    description: Turns PWM off with Error F (constant negative voltage)
+    description: >-
+      Turns PWM off with Error F (constant negative voltage). If Control Pilot state E is active, the
+      Control Pilot output is re-enabled (state F).
   cp_state_E:
     description: >-
       Sets the Control Pilot line to 0 V (state E) by disabling the power output or shorting to ground.
