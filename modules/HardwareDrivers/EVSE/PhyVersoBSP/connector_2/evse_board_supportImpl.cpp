@@ -100,6 +100,10 @@ void evse_board_supportImpl::handle_pwm_F() {
     mod->serial.set_pwm(2, 0);
 }
 
+void evse_board_supportImpl::handle_cp_state_E() {
+    EVLOG_warning << "Command cp_state_E is not supported. Ignoring command.";
+}
+
 void evse_board_supportImpl::handle_allow_power_on(types::evse_board_support::PowerOnOff& value) {
     if (mod->config.conn2_dc) {
         mod->serial.set_coil_state_request(2, CoilType_COIL_DC1, value.allow_power_on);
