@@ -244,6 +244,8 @@ public:
     explicit scoped_lock_timeout(mutex_type& __m, MutexDescription description) : mutex(__m) {
         if (mutex.p_id == pthread_self()) { // FIXME use pthread_equal()
             // locking a mutex already locked by the same thread, would lead to deadlock
+            EVLOG_warning << "Trying to lock " + to_string(description) + " while mutex already held by " +
+                                 to_string(mutex.description) + " from the same thread - ignoring.";
             return;
         }
         if (not mutex.try_lock_for(deadlock_timeout)) {
