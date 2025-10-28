@@ -544,14 +544,14 @@ types:
     type: object
     additionalProperties: false
     required:
-      - reinit_state_transition
-      - reinit_duration
+      - state_transition
+      - duration
     properties:
-      reinit_state_transition:
+      state_transition:
         description: State transition to use for reinitialization of a charging session
         type: object
         $ref: /evse_manager#/ReinitStateEnum
-      reinit_duration:
+      duration:
         description: Duration of the reinitialization state transition in seconds
         type: integer
   ReinitStateEnum:
