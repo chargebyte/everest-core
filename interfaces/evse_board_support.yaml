@@ -16,8 +16,8 @@ cmds:
         type: boolean
   pwm_on:
     description: >-
-      Turns PWM on with duty cycle (in percent). This command only applies when the charging port is enabled;
-      if disabled, the value must be cached and applied when re-enabled.
+      Turns PWM on with duty cycle (in percent). If Control Pilot state E is active, the Control Pilot
+      output is re-enabled and the PWM signal is generated with the given duty cycle.
     arguments:
       value:
         description: PWM duty cycle (>0, <100)
@@ -25,8 +25,10 @@ cmds:
         minimum: 0
         maximum: 100
   cp_state_X1:
-    description: Turns PWM off (constant high voltage) This command only applies when the charging port is enabled;
-      if disabled, the value must be cached and applied when re-enabled.
+    description: >-
+      Turns PWM off (constant high voltage). If Control Pilot state E is active, the Control Pilot output
+      is re-enabled (state X1). This command only applies when the charging port is enabled; if disabled,
+      the value must be cached and applied when re-enabled.
   cp_state_F:
     description: >-
       Turns PWM off with error state F: continuous -12 V on Control Pilot, indicating
