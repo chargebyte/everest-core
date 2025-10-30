@@ -7,7 +7,14 @@
 
 namespace slac::fsm::evse {
 
-void session_log(Context& ctx, MatchingSession& session, const std::string& text);
+enum class LogLevel {
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR
+};
+
+void session_log(Context& ctx, MatchingSession& session, const LogLevel level, const std::string& text);
 
 }
 
