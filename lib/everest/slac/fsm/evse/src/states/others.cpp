@@ -208,7 +208,7 @@ FSMSimpleState::HandleEventReturnType MatchedState::handle_event(AllocatorType& 
             if (link_ok.value()) {
                 return sa.PASS_ON;
             } else {
-                ctx.log_warn("Connection lost in matched state");
+                ctx.log_error("Connection lost in matched state");
                 ctx.signal_error_routine_request();
                 return sa.PASS_ON;
             }
@@ -268,7 +268,7 @@ FSMSimpleState::HandleEventReturnType WaitForLinkState::handle_event(AllocatorTy
             return sa.PASS_ON;
         }
     } else if (ev == Event::RETRY_MATCHING) {
-        ctx.log_warn("Link could not be established");
+        ctx.log_error("Link could not be established");
         // Notify higher layers to on CP signal
         return sa.create_simple<FailedState>(ctx);
     } else if (ev == Event::RESET) {
