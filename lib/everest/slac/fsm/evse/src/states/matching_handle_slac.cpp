@@ -370,7 +370,8 @@ void MatchingState::handle_cm_validate_req(const slac::messages::cm_validate_req
     ctx.send_slac_message(tmp_ev_mac, validate_cnf);
 }
 
-static bool validate_cm_slac_match_req(const slac::messages::cm_slac_match_req& msg) {
+static bool validate_cm_slac_match_req(const slac::messages::cm_slac_match_req& msg, const MatchingSession& session,
+                                       const Context& ctx) {
 
     if (msg.application_type not_eq slac::defs::COMMON_APPLICATION_TYPE) {
         return false;
@@ -381,20 +382,43 @@ static bool validate_cm_slac_match_req(const slac::messages::cm_slac_match_req& 
     if (msg.mvf_length not_eq slac::defs::CM_SLAC_MATCH_REQ_MVF_LENGTH) {
         return false;
     }
-
+    // PEV ID = 0x00 TC_SECC_CMN_VTB_CmSlacMatch_013/014(?)
+    uint8_t pev_id_ref[slac::messages::PEV_ID_LEN];
+    memset(pev_id_ref, 0, sizeof(pev_id_ref));
+    if (memcmp(pev_id_ref, msg.pev_id, slac::messages::PEV_ID_LEN)) {
+        return false;
+    }
+    // PEV MAC TC_SECC_CMN_VTB_CmSlacMatch_015/016(?)
+    if (memcmp(msg.pev_mac, session.ev_mac, ETH_ALEN)) {
+        return false;
+    }
+    // EVSE ID = 0x00 TC_SECC_CMN_VTB_CmSlacMatch_017/018(?)
+    uint8_t evse_id_ref[slac::messages::EVSE_ID_LEN];
+    memset(evse_id_ref, 0, sizeof(evse_id_ref));
+    if (memcmp(evse_id_ref, msg.evse_id, slac::messages::EVSE_ID_LEN)) {
+        return false;
+    }
+    // EVSE MAC TC_SECC_CMN_VTB_CmSlacMatch_019/020
+    if (memcmp(ctx.evse_mac, msg.evse_mac, ETH_ALEN)) {
+        return false;
+    }
+    // RunID TC_SECC_CMN_VTB_CmSlacMatch_021/022
+    if (memcmp(msg.run_id, session.run_id, slac::defs::RUN_ID_LEN)) {
+        return false;
+    }
     return true;
 }
 
 void MatchingState::handle_cm_slac_match_req(const slac::messages::cm_slac_match_req& msg) {
 
-    if (not validate_cm_slac_match_req(msg)) {
-        ctx.log_warn("Invalid CM_SLAC_MATCH_REQ received, ignoring");
-        return;
-    }
-
     auto session = find_session(sessions, tmp_ev_mac, msg.run_id);
     if (!session) {
         ctx.log_warn("No session found for CM_SLAC_MATCH_REQ");
+        return;
+    }
+
+    if (not validate_cm_slac_match_req(msg, *session, ctx)) {
+        session_log(ctx, *session, LogLevel::WARN, "Invalid CM_SLAC_MATCH_REQ received, ignoring");
         return;
     }
 
