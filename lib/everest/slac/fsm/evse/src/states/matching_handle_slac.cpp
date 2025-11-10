@@ -423,6 +423,9 @@ void MatchingState::finalize_sounding(MatchingSession& session) {
 
     session.set_next_timeout(slac::defs::TT_MATCH_RESPONSE_MS);
 
+    if (session.num_retries)
+        return;
+
     int aag_overall_sum = 0;
     for (size_t i = 0; i < slac::defs::AAG_LIST_LEN; ++i) {
         aag_overall_sum += atten_char.attenuation_profile.aag[i];
