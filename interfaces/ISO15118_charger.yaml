@@ -48,6 +48,11 @@ cmds:
           Indicates if the vehicle contract may be forwarded to and validated by a CSMS in case
           local validation was not successful
         type: boolean
+      fake_dc:
+        description: >-
+          By setting this to true, the charger will pretend to be a DC charger during the initial
+          negotiation and then switch to AC charging after receiving the EV SOC.
+        type: boolean
   bpt_setup:
     description: >-
       At startup, set the bpt setup for ISO15118-20 at least once. May be updated later on.
