@@ -404,8 +404,7 @@ void ISO15118_chargerImpl::handle_update_energy_transfer_modes(
         }
 
         if (mod->config.supported_DIN70121 == true and v2g_ctx->is_dc_charger == false) {
-            v2g_ctx->supported_protocols &= ~(1 << V2G_PROTO_DIN70121);
-            dlog(DLOG_LEVEL_WARNING, "Removed DIN70121 from the list of supported protocols as AC is enabled");
+            v2g_ctx->is_fake_dc = true;
         }
     }
 }
