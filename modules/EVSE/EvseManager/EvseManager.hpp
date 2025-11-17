@@ -322,6 +322,7 @@ private:
 
     void setup_AC_mode();
     void setup_fake_DC_mode();
+    void setup_ac_with_soc_handling();
 
     // special funtion to switch mode while session is active
     void switch_AC_mode();
