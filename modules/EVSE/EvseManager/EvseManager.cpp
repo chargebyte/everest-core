@@ -755,20 +755,7 @@ void EvseManager::ready() {
         }
         // switch to DC mode for first session for AC with SoC
         if (config.ac_with_soc) {
-
-            bsp->signal_event.connect([this](const CPEvent event) {
-                if (event == CPEvent::CarUnplugged) {
-                    // configure for DC again for next session. Will reset to AC when SoC is received
-                    switch_DC_mode();
-                }
-            });
-
-            charger->signal_ac_with_soc_timeout.connect([this]() { switch_DC_mode(); });
-
-            r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus status) {
-                EVLOG_info << fmt::format("SoC received: {}.", status.dc_ev_ress_soc);
-                switch_AC_mode();
-            });
+            setup_ac_with_soc_handling();
         }
     }
 
@@ -1225,6 +1212,22 @@ void EvseManager::setup_fake_DC_mode() {
 
     r_hlc[0]->call_setup(evseid, sae_mode, config.session_logging);
     r_hlc[0]->call_update_energy_transfer_modes(transfer_modes);
+}
+
+void EvseManager::setup_ac_with_soc_handling() {
+    bsp->signal_event.connect([this](const CPEvent event) {
+        if (event == CPEvent::CarUnplugged) {
+            // configure for DC again for next session. Will reset to AC when SoC is received
+            switch_DC_mode();
+        }
+    });
+
+    charger->signal_ac_with_soc_timeout.connect([this]() { switch_DC_mode(); });
+
+    r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus status) {
+        EVLOG_info << fmt::format("SoC received: {}.", status.dc_ev_ress_soc);
+        switch_AC_mode();
+    });
 }
 
 void EvseManager::setup_AC_mode() {
