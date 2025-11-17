@@ -377,3 +377,8 @@ vars:
   meter_info_requested:
     description: The EV requested meter infos from the EVSE
     type: "null"
+  ev_termination:
+    description: >-
+      The EV termination code as described in ISO15118-20.
+    type: object
+    $ref: /iso15118#/EvTermination

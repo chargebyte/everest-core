@@ -1559,3 +1559,14 @@ types:
         description:
           Certificate used by the EV for the TLS1.3 communication.
         type: string
+  EvTermination:
+    description: Information about EV termination code and explanation as described in ISO15118-20.
+    type: object
+    additionalProperties: false
+    properties:
+      ev_termination_code:
+        description: Contains the EV termination code
+        type: string
+      ev_termination_explanation:
+        description: Contains the EV termination explanation
+        type: string
