@@ -407,8 +407,11 @@ bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::Reini
     return false;
 }
 
-bool evse_managerImpl::handle_set_ac_charging_session_configuration(types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
-	return false;
+bool evse_managerImpl::handle_set_ac_charging_session_configuration(
+    types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+    (void)ac_charging_session_configuration;
+    EVLOG_warning << "handle_set_ac_charging_session_configuration is not implemented yet";
+    return false;
 }
 
 bool evse_managerImpl::handle_external_ready_to_start_charging() {
