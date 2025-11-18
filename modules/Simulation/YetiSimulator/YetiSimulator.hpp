@@ -65,6 +65,7 @@ public:
     void pwm_on(const double dutycycle);
     void pwm_off();
     void pwm_f();
+    void set_cp_state_e();
     // ev@1fce4c5e-0ab8-41bb-90f7-14277703d2ac:v1
 
 protected:

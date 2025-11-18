@@ -57,7 +57,7 @@ void evse_board_supportImpl::handle_pwm_F() {
 }
 
 void evse_board_supportImpl::handle_cp_state_E() {
-    EVLOG_warning << "Command cp_state_E is not supported. Ignoring command.";
+    mod->set_cp_state_e();
 }
 
 void evse_board_supportImpl::handle_allow_power_on(types::evse_board_support::PowerOnOff& value) {

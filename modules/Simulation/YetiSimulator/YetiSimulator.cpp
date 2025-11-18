@@ -353,6 +353,10 @@ void YetiSimulator::read_from_car() {
         module_state->pwm_voltage_hi = 0.0;
         module_state->pwm_voltage_lo = 0.0;
     }
+    if (module_state->force_cp_state_e) {
+        module_state->pwm_voltage_hi = 0.0;
+        module_state->pwm_voltage_lo = 0.0;
+    }
     if (module_state->simulation_data.diode_fail) {
         module_state->pwm_voltage_lo = -module_state->pwm_voltage_hi;
     }
@@ -391,6 +395,9 @@ void YetiSimulator::read_from_car() {
     } else if (is_voltage_in_range(cpHi, 3.0)) {
         module_state->current_state = state::State::STATE_D;
         drawPower(amps1, amps2, amps3, 0.2);
+    } else if (is_voltage_in_range(cpHi, 0.0) && is_voltage_in_range(cpLo, 0.0)) {
+        module_state->current_state = state::State::STATE_E;
+        drawPower(0, 0, 0, 0);
     } else if (is_voltage_in_range(cpHi, -12.0)) {
         module_state->current_state = state::State::STATE_F;
         drawPower(0, 0, 0, 0);
@@ -669,6 +676,7 @@ void YetiSimulator::publish_event(state::State event) {
 }
 
 void YetiSimulator::pwm_on(const double dutycycle) {
+    module_state->force_cp_state_e = false;
     if (dutycycle > 0.0) {
         module_state->pwm_duty_cycle = dutycycle;
         module_state->pwm_running = true;
@@ -686,6 +694,12 @@ void YetiSimulator::pwm_f() {
     module_state->pwm_duty_cycle = 1.0;
     module_state->pwm_running = false;
     module_state->pwm_error_f = true;
+}
+
+void YetiSimulator::set_cp_state_e() {
+    module_state->pwm_duty_cycle = 0.0;
+    module_state->pwm_running = false;
+    module_state->force_cp_state_e = true;
 }
 
 void YetiSimulator::reset_powermeter() const {
