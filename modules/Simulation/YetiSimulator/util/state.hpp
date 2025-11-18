@@ -216,6 +216,7 @@ struct ModuleState {
     double pwm_duty_cycle = 0;
     bool pwm_running = false;
     bool pwm_error_f = false;
+    bool force_cp_state_e = false;
     bool last_pwm_running = false;
     bool use_three_phases_confirmed = true;
     double pwm_voltage_hi = 12.1;
