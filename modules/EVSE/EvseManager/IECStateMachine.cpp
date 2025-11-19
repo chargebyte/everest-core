@@ -282,7 +282,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
             break;
 
         case RawCPState::E:
-            connector_unlock();
+            if (state_e_triggered_through_bsp == false) {
+                connector_unlock();
+            }
             if (last_cp_state != RawCPState::E) {
                 timer_state_C1 = TimerControl::stop;
                 call_allow_power_on_bsp(false);
