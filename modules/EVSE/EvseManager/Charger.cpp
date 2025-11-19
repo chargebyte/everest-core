@@ -205,6 +205,29 @@ void Charger::run_state_machine() {
             }
             // simply wait here until BSP informs us that replugging was finished
             break;
+        case EvseState::Reinit:
+            if (initialize_state) {
+                session_log.evse(false, "Reinit sequence started (placeholder CP state E).");
+                bsp->set_cp_state_E();
+                if (config_context.reinit_duration_ms > 0) {
+                    internal_context.reinit_timer_active = true;
+                    internal_context.reinit_deadline =
+                        std::chrono::steady_clock::now() + std::chrono::milliseconds(config_context.reinit_duration_ms);
+                    EVLOG_error << "Reinit will timeout in " << config_context.reinit_duration_ms
+                                << " ms. If the EV does not unplug by itself, the EVSE will return to "
+                                   "WaitingForAuthentication afterwards.";
+                } else {
+                    internal_context.reinit_timer_active = false;
+                }
+            }
+
+            if (!internal_context.reinit_timer_active ||
+                std::chrono::steady_clock::now() >= internal_context.reinit_deadline) {
+                shared_context.current_state = EvseState::WaitingForAuthentication;
+                shared_context.reinit_running = false;
+                internal_context.reinit_timer_active = false;
+            }
+            break;
 
         case EvseState::Idle:
             // make sure we signal availability to potential new cars
