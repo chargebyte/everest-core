@@ -219,12 +219,12 @@ int sdp_init(struct v2g_context* v2g_ctx) {
     /* create receiving socket */
     v2g_ctx->sdp_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (v2g_ctx->sdp_socket == -1) {
-        EVLOG_error << fmt::format("socket() failed: {}", strerror(errno));
+        EVLOG_error << "socket() failed: " << strerror(errno);
         return -1;
     }
 
     if (setsockopt(v2g_ctx->sdp_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) == -1) {
-        EVLOG_error << fmt::format("setsockopt(SO_REUSEPORT) failed: {}", strerror(errno));
+        EVLOG_error << "setsockopt(SO_REUSEPORT) failed: " << strerror(errno);
         close(v2g_ctx->sdp_socket);
         return -1;
     }
@@ -232,7 +232,7 @@ int sdp_init(struct v2g_context* v2g_ctx) {
     sdp_addr.sin6_addr = in6addr_any;
 
     if (bind(v2g_ctx->sdp_socket, (struct sockaddr*)&sdp_addr, sizeof(sdp_addr)) == -1) {
-        EVLOG_error << fmt::format("bind() failed: {}", strerror(errno));
+        EVLOG_error << "bind() failed: " << strerror(errno);
         close(v2g_ctx->sdp_socket);
         return -1;
     }
@@ -242,7 +242,7 @@ int sdp_init(struct v2g_context* v2g_ctx) {
     /* bind only to specified device */
     if (setsockopt(v2g_ctx->sdp_socket, SOL_SOCKET, SO_BINDTODEVICE, v2g_ctx->if_name, strlen(v2g_ctx->if_name)) ==
         -1) {
-        EVLOG_error << fmt::format("setsockopt(SO_BINDTODEVICE) failed: {}", strerror(errno));
+        EVLOG_error << "setsockopt(SO_BINDTODEVICE) failed: " << strerror(errno);
         close(v2g_ctx->sdp_socket);
         return -1;
     }
@@ -251,7 +251,7 @@ int sdp_init(struct v2g_context* v2g_ctx) {
 
     /* join multicast group */
     if (setsockopt(v2g_ctx->sdp_socket, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq)) == -1) {
-        EVLOG_error << fmt::format("setsockopt(IPV6_JOIN_GROUP) failed: {}", strerror(errno));
+        EVLOG_error << "setsockopt(IPV6_JOIN_GROUP) failed: " << strerror(errno);
         close(v2g_ctx->sdp_socket);
         return -1;
     }
@@ -281,7 +281,7 @@ int sdp_listen(struct v2g_context* v2g_ctx) {
             if (errno == EINTR) { // If the call did not succeed because it was interrupted
                 continue;
             } else {
-                EVLOG_error << fmt::format("poll() failed: {}", strerror(errno));
+                EVLOG_error << "poll() failed: " << strerror(errno);
                 continue;
             }
         }
@@ -291,7 +291,7 @@ int sdp_listen(struct v2g_context* v2g_ctx) {
                                    (struct sockaddr*)&sdp_query.remote_addr, &addrlen);
             if (len == -1) {
                 if (errno != EINTR)
-                    EVLOG_error << fmt::format("recvfrom() failed: {}", strerror(errno));
+                    EVLOG_error << "recvfrom() failed: " << strerror(errno);
                 continue;
             }
 
@@ -322,7 +322,7 @@ int sdp_listen(struct v2g_context* v2g_ctx) {
     }
 
     if (close(v2g_ctx->sdp_socket) == -1) {
-        EVLOG_error << fmt::format("close() failed: {}", strerror(errno));
+        EVLOG_error << "close() failed: " << strerror(errno);
     }
 
     return 0;
