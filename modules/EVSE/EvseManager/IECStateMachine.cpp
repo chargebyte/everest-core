@@ -69,8 +69,6 @@ const std::string cpevent_to_string(CPEvent e) {
         return "EFtoBCD";
     case CPEvent::BCDtoEF:
         return "BCDtoEF";
-    case CPEvent::BCDtoE:
-        return "BCDtoE";
     case CPEvent::EvseReplugStarted:
         return "EvseReplugStarted";
     case CPEvent::EvseReplugFinished:
@@ -302,7 +300,6 @@ std::queue<CPEvent> IECStateMachine::state_machine() {
                 if (last_cp_state == RawCPState::B || last_cp_state == RawCPState::C ||
                     last_cp_state == RawCPState::D) {
                     events.push(CPEvent::BCDtoEF);
-                    events.push(CPEvent::BCDtoE);
                 }
             }
             break;

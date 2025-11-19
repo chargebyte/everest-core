@@ -46,7 +46,6 @@ enum class CPEvent {
     CarUnplugged,
     EFtoBCD,
     BCDtoEF,
-    BCDtoE,
     EvseReplugStarted,
     EvseReplugFinished,
 };
