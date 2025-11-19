@@ -135,7 +135,7 @@ int sdp_send_response(int sdp_socket, struct sdp_query* sdp_query) {
     /* at the moment we only understand TCP protocol */
     if (sdp_query->proto_requested != SDP_TRANSPORT_PROTOCOL_TCP) {
         EVLOG_error << fmt::format("SDP requested unsupported protocol 0x{:02x}, announcing nothing",
-                                    sdp_query->proto_requested);
+                                    static_cast<int>(sdp_query->proto_requested));
         return 1;
     }
 
@@ -180,7 +180,7 @@ int sdp_send_response(int sdp_socket, struct sdp_query* sdp_query) {
 
     default:
         EVLOG_error << fmt::format("SDP requested unsupported security 0x{:02x}, announcing nothing",
-                                    sdp_query->security_requested);
+                                    static_cast<int>(sdp_query->security_requested));
         return 1;
     }
 
@@ -313,8 +313,8 @@ int sdp_listen(struct v2g_context* v2g_ctx) {
             sdp_query.proto_requested = (sdp_transport_protocol)buffer[SDP_HEADER_LEN + 1];
 
             EVLOG_info << fmt::format("Received packet from [{}]:{} with security 0x{:02x} and protocol 0x{:02x}", addr,
-                                       ntohs(sdp_query.remote_addr.sin6_port), sdp_query.security_requested,
-                                       sdp_query.proto_requested);
+                                       ntohs(sdp_query.remote_addr.sin6_port), static_cast<int>(sdp_query.security_requested),
+                                       static_cast<int>(sdp_query.proto_requested));
 
             sdp_send_response(v2g_ctx->sdp_socket, &sdp_query);
         }
