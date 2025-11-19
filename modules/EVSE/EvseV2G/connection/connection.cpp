@@ -186,11 +186,11 @@ int connection_init(struct v2g_context* v2g_ctx) {
             }
             if (inet_ntop(AF_INET6, &v2g_ctx->local_tcp_addr->sin6_addr, buffer, sizeof(buffer)) != nullptr) {
                 EVLOG_info << fmt::format("TCP server on {} is listening on port [{}%{}]:{}", v2g_ctx->if_name, buffer,
-                                           v2g_ctx->local_tcp_addr->sin6_scope_id,
-                                           ntohs(v2g_ctx->local_tcp_addr->sin6_port));
+                                          v2g_ctx->local_tcp_addr->sin6_scope_id,
+                                          ntohs(v2g_ctx->local_tcp_addr->sin6_port));
             } else {
-                EVLOG_error << fmt::format("TCP server on {} is listening, but inet_ntop failed: {}",
-                                           v2g_ctx->if_name, strerror(errno));
+                EVLOG_error << fmt::format("TCP server on {} is listening, but inet_ntop failed: {}", v2g_ctx->if_name,
+                                           strerror(errno));
                 return -1;
             }
         }
@@ -214,8 +214,8 @@ int connection_init(struct v2g_context* v2g_ctx) {
 
             if (inet_ntop(AF_INET6, &v2g_ctx->local_tls_addr->sin6_addr, buffer, sizeof(buffer)) != nullptr) {
                 EVLOG_info << fmt::format("TLS server on {} is listening on port [{}%{}]:{}", v2g_ctx->if_name, buffer,
-                                           v2g_ctx->local_tls_addr->sin6_scope_id,
-                                           ntohs(v2g_ctx->local_tls_addr->sin6_port));
+                                          v2g_ctx->local_tls_addr->sin6_scope_id,
+                                          ntohs(v2g_ctx->local_tls_addr->sin6_port));
             } else {
                 EVLOG_info << fmt::format("TLS server on {} is listening, but inet_ntop failed: {}", v2g_ctx->if_name,
                                           strerror(errno));
@@ -244,8 +244,7 @@ bool is_sequence_timeout(struct timespec ts_start, struct v2g_context* ctx) {
 
     if (((clock_gettime(CLOCK_MONOTONIC, &ts_current)) != 0) ||
         (timespec_to_ms(timespec_sub(ts_current, ts_start)) > sequence_timeout)) {
-        EVLOG_error << fmt::format("Sequence timeout has occurred (message: {})",
-                                    v2g_msg_type[ctx->current_v2g_msg]);
+        EVLOG_error << fmt::format("Sequence timeout has occurred (message: {})", v2g_msg_type[ctx->current_v2g_msg]);
         return true;
     }
     return false;
@@ -380,15 +379,15 @@ void connection_teardown(struct v2g_connection* conn) {
     /* print dlink status */
     switch (conn->dlink_action) {
     case MQTT_DLINK_ACTION_ERROR:
-                    EVLOG_verbose << "d_link/error";
+        EVLOG_verbose << "d_link/error";
         break;
     case MQTT_DLINK_ACTION_TERMINATE:
         conn->ctx->p_charger->publish_dlink_terminate(nullptr);
-                    EVLOG_verbose << "d_link/terminate";
+        EVLOG_verbose << "d_link/terminate";
         break;
     case MQTT_DLINK_ACTION_PAUSE:
         conn->ctx->p_charger->publish_dlink_pause(nullptr);
-                    EVLOG_verbose << "d_link/pause";
+        EVLOG_verbose << "d_link/pause";
         break;
     }
 }
@@ -400,7 +399,7 @@ static void* connection_handle_tcp(void* data) {
     struct v2g_connection* conn = static_cast<struct v2g_connection*>(data);
     int rv = 0;
 
-            EVLOG_info << "Started new TCP connection thread";
+    EVLOG_info << "Started new TCP connection thread";
 
     remove_service_from_service_list_if_exists(conn->ctx, V2G_SERVICE_ID_CERTIFICATE);
 
@@ -413,11 +412,11 @@ static void* connection_handle_tcp(void* data) {
         }
     } else {
         rv = ERROR_SESSION_ALREADY_STARTED;
-            EVLOG_warning << "Closing tcp-connection. v2g-session is already running";
+        EVLOG_warning << "Closing tcp-connection. v2g-session is already running";
     }
 
     /* tear down connection gracefully */
-        EVLOG_info << "Closing TCP connection";
+    EVLOG_info << "Closing TCP connection";
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -489,7 +488,7 @@ static void* connection_server(void* data) {
 
         if (inet_ntop(AF_INET6, &addr, client_addr, sizeof(client_addr)) != NULL) {
             EVLOG_info << fmt::format("Incoming connection on {} from [{}]:{}", ctx->if_name, client_addr,
-                                       ntohs(addr.sin6_port));
+                                      ntohs(addr.sin6_port));
         } else {
             EVLOG_error << fmt::format("Incoming connection on {}, but inet_ntop failed: {}", ctx->if_name,
                                        strerror(errno));

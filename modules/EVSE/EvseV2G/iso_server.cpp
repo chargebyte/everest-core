@@ -539,8 +539,7 @@ static enum v2g_event handle_iso_session_setup(struct v2g_connection* conn) {
 
     conn->ctx->p_charger->publish_evcc_id(buffer); // publish EVCC ID
 
-    EVLOG_info << "SessionSetupReq.EVCCID: "
-               << (std::string(buffer).size() ? buffer : "(zero length provided)");
+    EVLOG_info << "SessionSetupReq.EVCCID: " << (std::string(buffer).size() ? buffer : "(zero length provided)");
 
     /* [V2G2-756]: If the SECC receives a SessionSetupReq including a SessionID value which is not
      * equal to zero (0) and not equal to the SessionID value stored from the preceding V2G
@@ -561,12 +560,12 @@ static enum v2g_event handle_iso_session_setup(struct v2g_connection* conn) {
     if (conn->ctx->evse_v2g_data.session_id == (uint64_t)0 ||
         conn->ctx->evse_v2g_data.session_id != conn->ctx->ev_v2g_data.received_session_id) {
         generate_random_data(&conn->ctx->evse_v2g_data.session_id, 4);
-        EVLOG_info
-            << "No session_id found or not equal to the id from the preceding v2g session. Generating random session id.";
+        EVLOG_info << "No session_id found or not equal to the id from the preceding v2g session. Generating random "
+                      "session id.";
         EVLOG_info << fmt::format("Created new session with id 0x{0:08}", conn->ctx->evse_v2g_data.session_id);
     } else {
         EVLOG_info << fmt::format("Found Session_id from the old session: 0x{0:08}",
-                                   conn->ctx->evse_v2g_data.session_id);
+                                  conn->ctx->evse_v2g_data.session_id);
         res->ResponseCode = iso2_responseCodeType_OK_OldSessionJoined;
     }
 
@@ -608,8 +607,7 @@ static enum v2g_event handle_iso_service_discovery(struct v2g_connection* conn) 
 
     // Checking of the charge service id
     if (conn->ctx->evse_v2g_data.charge_service.ServiceID != V2G_SERVICE_ID_CHARGING) {
-        EVLOG_warning
-            << "Selected ServiceID is not ISO15118 conform. Correcting value to '1' (Charge service id)";
+        EVLOG_warning << "Selected ServiceID is not ISO15118 conform. Correcting value to '1' (Charge service id)";
         conn->ctx->evse_v2g_data.charge_service.ServiceID = V2G_SERVICE_ID_CHARGING;
     }
     // Checking of the service category
@@ -853,7 +851,7 @@ static enum v2g_event handle_iso_payment_service_selection(struct v2g_connection
                 if (selected_service.ServiceID == conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID) {
                     /* If it's stored, search for the next requested SelectedService entry */
                     EVLOG_info << fmt::format("Selected service id {} found",
-                                               conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID);
+                                              conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID);
 
                     if (conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID == SAE_V2H) {
                         conn->ctx->evse_v2g_data.sae_bidi_data.enabled_sae_v2h = true;
@@ -1306,7 +1304,8 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
     /* Checking SAScheduleTupleID */
     for (uint8_t idx = 0; idx < res->SAScheduleList.SAScheduleTuple.arrayLen; idx++) {
         if (res->SAScheduleList.SAScheduleTuple.array[idx].SAScheduleTupleID == (uint8_t)0) {
-            EVLOG_warning << "Selected SAScheduleTupleID is not ISO15118 conform. The SECC shall use the values 1 to 255";
+            EVLOG_warning
+                << "Selected SAScheduleTupleID is not ISO15118 conform. The SECC shall use the values 1 to 255";
             // [V2G2-773] The SECC shall use the values 1 to 255 for the parameter SAScheduleTupleID.
         }
     }
@@ -1537,7 +1536,8 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
             }
         } else if (ev_should_pause) {
 
-            EVLOG_error << "The EV did not pause the session even EVSE signaled the EV that no energy is available. Abort the session";
+            EVLOG_error << "The EV did not pause the session even EVSE signaled the EV that no energy is available. "
+                           "Abort the session";
             res->ResponseCode = iso2_responseCodeType_FAILED;
             conn->ctx->session.is_charging = false;
             conn->ctx->p_charger->publish_dc_open_contactor(nullptr);
@@ -1562,7 +1562,8 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
         break;
 
     default:
-        EVLOG_error << fmt::format("Unknown ChargeProgress {} received, signaling error", static_cast<int>(req->ChargeProgress));
+        EVLOG_error << fmt::format("Unknown ChargeProgress {} received, signaling error",
+                                   static_cast<int>(req->ChargeProgress));
         res->ResponseCode = iso2_responseCodeType_FAILED;
     }
 
@@ -1745,8 +1746,7 @@ static enum v2g_event handle_iso_metering_receipt(struct v2g_connection* conn) {
     EVLOG_verbose << fmt::format("\t\t MeterInfo.MeterID={}", req->MeterInfo.MeterID.characters[0]);
     const int meterreading_isUsed = req->MeterInfo.MeterReading_isUsed; // bitfield to int
     EVLOG_verbose << fmt::format("\t\t MeterInfo.isused.MeterReading={}", meterreading_isUsed);
-    EVLOG_verbose << fmt::format("\t\t MeterReading.Value={}",
-                                 static_cast<unsigned long>(req->MeterInfo.MeterReading));
+    EVLOG_verbose << fmt::format("\t\t MeterReading.Value={}", static_cast<unsigned long>(req->MeterInfo.MeterReading));
     EVLOG_verbose << fmt::format("\t\t MeterInfo.TMeter={}", static_cast<long>(req->MeterInfo.TMeter));
 
     res->ResponseCode = iso2_responseCodeType_OK;
@@ -2035,7 +2035,8 @@ static enum v2g_event handle_iso_current_demand(struct v2g_connection* conn) {
             conn->ctx->evse_v2g_data.evse_maximum_power_limit.Value < 0) {
             if (req->EVTargetCurrent.Value > 0) {
                 if (req_pos_value_count++ >= 1) {
-                    EVLOG_warning << "SAE V2G Bidi handshake was not recognized by the ev side. Instead of shutting down, it is better to wait for a correct response";
+                    EVLOG_warning << "SAE V2G Bidi handshake was not recognized by the ev side. Instead of shutting "
+                                     "down, it is better to wait for a correct response";
                     req_pos_value_count = 0;
                 } else {
                     req_pos_value_count = 0;
@@ -2050,7 +2051,8 @@ static enum v2g_event handle_iso_current_demand(struct v2g_connection* conn) {
                    conn->ctx->evse_v2g_data.evse_maximum_power_limit.Value > 0) {
             if (req->EVTargetCurrent.Value < 0) {
                 if (req_pos_value_count++ >= 1) {
-                    EVLOG_warning << "SAE V2G Bidi handshake was not recognized by the ev side. Instead of shutting down, it is better to wait for a correct response";
+                    EVLOG_warning << "SAE V2G Bidi handshake was not recognized by the ev side. Instead of shutting "
+                                     "down, it is better to wait for a correct response";
                     req_pos_value_count = 0;
                 } else {
                     req_pos_value_count = 0;
@@ -2335,8 +2337,8 @@ enum v2g_event iso_handle_request(v2g_connection* conn) {
         EVLOG_error << "create_response_message: request type not found";
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     }
-    EVLOG_verbose << fmt::format("Current state: {}",
-                                 conn->ctx->is_dc_charger ? iso_dc_states[conn->ctx->state].description
+    EVLOG_verbose << fmt::format("Current state: {}", conn->ctx->is_dc_charger
+                                                          ? iso_dc_states[conn->ctx->state].description
                                                           : iso_ac_states[conn->ctx->state].description);
 
     // If next_v2g_event == V2G_EVENT_IGNORE_MSG, keep the current state and ignore msg

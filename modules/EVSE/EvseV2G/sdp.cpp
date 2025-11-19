@@ -90,14 +90,14 @@ int sdp_validate_header(uint8_t* buffer, uint16_t expected_payload_type, uint32_
     payload_type = (buffer[2] << 8) + buffer[3];
     if (payload_type != expected_payload_type) {
         EVLOG_error << fmt::format("Invalid payload type: expected {}, received {}", expected_payload_type,
-                                    payload_type);
+                                   payload_type);
         return -1;
     }
 
     payload_len = (buffer[4] << 24) + (buffer[5] << 16) + (buffer[6] << 8) + buffer[7];
     if (payload_len != expected_payload_len) {
         EVLOG_error << fmt::format("Invalid payload length: expected {}, received {}", expected_payload_len,
-                                    payload_len);
+                                   payload_len);
         return -1;
     }
 
@@ -135,7 +135,7 @@ int sdp_send_response(int sdp_socket, struct sdp_query* sdp_query) {
     /* at the moment we only understand TCP protocol */
     if (sdp_query->proto_requested != SDP_TRANSPORT_PROTOCOL_TCP) {
         EVLOG_error << fmt::format("SDP requested unsupported protocol 0x{:02x}, announcing nothing",
-                                    static_cast<int>(sdp_query->proto_requested));
+                                   static_cast<int>(sdp_query->proto_requested));
         return 1;
     }
 
@@ -180,7 +180,7 @@ int sdp_send_response(int sdp_socket, struct sdp_query* sdp_query) {
 
     default:
         EVLOG_error << fmt::format("SDP requested unsupported security 0x{:02x}, announcing nothing",
-                                    static_cast<int>(sdp_query->security_requested));
+                                   static_cast<int>(sdp_query->security_requested));
         return 1;
     }
 
@@ -197,8 +197,8 @@ int sdp_send_response(int sdp_socket, struct sdp_query* sdp_query) {
         if (rv == 0) {
             EVLOG_info << fmt::format("sendto([{}]:{}) succeeded", addr, ntohs(sdp_query->remote_addr.sin6_port));
         } else {
-            EVLOG_error << fmt::format("sendto([{}]:{}) failed: {}", addr,
-                                        ntohs(sdp_query->remote_addr.sin6_port), strerror(saved_errno));
+            EVLOG_error << fmt::format("sendto([{}]:{}) failed: {}", addr, ntohs(sdp_query->remote_addr.sin6_port),
+                                       strerror(saved_errno));
         }
     }
 
@@ -299,13 +299,13 @@ int sdp_listen(struct v2g_context* v2g_ctx) {
 
             if (len != sizeof(buffer)) {
                 EVLOG_warning << fmt::format("Discarded packet from [{}]:{} due to unexpected length {}", addr,
-                                              ntohs(sdp_query.remote_addr.sin6_port), len);
+                                             ntohs(sdp_query.remote_addr.sin6_port), len);
                 continue;
             }
 
             if (sdp_validate_header(buffer, SDP_REQUEST_TYPE, SDP_REQUEST_PAYLOAD_LEN)) {
                 EVLOG_warning << fmt::format("Packet with invalid SDP header received from [{}]:{}", addr,
-                                              ntohs(sdp_query.remote_addr.sin6_port));
+                                             ntohs(sdp_query.remote_addr.sin6_port));
                 continue;
             }
 
@@ -313,8 +313,9 @@ int sdp_listen(struct v2g_context* v2g_ctx) {
             sdp_query.proto_requested = (sdp_transport_protocol)buffer[SDP_HEADER_LEN + 1];
 
             EVLOG_info << fmt::format("Received packet from [{}]:{} with security 0x{:02x} and protocol 0x{:02x}", addr,
-                                       ntohs(sdp_query.remote_addr.sin6_port), static_cast<int>(sdp_query.security_requested),
-                                       static_cast<int>(sdp_query.proto_requested));
+                                      ntohs(sdp_query.remote_addr.sin6_port),
+                                      static_cast<int>(sdp_query.security_requested),
+                                      static_cast<int>(sdp_query.proto_requested));
 
             sdp_send_response(v2g_ctx->sdp_socket, &sdp_query);
         }

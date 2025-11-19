@@ -477,7 +477,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             break;
         } else if (rv == -1) {
             EVLOG_error << fmt::format("v2g_incoming_v2gtp() (previous message \"{}\") failed",
-                                        v2g_msg_type[conn->ctx->last_v2g_msg]);
+                                       v2g_msg_type[conn->ctx->last_v2g_msg]);
             break;
         }
 
@@ -492,7 +492,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             rv = decode_din_exiDocument(&conn->stream, conn->exi_in.dinEXIDocument);
             if (rv != 0) {
                 EVLOG_error << fmt::format("decode_dinExiDocument() (previous message \"{}\") failed: {}",
-                                            v2g_msg_type[conn->ctx->last_v2g_msg], rv);
+                                           v2g_msg_type[conn->ctx->last_v2g_msg], rv);
                 /* we must ignore packet which we cannot decode, so reset rv to zero to stay in loop */
                 rv = 0;
                 v2gEvent = V2G_EVENT_IGNORE_MSG;
@@ -509,7 +509,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             rv = decode_iso2_exiDocument(&conn->stream, conn->exi_in.iso2EXIDocument);
             if (rv != 0) {
                 EVLOG_error << fmt::format("decode_iso2_exiDocument() (previous message \"{}\") failed: {}",
-                                            v2g_msg_type[conn->ctx->last_v2g_msg], rv);
+                                           v2g_msg_type[conn->ctx->last_v2g_msg], rv);
                 /* we must ignore packet which we cannot decode, so reset rv to zero to stay in loop */
                 rv = 0;
                 v2gEvent = V2G_EVENT_IGNORE_MSG;
@@ -546,13 +546,13 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             case V2G_PROTO_ISO15118_2010:
                 if ((rv = encode_din_exiDocument(&conn->stream, conn->exi_out.dinEXIDocument)) != 0) {
                     EVLOG_error << fmt::format("encode_dinExiDocument() (message \"{}\") failed: {}",
-                                                v2g_msg_type[conn->ctx->current_v2g_msg], rv);
+                                               v2g_msg_type[conn->ctx->current_v2g_msg], rv);
                 }
                 break;
             case V2G_PROTO_ISO15118_2013:
                 if ((rv = encode_iso2_exiDocument(&conn->stream, conn->exi_out.iso2EXIDocument)) != 0) {
                     EVLOG_error << fmt::format("encode_iso2_exiDocument() (message \"{}\") failed: {}",
-                                                v2g_msg_type[conn->ctx->current_v2g_msg], rv);
+                                               v2g_msg_type[conn->ctx->current_v2g_msg], rv);
                 }
                 break;
             default:
@@ -565,9 +565,9 @@ int v2g_handle_connection(struct v2g_connection* conn) {
                 // EVLOG_error << fmt::format("time_to_conf_res {}", time_to_conf_res);
                 std::this_thread::sleep_for(std::chrono::microseconds((MAX_RES_TIME - time_to_conf_res) * 1000));
             } else {
-                EVLOG_warning << fmt::format(
-                    "Response message (type {}) not configured within {} ms (took {} ms)",
-                    static_cast<int>(conn->ctx->current_v2g_msg), MAX_RES_TIME, time_to_conf_res);
+                EVLOG_warning << fmt::format("Response message (type {}) not configured within {} ms (took {} ms)",
+                                             static_cast<int>(conn->ctx->current_v2g_msg), MAX_RES_TIME,
+                                             time_to_conf_res);
             }
         }
         case V2G_EVENT_SEND_RECV_EXI_MSG: { // fall-through intended
@@ -579,19 +579,19 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             /* Write header and send next res-msg */
             if ((rv != 0) || ((rv = v2g_outgoing_v2gtp(conn)) == -1)) {
                 EVLOG_error << fmt::format("v2g_outgoing_v2gtp() \"{}\" failed: {}",
-                                            v2g_msg_type[conn->ctx->current_v2g_msg], rv);
+                                           v2g_msg_type[conn->ctx->current_v2g_msg], rv);
                 break;
             }
             break;
         }
         case V2G_EVENT_IGNORE_MSG:
             EVLOG_error << fmt::format("Ignoring V2G request message \"{}\". Waiting for next request",
-                                        v2g_msg_type[conn->ctx->current_v2g_msg]);
+                                       v2g_msg_type[conn->ctx->current_v2g_msg]);
             break;
         case V2G_EVENT_TERMINATE_CONNECTION: // fall-through intended
         default:
             EVLOG_error << fmt::format("Failed to handle V2G request message \"{}\"",
-                                        v2g_msg_type[conn->ctx->current_v2g_msg]);
+                                       v2g_msg_type[conn->ctx->current_v2g_msg]);
             stop_receiving_loop = true;
             break;
         }
