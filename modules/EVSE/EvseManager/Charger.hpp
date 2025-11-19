@@ -104,7 +104,7 @@ public:
     sigslot::signal<float> signal_max_current;
 
     void setup(bool has_ventilation, const ChargeMode charge_mode, bool ac_hlc_enabled, bool ac_hlc_use_5percent,
-               bool ac_enforce_hlc, bool ac_with_soc_timeout, float soft_over_current_tolerance_percent,
+               bool ac_enforce_hlc , float soft_over_current_tolerance_percent,
                float soft_over_current_measurement_noise_A, const int switch_3ph1ph_delay_s,
                const std::string switch_3ph1ph_cp_state, const int soft_over_current_timeout_ms,
                const int _state_F_after_fault_ms, const bool fail_on_powermeter_errors, const bool raise_mrec9,
@@ -156,8 +156,6 @@ public:
     sigslot::signal<types::authorization::ProvidedIdToken> signal_transaction_started_event;
     sigslot::signal<types::evse_manager::StopTransactionReason, std::optional<types::authorization::ProvidedIdToken>>
         signal_transaction_finished_event;
-
-    sigslot::signal<> signal_ac_with_soc_timeout;
 
     sigslot::signal<> signal_dc_supply_off;
     sigslot::signal<> signal_slac_reset;
@@ -312,9 +310,8 @@ private:
         float current_drawn_by_vehicle[3];
         ShutdownType shutdown_type{ShutdownType::None};
         ShutdownType last_shutdown_type{ShutdownType::None};
-        int ac_with_soc_timer;
-        // non standard compliant option: time out after a while and switch back to DC to get SoC update
-        bool ac_with_soc_timeout;
+        bool error_prevent_charging_flag{false};
+        bool last_error_prevent_charging_flag{false};
         bool contactor_welded{false};
         bool switch_3ph1ph_threephase{false};
         bool switch_3ph1ph_threephase_ongoing{false};

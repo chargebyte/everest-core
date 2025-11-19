@@ -171,13 +171,6 @@ void Charger::run_state_machine() {
 
         auto now = std::chrono::system_clock::now();
 
-        if (shared_context.ac_with_soc_timeout and (shared_context.ac_with_soc_timer -= 50) < 0) {
-            shared_context.ac_with_soc_timeout = false;
-            shared_context.ac_with_soc_timer = 3600000;
-            signal_ac_with_soc_timeout();
-            return;
-        }
-
         if (initialize_state) {
             internal_context.current_state_started = now;
             signal_state(shared_context.current_state);
@@ -205,10 +198,6 @@ void Charger::run_state_machine() {
         case EvseState::Replug:
             if (initialize_state) {
                 signal_simple_event(types::evse_manager::SessionEventEnum::ReplugStarted);
-                // start timer in case we need to
-                if (shared_context.ac_with_soc_timeout) {
-                    shared_context.ac_with_soc_timer = 120000;
-                }
             }
             // simply wait here until BSP informs us that replugging was finished
             break;
@@ -1489,7 +1478,7 @@ bool Charger::switch_three_phases_while_charging(bool n) {
 }
 
 void Charger::setup(bool has_ventilation, const ChargeMode _charge_mode, bool _ac_hlc_enabled,
-                    bool _ac_hlc_use_5percent, bool _ac_enforce_hlc, bool _ac_with_soc_timeout,
+                    bool _ac_hlc_use_5percent, bool _ac_enforce_hlc,
                     float _soft_over_current_tolerance_percent, float _soft_over_current_measurement_noise_A,
                     const int _switch_3ph1ph_delay_s, const std::string _switch_3ph1ph_cp_state,
                     const int _soft_over_current_timeout_ms, const int _state_F_after_fault_ms,
@@ -1506,8 +1495,6 @@ void Charger::setup(bool has_ventilation, const ChargeMode _charge_mode, bool _a
     config_context.ac_hlc_use_5percent = _ac_hlc_use_5percent;
     config_context.ac_enforce_hlc = _ac_enforce_hlc;
     config_context.soft_over_current_timeout_ms = _soft_over_current_timeout_ms;
-    shared_context.ac_with_soc_timeout = _ac_with_soc_timeout;
-    shared_context.ac_with_soc_timer = 3600000;
     soft_over_current_tolerance_percent = _soft_over_current_tolerance_percent;
     soft_over_current_measurement_noise_A = _soft_over_current_measurement_noise_A;
 
