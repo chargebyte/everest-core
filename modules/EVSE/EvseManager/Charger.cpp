@@ -957,7 +957,6 @@ void Charger::process_event(CPEvent cp_event) {
     case CPEvent::CarRequestedStopPower:
     case CPEvent::CarUnplugged:
     case CPEvent::BCDtoEF:
-    case CPEvent::BCDtoE:
     case CPEvent::EFtoBCD:
         session_log.car(false, fmt::format("Event {}", cpevent_to_string(cp_event)));
         break;
@@ -1023,7 +1022,7 @@ void Charger::process_cp_events_state(CPEvent cp_event) {
                 signal_hlc_stop_charging();
                 session_log.evse(false, "CP state transition C->B at this stage violates ISO15118-2");
             }
-        } else if (cp_event == CPEvent::BCDtoE) {
+        } else if (cp_event == CPEvent::BCDtoEF) {
             shared_context.iec_allow_close_contactor = false;
             shared_context.current_state = EvseState::StoppingCharging;
             // Tell HLC stack to stop the session in case of an E event while charging.
