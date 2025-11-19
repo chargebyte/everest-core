@@ -406,6 +406,11 @@ void IECStateMachine::set_pwm_F() {
     feed_state_machine();
 }
 
+void IECStateMachine::set_cp_state_E() {
+    r_bsp->call_cp_state_E();
+    state_e_triggered_through_bsp = true;
+}
+
 // The higher level state machine in Charger.cpp calls this to indicate it allows contactors to be switched on
 void IECStateMachine::allow_power_on(bool value, types::evse_board_support::Reason reason) {
     {

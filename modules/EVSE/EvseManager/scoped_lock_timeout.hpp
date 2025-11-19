@@ -26,6 +26,7 @@ enum class MutexDescription {
     Charger_resume_charging,
     Charger_waiting_for_power,
     Charger_resume_power_available,
+    Charger_start_reinit,
     Charger_cancel_transaction,
     Charger_setup,
     Charger_get_current_state,
@@ -107,6 +108,8 @@ static std::string to_string(MutexDescription d) {
         return "Charger.cpp: pause_charging_wait_for_power";
     case MutexDescription::Charger_resume_power_available:
         return "Charger.cpp: resume_charging_power_available";
+    case MutexDescription::Charger_start_reinit:
+        return "Charger.cpp: start_reinit";
     case MutexDescription::Charger_cancel_transaction:
         return "Charger.cpp: cancel_transaction";
     case MutexDescription::Charger_setup:

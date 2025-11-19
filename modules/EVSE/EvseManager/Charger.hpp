@@ -81,7 +81,8 @@ public:
         T_step_EF,
         T_step_X1,
         SwitchPhases,
-        Replug
+        Replug,
+        Reinit
     };
 
     enum class HlcTerminatePause {
@@ -107,7 +108,8 @@ public:
                float soft_over_current_measurement_noise_A, const int switch_3ph1ph_delay_s,
                const std::string switch_3ph1ph_cp_state, const int soft_over_current_timeout_ms,
                const int _state_F_after_fault_ms, const bool fail_on_powermeter_errors, const bool raise_mrec9,
-               const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type);
+               const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type,
+               const int reinit_duration_ms);
 
     void enable_disable_initial_state_publish();
     bool enable_disable(int connector_id, const types::evse_manager::EnableDisableSource& source);
@@ -142,14 +144,10 @@ public:
     bool pause_charging_wait_for_power();
     bool resume_charging();
     bool resume_charging_power_available();
+    bool start_reinit();
 
     bool cancel_transaction(const types::evse_manager::StopTransactionRequest&
                                 request); // cancel transaction ahead of time when car is still plugged
-
-    // execute a virtual replug sequence. Does NOT generate a Car plugged in event etc,
-    // since the session is not restarted. It can be used to e.g. restart the ISO session
-    // and switch between AC and DC mode within a session.
-    bool evse_replug();
 
     void set_current_drawn_by_vehicle(float l1, float l2, float l3);
 
@@ -238,6 +236,7 @@ private:
     float get_max_current_signalled_to_ev_internal();
     bool deauthorize_internal();
     bool pause_charging_wait_for_power_internal();
+    void process_pending_reinit_request();
 
     void bcb_toggle_reset();
     void bcb_toggle_detect_start_pulse();
@@ -314,6 +313,8 @@ private:
         bool contactor_welded{false};
         bool switch_3ph1ph_threephase{false};
         bool switch_3ph1ph_threephase_ongoing{false};
+        bool reinit_requested{false};
+        bool reinit_running{false};
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;
@@ -344,6 +345,8 @@ private:
         int sleep_before_enabling_pwm_hlc_mode_ms{1000};
         // type used to generate session ids
         utils::SessionIdType session_id_type{utils::SessionIdType::UUID};
+        // duration of reinit procedure in ms
+        int reinit_duration_ms{0};
     } config_context;
 
     // Used by different threads, but requires no complete state machine locking
@@ -387,6 +390,8 @@ private:
 
         std::chrono::time_point<std::chrono::steady_clock> fatal_error_became_active;
         bool fatal_error_timer_running{false};
+        bool reinit_timer_active{false};
+        std::chrono::time_point<std::chrono::steady_clock> reinit_deadline;
     } internal_context;
 
     // main Charger thread
