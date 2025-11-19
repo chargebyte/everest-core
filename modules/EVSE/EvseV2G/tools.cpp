@@ -2,7 +2,6 @@
 // Copyright (C) 2022-2023 chargebyte GmbH
 // Copyright (C) 2022-2023 Contributors to EVerest
 #include "tools.hpp"
-#include "log.hpp"
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
@@ -18,6 +17,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <everest/logging.hpp>
 
 ssize_t safe_read(int fd, void* buf, size_t count) {
     for (;;) {
@@ -73,7 +73,7 @@ const char* choose_first_ipv6_interface() {
             }
         }
     }
-    dlog(DLOG_LEVEL_ERROR, "No necessary IPv6 link-local address was found!");
+    EVLOG_error << "No necessary IPv6 link-local address was found!";
     return NULL;
 }
 

@@ -3,10 +3,11 @@
 // Copyright (C) 2022-2023 Contributors to EVerest
 
 #include "connection.hpp"
-#include "log.hpp"
 #include "tls_connection.hpp"
 #include "tools.hpp"
 #include "v2g_server.hpp"
+#include <everest/logging.hpp>
+#include <fmt/format.h>
 
 #include <arpa/inet.h>
 #include <cstring>
@@ -45,7 +46,7 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
     s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s == -1) {
         if (!error_once) {
-            dlog(DLOG_LEVEL_ERROR, "socket() failed: %s", strerror(errno));
+            EVLOG_error << "socket() failed: " << strerror(errno);
             error_once = true;
         }
         return -1;
@@ -53,7 +54,7 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
 
     if (setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) == -1) {
         if (!error_once) {
-            dlog(DLOG_LEVEL_ERROR, "setsockopt(SO_REUSEPORT) failed: %s", strerror(errno));
+            EVLOG_error << "setsockopt(SO_REUSEPORT) failed: " << strerror(errno);
             error_once = true;
         }
         close(s);
@@ -63,9 +64,8 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
     /* bind it to interface */
     if (bind(s, reinterpret_cast<struct sockaddr*>(sockaddr), addrlen) == -1) {
         if (!error_once) {
-            dlog(DLOG_LEVEL_WARNING, "bind() failed: %s", strerror(errno));
-            dlog(DLOG_LEVEL_WARNING,
-                 "Verify that the configured interface has a valid IPv6 link local address configured.");
+            EVLOG_warning << "bind() failed: " << strerror(errno);
+            EVLOG_warning << "Verify that the configured interface has a valid IPv6 link local address configured.";
             error_once = true;
         }
         close(s);
@@ -75,7 +75,7 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
     /* listen on this socket */
     if (listen(s, DEFAULT_SOCKET_BACKLOG) == -1) {
         if (!error_once) {
-            dlog(DLOG_LEVEL_ERROR, "listen() failed: %s", strerror(errno));
+            EVLOG_error << "listen() failed: " << strerror(errno);
             error_once = true;
         }
         close(s);
@@ -85,7 +85,7 @@ static int connection_create_socket(struct sockaddr_in6* sockaddr) {
     /* retrieve the actual port number we are listening on */
     if (getsockname(s, reinterpret_cast<struct sockaddr*>(sockaddr), &addrlen) == -1) {
         if (!error_once) {
-            dlog(DLOG_LEVEL_ERROR, "getsockname() failed: %s", strerror(errno));
+            EVLOG_error << "getsockname() failed: " << strerror(errno);
             error_once = true;
         }
         close(s);
@@ -119,7 +119,7 @@ int check_interface(struct v2g_context* v2g_ctx) {
 
     mreq.ipv6mr_interface = if_nametoindex(v2g_ctx->if_name);
     if (!mreq.ipv6mr_interface) {
-        dlog(DLOG_LEVEL_ERROR, "No such interface: %s", v2g_ctx->if_name);
+        EVLOG_error << "No such interface: " << v2g_ctx->if_name;
         return -1;
     }
 
@@ -139,7 +139,7 @@ int connection_init(struct v2g_context* v2g_ctx) {
     if (v2g_ctx->tls_security != TLS_SECURITY_FORCE) {
         v2g_ctx->local_tcp_addr = static_cast<sockaddr_in6*>(calloc(1, sizeof(*v2g_ctx->local_tcp_addr)));
         if (v2g_ctx->local_tcp_addr == nullptr) {
-            dlog(DLOG_LEVEL_ERROR, "Failed to allocate memory for TCP address");
+            EVLOG_error << "Failed to allocate memory for TCP address";
             return -1;
         }
     }
@@ -147,7 +147,7 @@ int connection_init(struct v2g_context* v2g_ctx) {
     if (v2g_ctx->tls_security != TLS_SECURITY_PROHIBIT) {
         v2g_ctx->local_tls_addr = static_cast<sockaddr_in6*>(calloc(1, sizeof(*v2g_ctx->local_tls_addr)));
         if (!v2g_ctx->local_tls_addr) {
-            dlog(DLOG_LEVEL_ERROR, "Failed to allocate memory for TLS address");
+            EVLOG_error << "Failed to allocate memory for TLS address";
             return -1;
         }
     }
@@ -185,12 +185,12 @@ int connection_init(struct v2g_context* v2g_ctx) {
                 continue;
             }
             if (inet_ntop(AF_INET6, &v2g_ctx->local_tcp_addr->sin6_addr, buffer, sizeof(buffer)) != nullptr) {
-                dlog(DLOG_LEVEL_INFO, "TCP server on %s is listening on port [%s%%%" PRIu32 "]:%" PRIu16,
-                     v2g_ctx->if_name, buffer, v2g_ctx->local_tcp_addr->sin6_scope_id,
-                     ntohs(v2g_ctx->local_tcp_addr->sin6_port));
+                EVLOG_info << fmt::format("TCP server on {} is listening on port [{}%{}]:{}", v2g_ctx->if_name, buffer,
+                                           v2g_ctx->local_tcp_addr->sin6_scope_id,
+                                           ntohs(v2g_ctx->local_tcp_addr->sin6_port));
             } else {
-                dlog(DLOG_LEVEL_ERROR, "TCP server on %s is listening, but inet_ntop failed: %s", v2g_ctx->if_name,
-                     strerror(errno));
+                EVLOG_error << fmt::format("TCP server on {} is listening, but inet_ntop failed: {}",
+                                           v2g_ctx->if_name, strerror(errno));
                 return -1;
             }
         }
@@ -213,12 +213,12 @@ int connection_init(struct v2g_context* v2g_ctx) {
             }
 
             if (inet_ntop(AF_INET6, &v2g_ctx->local_tls_addr->sin6_addr, buffer, sizeof(buffer)) != nullptr) {
-                dlog(DLOG_LEVEL_INFO, "TLS server on %s is listening on port [%s%%%" PRIu32 "]:%" PRIu16,
-                     v2g_ctx->if_name, buffer, v2g_ctx->local_tls_addr->sin6_scope_id,
-                     ntohs(v2g_ctx->local_tls_addr->sin6_port));
+                EVLOG_info << fmt::format("TLS server on {} is listening on port [{}%{}]:{}", v2g_ctx->if_name, buffer,
+                                           v2g_ctx->local_tls_addr->sin6_scope_id,
+                                           ntohs(v2g_ctx->local_tls_addr->sin6_port));
             } else {
-                dlog(DLOG_LEVEL_INFO, "TLS server on %s is listening, but inet_ntop failed: %s", v2g_ctx->if_name,
-                     strerror(errno));
+                EVLOG_info << fmt::format("TLS server on {} is listening, but inet_ntop failed: {}", v2g_ctx->if_name,
+                                          strerror(errno));
                 return -1;
             }
         }
@@ -244,7 +244,8 @@ bool is_sequence_timeout(struct timespec ts_start, struct v2g_context* ctx) {
 
     if (((clock_gettime(CLOCK_MONOTONIC, &ts_current)) != 0) ||
         (timespec_to_ms(timespec_sub(ts_current, ts_start)) > sequence_timeout)) {
-        dlog(DLOG_LEVEL_ERROR, "Sequence timeout has occurred (message: %s)", v2g_msg_type[ctx->current_v2g_msg]);
+        EVLOG_error << fmt::format("Sequence timeout has occurred (message: {})",
+                                    v2g_msg_type[ctx->current_v2g_msg]);
         return true;
     }
     return false;
@@ -263,7 +264,7 @@ ssize_t connection_read(struct v2g_connection* conn, unsigned char* buf, size_t 
     int bytes_read = 0;
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts_start) == -1) {
-        dlog(DLOG_LEVEL_ERROR, "clock_gettime(ts_start) failed: %s", strerror(errno));
+        EVLOG_error << "clock_gettime(ts_start) failed: " << strerror(errno);
         return -1;
     }
 
@@ -317,7 +318,7 @@ ssize_t connection_read(struct v2g_connection* conn, unsigned char* buf, size_t 
     }
 
     if (conn->ctx->is_connection_terminated == true) {
-        dlog(DLOG_LEVEL_ERROR, "Reading from tcp-socket aborted");
+        EVLOG_error << "Reading from tcp-socket aborted";
         return -2;
     }
 
@@ -379,15 +380,15 @@ void connection_teardown(struct v2g_connection* conn) {
     /* print dlink status */
     switch (conn->dlink_action) {
     case MQTT_DLINK_ACTION_ERROR:
-        dlog(DLOG_LEVEL_TRACE, "d_link/error");
+                    EVLOG_verbose << "d_link/error";
         break;
     case MQTT_DLINK_ACTION_TERMINATE:
         conn->ctx->p_charger->publish_dlink_terminate(nullptr);
-        dlog(DLOG_LEVEL_TRACE, "d_link/terminate");
+                    EVLOG_verbose << "d_link/terminate";
         break;
     case MQTT_DLINK_ACTION_PAUSE:
         conn->ctx->p_charger->publish_dlink_pause(nullptr);
-        dlog(DLOG_LEVEL_TRACE, "d_link/pause");
+                    EVLOG_verbose << "d_link/pause";
         break;
     }
 }
@@ -399,7 +400,7 @@ static void* connection_handle_tcp(void* data) {
     struct v2g_connection* conn = static_cast<struct v2g_connection*>(data);
     int rv = 0;
 
-    dlog(DLOG_LEVEL_INFO, "Started new TCP connection thread");
+            EVLOG_info << "Started new TCP connection thread";
 
     remove_service_from_service_list_if_exists(conn->ctx, V2G_SERVICE_ID_CERTIFICATE);
 
@@ -408,29 +409,29 @@ static void* connection_handle_tcp(void* data) {
         int rv2 = v2g_handle_connection(conn);
 
         if (rv2 != 0) {
-            dlog(DLOG_LEVEL_INFO, "v2g_handle_connection exited with %d", rv2);
+            EVLOG_info << "v2g_handle_connection exited with " << rv2;
         }
     } else {
         rv = ERROR_SESSION_ALREADY_STARTED;
-        dlog(DLOG_LEVEL_WARNING, "%s", "Closing tcp-connection. v2g-session is already running");
+            EVLOG_warning << "Closing tcp-connection. v2g-session is already running";
     }
 
     /* tear down connection gracefully */
-    dlog(DLOG_LEVEL_INFO, "Closing TCP connection");
+        EVLOG_info << "Closing TCP connection";
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     if (shutdown(conn->conn.socket_fd, SHUT_RDWR) == -1) {
-        dlog(DLOG_LEVEL_ERROR, "shutdown() failed: %s", strerror(errno));
+        EVLOG_error << "shutdown() failed: " << strerror(errno);
     }
 
     // Waiting for client closing the connection
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
     if (close(conn->conn.socket_fd) == -1) {
-        dlog(DLOG_LEVEL_ERROR, "close() failed: %s", strerror(errno));
+        EVLOG_error << "close() failed: " << strerror(errno);
     }
-    dlog(DLOG_LEVEL_INFO, "TCP connection closed gracefully");
+    EVLOG_info << "TCP connection closed gracefully";
 
     conn->ctx->connection_initiated = false;
 
@@ -452,11 +453,11 @@ static void* connection_server(void* data) {
 
     /* create the thread in detached state so we don't need to join every single one */
     if (pthread_attr_init(&attr) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "pthread_attr_init failed: %s", strerror(errno));
+        EVLOG_error << "pthread_attr_init failed: " << strerror(errno);
         goto thread_exit;
     }
     if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "pthread_attr_setdetachstate failed: %s", strerror(errno));
+        EVLOG_error << "pthread_attr_setdetachstate failed: " << strerror(errno);
         goto thread_exit;
     }
 
@@ -469,7 +470,7 @@ static void* connection_server(void* data) {
         free(conn);
         conn = static_cast<v2g_connection*>(calloc(1, sizeof(*conn)));
         if (!conn) {
-            dlog(DLOG_LEVEL_ERROR, "Calloc failed: %s", strerror(errno));
+            EVLOG_error << "Calloc failed: " << strerror(errno);
             break;
         }
 
@@ -482,24 +483,24 @@ static void* connection_server(void* data) {
         /* wait for an incoming connection */
         conn->conn.socket_fd = accept(ctx->tcp_socket, (struct sockaddr*)&addr, &addrlen);
         if (conn->conn.socket_fd == -1) {
-            dlog(DLOG_LEVEL_ERROR, "Accept(tcp) failed: %s", strerror(errno));
+            EVLOG_error << "Accept(tcp) failed: " << strerror(errno);
             continue;
         }
 
         if (inet_ntop(AF_INET6, &addr, client_addr, sizeof(client_addr)) != NULL) {
-            dlog(DLOG_LEVEL_INFO, "Incoming connection on %s from [%s]:%" PRIu16, ctx->if_name, client_addr,
-                 ntohs(addr.sin6_port));
+            EVLOG_info << fmt::format("Incoming connection on {} from [{}]:{}", ctx->if_name, client_addr,
+                                       ntohs(addr.sin6_port));
         } else {
-            dlog(DLOG_LEVEL_ERROR, "Incoming connection on %s, but inet_ntop failed: %s", ctx->if_name,
-                 strerror(errno));
+            EVLOG_error << fmt::format("Incoming connection on {}, but inet_ntop failed: {}", ctx->if_name,
+                                       strerror(errno));
         }
 
         // store the port to create a udp socket
         conn->ctx->udp_port = ntohs(addr.sin6_port);
 
         if (ctx->connection_initiated) {
-            dlog(DLOG_LEVEL_ERROR, "Incoming connection on %s, but there is already an active connection.",
-                 ctx->if_name);
+            EVLOG_error << fmt::format("Incoming connection on {}, but there is already an active connection.",
+                                       ctx->if_name);
             connection_teardown(conn);
             free(conn);
             conn = NULL;
@@ -508,7 +509,7 @@ static void* connection_server(void* data) {
         ctx->connection_initiated = true;
 
         if (pthread_create(&conn->thread_id, &attr, connection_handle_tcp, conn) != 0) {
-            dlog(DLOG_LEVEL_ERROR, "pthread_create() failed: %s", strerror(errno));
+            EVLOG_error << "pthread_create() failed: " << strerror(errno);
             ctx->connection_initiated = false;
             continue;
         }
@@ -519,7 +520,7 @@ static void* connection_server(void* data) {
 
 thread_exit:
     if (pthread_attr_destroy(&attr) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "pthread_attr_destroy failed: %s", strerror(errno));
+        EVLOG_error << "pthread_attr_destroy failed: " << strerror(errno);
     }
 
     /* clean up if dangling */
@@ -534,7 +535,7 @@ int connection_start_servers(struct v2g_context* ctx) {
     if (ctx->tcp_socket != -1) {
         rv = pthread_create(&ctx->tcp_thread, NULL, connection_server, ctx);
         if (rv != 0) {
-            dlog(DLOG_LEVEL_ERROR, "pthread_create(tcp) failed: %s", strerror(errno));
+            EVLOG_error << "pthread_create(tcp) failed: " << strerror(errno);
             return -1;
         }
         tcp_started = 1;
@@ -547,7 +548,7 @@ int connection_start_servers(struct v2g_context* ctx) {
                 pthread_cancel(ctx->tcp_thread);
                 pthread_join(ctx->tcp_thread, NULL);
             }
-            dlog(DLOG_LEVEL_ERROR, "pthread_create(tls) failed: %s", strerror(errno));
+            EVLOG_error << "pthread_create(tls) failed: " << strerror(errno);
             return -1;
         }
     }
