@@ -716,8 +716,6 @@ const std::string cpevent_to_string(CPEvent e) {
         return "EFtoBCD";
     case CPEvent::BCDtoEF:
         return "BCDtoEF";
-    case CPEvent::BCDtoE:
-        return "BCDtoE";
     case CPEvent::EvseReplugStarted:
         return "EvseReplugStarted";
     case CPEvent::EvseReplugFinished:
