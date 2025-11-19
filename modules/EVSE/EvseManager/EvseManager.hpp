@@ -75,6 +75,7 @@ struct Conf {
     bool ac_enforce_hlc;
     bool ac_with_soc;
     int internal_over_voltage_duration_ms;
+    int reinit_duration_ms;
     bool dbg_hlc_auth_after_tstep;
     int dc_isolation_voltage_V;
     int cable_check_wait_number_of_imd_measurements;
@@ -354,7 +355,7 @@ private:
     // Voltage plausibility monitor
     std::unique_ptr<VoltagePlausibilityMonitor> voltage_plausibility_monitor;
 
-    void setup_AC_mode();
+    void setup_AC_mode(const bool hlc_enabled = false);
     void setup_fake_DC_mode();
     void setup_ac_with_soc_handling();
 

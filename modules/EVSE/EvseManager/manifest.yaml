@@ -89,6 +89,10 @@ config:
     description: >-
       Time in milliseconds the internal software over voltage monitor waits before raising MREC5 once the measured
       voltage exceeds the negotiated limit.
+  reinit_duration_ms:
+    description: Duration in milliseconds of the reinit state before going back to normal operation
+    type: integer
+    default: 3000
     type: integer
     minimum: 0
     default: 400
