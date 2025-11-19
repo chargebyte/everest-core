@@ -20,10 +20,11 @@ using namespace openssl;
 using namespace crypto::openssl;
 
 #include "iso_server.hpp"
-#include "log.hpp"
 #include "tools.hpp"
 #include "v2g_ctx.hpp"
 #include "v2g_server.hpp"
+#include <everest/logging.hpp>
+#include <fmt/format.h>
 
 #define MQTT_MAX_PAYLOAD_SIZE         268435455
 #define V2G_SECC_MSG_CERTINSTALL_TIME 4500
@@ -66,7 +67,7 @@ static v2g_event iso_validate_response_code(iso2_responseCodeType* const v2g_res
     iso2_responseCodeType response_code_tmp;
 
     if (conn->ctx->is_connection_terminated == true) {
-        dlog(DLOG_LEVEL_ERROR, "Connection is terminated. Abort charging");
+        EVLOG_error << "Connection is terminated. Abort charging";
         return V2G_EVENT_TERMINATE_CONNECTION;
     }
 
@@ -100,8 +101,8 @@ static v2g_event iso_validate_response_code(iso2_responseCodeType* const v2g_res
     /* log failed response code message */
     if ((*v2g_response_code >= iso2_responseCodeType_FAILED) &&
         (*v2g_response_code <= iso2_responseCodeType_FAILED_CertificateRevoked)) {
-        dlog(DLOG_LEVEL_ERROR, "Failed response code detected for message \"%s\", error: %s",
-             v2g_msg_type[conn->ctx->current_v2g_msg], isoResponse[*v2g_response_code]);
+        EVLOG_error << fmt::format("Failed response code detected for message \"{}\", error: {}",
+                                   v2g_msg_type[conn->ctx->current_v2g_msg], isoResponse[*v2g_response_code]);
     }
 
     return next_event;
@@ -181,8 +182,7 @@ static void check_iso2_charging_profile_values(iso2_PowerDeliveryReqType* req, i
                         res->ResponseCode = iso2_responseCodeType_FAILED_ChargingProfileInvalid; // [V2G2-224]
                         // [V2G2-225] [V2G2-478]
                         //  setting response code is commented because some EVs do not support schedules correctly
-                        dlog(DLOG_LEVEL_WARNING,
-                             "EV's charging profile is invalid (ChargingProfileEntryMaxPower too high)!");
+                        EVLOG_warning << "EV's charging profile is invalid (ChargingProfileEntryMaxPower too high)!";
                         break;
                     }
                 }
@@ -191,8 +191,8 @@ static void check_iso2_charging_profile_values(iso2_PowerDeliveryReqType* req, i
                     // res->ResponseCode = iso2_responseCodeType_FAILED_ChargingProfileInvalid; // EV charing profile
                     // time exceeds EVSE provided schedule
                     //  setting response code is commented because some EVs do not support schedules correctly
-                    dlog(DLOG_LEVEL_WARNING,
-                         "EV's charging profile is invalid (EV charging profile time exceeds provided schedule)!");
+                    EVLOG_warning
+                        << "EV's charging profile is invalid (EV charging profile time exceeds provided schedule)!";
                 } else {
                     /* Now we checked if the current EV interval fits within the EVSE interval, but it fails.
                      * Next step is to check the EVSE interval until we reached the last EVSE interval */
@@ -498,11 +498,11 @@ static bool publish_iso_certificate_installation_exi_req(struct v2g_context* ctx
 
     certificate_request.exi_request = openssl::base64_encode(AExiBuffer, AExiBufferSize);
     if (certificate_request.exi_request.size() > MQTT_MAX_PAYLOAD_SIZE) {
-        dlog(DLOG_LEVEL_ERROR, "Mqtt payload size exceeded!");
+        EVLOG_error << "Mqtt payload size exceeded!";
         return false;
     }
     if (certificate_request.exi_request.size() == 0) {
-        dlog(DLOG_LEVEL_ERROR, "Unable to encode contract leaf certificate");
+        EVLOG_error << "Unable to encode contract leaf certificate";
         return false;
     }
 
@@ -531,8 +531,8 @@ static enum v2g_event handle_iso_session_setup(struct v2g_connection* conn) {
 
     conn->ctx->p_charger->publish_evcc_id(mac_addr); // publish EVCC ID
 
-    dlog(DLOG_LEVEL_INFO, "SessionSetupReq.EVCCID: %s",
-         (mac_addr.empty()) ? "(zero length provided)" : mac_addr.c_str());
+    EVLOG_info << "SessionSetupReq.EVCCID: "
+               << (mac_addr.empty() ? "(zero length provided)" : mac_addr.c_str());
 
     /* [V2G2-756]: If the SECC receives a SessionSetupReq including a SessionID value which is not
      * equal to zero (0) and not equal to the SessionID value stored from the preceding V2G
@@ -553,14 +553,12 @@ static enum v2g_event handle_iso_session_setup(struct v2g_connection* conn) {
     if (conn->ctx->evse_v2g_data.session_id == (uint64_t)0 ||
         conn->ctx->evse_v2g_data.session_id != conn->ctx->ev_v2g_data.received_session_id) {
         generate_random_data(&conn->ctx->evse_v2g_data.session_id, 8);
-        dlog(
-            DLOG_LEVEL_INFO,
-            "No session_id found or not equal to the id from the preceding v2g session. Generating random session id.");
-        dlog(DLOG_LEVEL_INFO, "Created new session with id 0x%016" PRIx64,
-             be64toh(conn->ctx->evse_v2g_data.session_id));
+        EVLOG_info
+            << "No session_id found or not equal to the id from the preceding v2g session. Generating random session id.";
+        EVLOG_info << fmt::format("Created new session with id 0x{:016x}", be64toh(conn->ctx->evse_v2g_data.session_id));
     } else {
-        dlog(DLOG_LEVEL_INFO, "Found Session_id from the old session: 0x%016" PRIx64,
-             be64toh(conn->ctx->evse_v2g_data.session_id));
+        EVLOG_info << fmt::format("Found Session_id from the old session: 0x{:016x}",
+                                  be64toh(conn->ctx->evse_v2g_data.session_id));
         res->ResponseCode = iso2_responseCodeType_OK_OldSessionJoined;
     }
 
@@ -602,14 +600,13 @@ static enum v2g_event handle_iso_service_discovery(struct v2g_connection* conn) 
 
     // Checking of the charge service id
     if (conn->ctx->evse_v2g_data.charge_service.ServiceID != V2G_SERVICE_ID_CHARGING) {
-        dlog(DLOG_LEVEL_WARNING,
-             "Selected ServiceID is not ISO15118 conform. Correcting value to '1' (Charge service id)");
+        EVLOG_warning
+            << "Selected ServiceID is not ISO15118 conform. Correcting value to '1' (Charge service id)";
         conn->ctx->evse_v2g_data.charge_service.ServiceID = V2G_SERVICE_ID_CHARGING;
     }
     // Checking of the service category
     if (conn->ctx->evse_v2g_data.charge_service.ServiceCategory != iso2_serviceCategoryType_EVCharging) {
-        dlog(DLOG_LEVEL_WARNING,
-             "Selected ServiceCategory is not ISO15118 conform. Correcting value to '0' (EVCharging)");
+        EVLOG_warning << "Selected ServiceCategory is not ISO15118 conform. Correcting value to '0' (EVCharging)";
         conn->ctx->evse_v2g_data.charge_service.ServiceCategory = iso2_serviceCategoryType_EVCharging;
     }
 
@@ -621,8 +618,7 @@ static enum v2g_event handle_iso_service_discovery(struct v2g_connection* conn) 
          (conn->ctx->evse_v2g_data.payment_option_list[1] == iso2_paymentOptionType_Contract))) {
         conn->ctx->evse_v2g_data.payment_option_list[0] = iso2_paymentOptionType_ExternalPayment;
         conn->ctx->evse_v2g_data.payment_option_list_len = 1;
-        dlog(DLOG_LEVEL_WARNING,
-             "PnC is not allowed without TLS-communication. Correcting value to '1' (ExternalPayment)");
+        EVLOG_warning << "PnC is not allowed without TLS-communication. Correcting value to '1' (ExternalPayment)";
     }
 
     memcpy(res->PaymentOptionList.PaymentOption.array, conn->ctx->evse_v2g_data.payment_option_list,
@@ -739,7 +735,7 @@ static enum v2g_event handle_iso_service_detail(struct v2g_connection* conn) {
                                 // TODO(SL): Check if string is too big to copy char array
                                 const auto& temp = parameter.value.finite_string.value();
                                 if (temp.length() > sizeof(out_parameter)) {
-                                    dlog(DLOG_LEVEL_WARNING, "Paramater String is too long to copy into char array");
+                                    EVLOG_warning << "Paramater String is too long to copy into char array";
                                 }
                                 temp.copy(out_parameter.stringValue.characters, temp.length());
                                 out_parameter.stringValue.charactersLen = temp.length();
@@ -848,8 +844,8 @@ static enum v2g_event handle_iso_payment_service_selection(struct v2g_connection
 
                 if (selected_service.ServiceID == conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID) {
                     /* If it's stored, search for the next requested SelectedService entry */
-                    dlog(DLOG_LEVEL_INFO, "Selected service id %i found",
-                         conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID);
+                    EVLOG_info << fmt::format("Selected service id {} found",
+                                               conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID);
 
                     if (conn->ctx->evse_v2g_data.evse_service_list[ci_idx].ServiceID == SAE_V2H) {
                         conn->ctx->evse_v2g_data.sae_bidi_data.enabled_sae_v2h = true;
@@ -902,14 +898,14 @@ static enum v2g_event handle_iso_payment_service_selection(struct v2g_connection
     next_event = (v2g_event)iso_validate_response_code(&res->ResponseCode, conn);
 
     if (req->SelectedPaymentOption == iso2_paymentOptionType_Contract) {
-        dlog(DLOG_LEVEL_INFO, "SelectedPaymentOption: Contract");
+        EVLOG_info << "SelectedPaymentOption: Contract";
         conn->ctx->session.iso_selected_payment_option = iso2_paymentOptionType_Contract;
         /* Set next expected req msg */
         conn->ctx->state =
             (int)iso_dc_state_id::WAIT_FOR_PAYMENTDETAILS_CERTINST_CERTUPD; // [V2G-551] (iso specification describes
                                                                             // only the ac case... )
     } else {
-        dlog(DLOG_LEVEL_INFO, "SelectedPaymentOption: ExternalPayment");
+        EVLOG_info << "SelectedPaymentOption: ExternalPayment";
         conn->ctx->evse_v2g_data.evse_processing[PHASE_AUTH] =
             (uint8_t)iso2_EVSEProcessingType_Ongoing_WaitingForCustomerInteraction; // [V2G2-854]
         /* Set next expected req msg */
@@ -948,7 +944,7 @@ static enum v2g_event handle_iso_payment_details(struct v2g_connection* conn) {
             err = parse_contract_certificate(contract_crt, req->ContractSignatureCertChain.Certificate.bytes,
                                              req->ContractSignatureCertChain.Certificate.bytesLen);
         } else {
-            dlog(DLOG_LEVEL_ERROR, "No certificate received!");
+            EVLOG_error << "No certificate received!";
             res->ResponseCode = iso2_responseCodeType_FAILED_CertChainError;
             goto error_out;
         }
@@ -960,11 +956,11 @@ static enum v2g_event handle_iso_payment_details(struct v2g_connection* conn) {
         cert_emaid.erase(std::remove(cert_emaid.begin(), cert_emaid.end(), '-'), cert_emaid.end());
         req_emaid.erase(std::remove(req_emaid.begin(), req_emaid.end(), '-'), req_emaid.end());
 
-        dlog(DLOG_LEVEL_TRACE, "emaid-v2g: %s emaid-cert: %s", req_emaid.c_str(), cert_emaid.c_str());
+        EVLOG_verbose << fmt::format("emaid-v2g: {} emaid-cert: {}", req_emaid, cert_emaid);
 
         if ((req_emaid.size() != cert_emaid.size()) ||
             (strncasecmp(req_emaid.c_str(), cert_emaid.c_str(), req_emaid.size()) != 0)) {
-            dlog(DLOG_LEVEL_ERROR, "emaid of the contract certificate doesn't match with the received v2g-emaid");
+            EVLOG_error << "emaid of the contract certificate doesn't match with the received v2g-emaid";
             res->ResponseCode = iso2_responseCodeType_FAILED_CertChainError;
             goto error_out;
         }
@@ -1055,19 +1051,19 @@ static enum v2g_event handle_iso_payment_details(struct v2g_connection* conn) {
             }
 
             if (err == -1) {
-                dlog(DLOG_LEVEL_ERROR, "Validation of the contract certificate failed!");
+                EVLOG_error << "Validation of the contract certificate failed!";
                 if (!forward_contract) {
-                    dlog(DLOG_LEVEL_ERROR, "Central contract validation is not allowed.");
+                    EVLOG_error << "Central contract validation is not allowed.";
                     // EVSETimeStamp and GenChallenge are mandatory, GenChallenge has fixed size
                     res->EVSETimeStamp = time(NULL);
                     memset(res->GenChallenge.bytes, 0, GEN_CHALLENGE_SIZE);
                     res->GenChallenge.bytesLen = GEN_CHALLENGE_SIZE;
                     goto error_out;
                 } else {
-                    dlog(DLOG_LEVEL_INFO, "Central contract validation is allowed: Forwarding contract");
+                    EVLOG_info << "Central contract validation is allowed: Forwarding contract";
                 }
             } else {
-                dlog(DLOG_LEVEL_INFO, "Validation of the contract certificate was successful!");
+                EVLOG_info << "Validation of the contract certificate was successful!";
 
                 // contract chain ocsp data can only be retrieved if the MO root is present and the chain could be
                 // verified
@@ -1132,12 +1128,12 @@ static enum v2g_event handle_iso_authorization(struct v2g_connection* conn) {
         if (req->GenChallenge_isUsed == 0 ||
             req->GenChallenge.bytesLen != 16 // [V2G2-697]  The GenChallenge field shall be exactly 128 bits long.
             || memcmp(req->GenChallenge.bytes, conn->ctx->session.gen_challenge, 16) != 0) {
-            dlog(DLOG_LEVEL_ERROR, "Challenge invalid or not present");
+            EVLOG_error << "Challenge invalid or not present";
             res->ResponseCode = iso2_responseCodeType_FAILED_ChallengeInvalid; // [V2G2-475]
             goto error_out;
         }
         if (conn->exi_in.iso2EXIDocument->V2G_Message.Header.Signature_isUsed == 0) {
-            dlog(DLOG_LEVEL_ERROR, "Missing signature (Signature_isUsed == 0)");
+            EVLOG_error << "Missing signature (Signature_isUsed == 0)";
             res->ResponseCode = iso2_responseCodeType_FAILED_SignatureError;
             goto error_out;
         }
@@ -1163,7 +1159,7 @@ static enum v2g_event handle_iso_authorization(struct v2g_connection* conn) {
         } else {
             // this should never happen, since the contract certificate is set in handle_iso_payment_details in case
             // contract is selected
-            dlog(DLOG_LEVEL_ERROR, "No contract certificate could be retrieved!");
+            EVLOG_error << "No contract certificate could be retrieved!";
             res->ResponseCode = iso2_responseCodeType_FAILED;
             goto error_out;
         }
@@ -1173,7 +1169,7 @@ static enum v2g_event handle_iso_authorization(struct v2g_connection* conn) {
     if (conn->ctx->evse_v2g_data.evse_processing[PHASE_AUTH] != iso2_EVSEProcessingType_Finished) {
         if (((is_payment_option_contract == false) && (conn->ctx->session.auth_timeout_eim == 0)) ||
             ((is_payment_option_contract == true) && (conn->ctx->session.auth_timeout_pnc == 0))) {
-            dlog(DLOG_LEVEL_DEBUG, "Waiting for authorization forever!");
+            EVLOG_debug << "Waiting for authorization forever!";
         } else if ((getmonotonictime() - conn->ctx->session.auth_start_timeout) >=
                    1000 * (is_payment_option_contract ? conn->ctx->session.auth_timeout_pnc
                                                       : conn->ctx->session.auth_timeout_eim)) {
@@ -1244,9 +1240,9 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
         pmax = max_current * voltage *
                ((req->RequestedEnergyTransferMode == iso2_EnergyTransferModeType_AC_single_phase_core) ? 1 : 3);
 
-        dlog(DLOG_LEVEL_INFO,
-             "before adjusting for departure time, max_current %f, nom_voltage %d, pmax %d, departure_duration %d",
-             max_current, voltage, pmax, req->AC_EVChargeParameter.DepartureTime);
+        EVLOG_info << fmt::format(
+            "before adjusting for departure time, max_current {}, nom_voltage {}, pmax {}, departure_duration {}",
+            max_current, voltage, pmax, req->AC_EVChargeParameter.DepartureTime);
     }
 
     /* Configure SA-schedules*/
@@ -1292,7 +1288,7 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
 
         if ((req->MaxEntriesSAScheduleTuple_isUsed == (unsigned int)1) &&
             (req->MaxEntriesSAScheduleTuple < res->SAScheduleList.SAScheduleTuple.arrayLen)) {
-            dlog(DLOG_LEVEL_WARNING, "EV's max. SA-schedule-tuple entries exceeded");
+            EVLOG_warning << "EV's max. SA-schedule-tuple entries exceeded";
         }
     } else {
         res->EVSEProcessing = iso2_EVSEProcessingType_Ongoing;
@@ -1302,9 +1298,8 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
     /* Checking SAScheduleTupleID */
     for (uint8_t idx = 0; idx < res->SAScheduleList.SAScheduleTuple.arrayLen; idx++) {
         if (res->SAScheduleList.SAScheduleTuple.array[idx].SAScheduleTupleID == (uint8_t)0) {
-            dlog(DLOG_LEVEL_WARNING, "Selected SAScheduleTupleID is not ISO15118 conform. The SECC shall use the "
-                                     "values 1 to 255"); // [V2G2-773]  The SECC shall use the values 1 to 255 for the
-                                                         // parameter SAScheduleTupleID.
+            EVLOG_warning << "Selected SAScheduleTupleID is not ISO15118 conform. The SECC shall use the values 1 to 255";
+            // [V2G2-773] The SECC shall use the values 1 to 255 for the parameter SAScheduleTupleID.
         }
     }
 
@@ -1344,8 +1339,7 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
                          pow(10, res->SAScheduleList.SAScheduleTuple.array[idx]
                                      .PMaxSchedule.PMaxScheduleEntry.array[idx2]
                                      .PMax.Multiplier)) > pmax) {
-                        dlog(DLOG_LEVEL_WARNING,
-                             "Provided SA-schedule-list doesn't match with the physical value limits");
+                        EVLOG_warning << "Provided SA-schedule-list doesn't match with the physical value limits";
                     }
             }
         }
@@ -1516,7 +1510,7 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
                 timespec_add_ms(&ts_abs_timeout, V2G_CONTACTOR_CLOSE_TIMEOUT);
 
                 /* wait for contactor to really close or timeout */
-                dlog(DLOG_LEVEL_INFO, "Waiting for contactor is closed");
+                EVLOG_info << "Waiting for contactor is closed";
 
                 int rv = 0;
                 while ((rv == 0) && (conn->ctx->contactor_is_closed == false) &&
@@ -1527,7 +1521,7 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
                     if (rv == EINTR)
                         rv = 0; /* restart */
                     if (rv == ETIMEDOUT) {
-                        dlog(DLOG_LEVEL_ERROR, "timeout while waiting for contactor to close, signaling error");
+                        EVLOG_error << "timeout while waiting for contactor to close, signaling error";
                         res->ResponseCode = iso2_responseCodeType_FAILED_ContactorError;
                     }
                     pthread_mutex_unlock(&conn->ctx->mqtt_lock);
@@ -1535,8 +1529,7 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
             }
         } else if (ev_should_pause) {
 
-            dlog(DLOG_LEVEL_ERROR, "The EV did not pause the session even EVSE signaled the EV that no energy is "
-                                   "available. Abort the session");
+            EVLOG_error << "The EV did not pause the session even EVSE signaled the EV that no energy is available. Abort the session";
             res->ResponseCode = iso2_responseCodeType_FAILED;
             conn->ctx->session.is_charging = false;
             conn->ctx->p_charger->publish_dc_open_contactor(nullptr);
@@ -1561,7 +1554,7 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
         break;
 
     default:
-        dlog(DLOG_LEVEL_ERROR, "Unknown ChargeProgress %d received, signaling error", req->ChargeProgress);
+        EVLOG_error << fmt::format("Unknown ChargeProgress {} received, signaling error", req->ChargeProgress);
         res->ResponseCode = iso2_responseCodeType_FAILED;
     }
 
@@ -1734,17 +1727,18 @@ static enum v2g_event handle_iso_metering_receipt(struct v2g_connection* conn) {
     /* At first, publish the received ev request message to the MQTTinterface */
     publish_iso_metering_receipt_req(req);
 
-    dlog(DLOG_LEVEL_TRACE, "EVSE side: meteringReceipt called");
-    dlog(DLOG_LEVEL_TRACE, "\tReceived data:");
+    EVLOG_verbose << "EVSE side: meteringReceipt called";
+    EVLOG_verbose << "\tReceived data:";
 
-    dlog(DLOG_LEVEL_TRACE, "\t\t ID=%c%c%c", req->Id.characters[0], req->Id.characters[1], req->Id.characters[2]);
-    dlog(DLOG_LEVEL_TRACE, "\t\t SAScheduleTupleID=%d", req->SAScheduleTupleID);
-    dlog(DLOG_LEVEL_TRACE, "\t\t SessionID=%d", req->SessionID.bytes[1]);
-    dlog(DLOG_LEVEL_TRACE, "\t\t MeterInfo.MeterStatus=%d", req->MeterInfo.MeterStatus);
-    dlog(DLOG_LEVEL_TRACE, "\t\t MeterInfo.MeterID=%d", req->MeterInfo.MeterID.characters[0]);
-    dlog(DLOG_LEVEL_TRACE, "\t\t MeterInfo.isused.MeterReading=%d", req->MeterInfo.MeterReading_isUsed);
-    dlog(DLOG_LEVEL_TRACE, "\t\t MeterReading.Value=%lu", (long unsigned int)req->MeterInfo.MeterReading);
-    dlog(DLOG_LEVEL_TRACE, "\t\t MeterInfo.TMeter=%li", (long int)req->MeterInfo.TMeter);
+    EVLOG_verbose << fmt::format("\t\t ID={}{}{}", req->Id.characters[0], req->Id.characters[1], req->Id.characters[2]);
+    EVLOG_verbose << fmt::format("\t\t SAScheduleTupleID={}", req->SAScheduleTupleID);
+    EVLOG_verbose << fmt::format("\t\t SessionID={}", req->SessionID.bytes[1]);
+    EVLOG_verbose << fmt::format("\t\t MeterInfo.MeterStatus={}", req->MeterInfo.MeterStatus);
+    EVLOG_verbose << fmt::format("\t\t MeterInfo.MeterID={}", req->MeterInfo.MeterID.characters[0]);
+    EVLOG_verbose << fmt::format("\t\t MeterInfo.isused.MeterReading={}", req->MeterInfo.MeterReading_isUsed);
+    EVLOG_verbose << fmt::format("\t\t MeterReading.Value={}",
+                                 static_cast<unsigned long>(req->MeterInfo.MeterReading));
+    EVLOG_verbose << fmt::format("\t\t MeterInfo.TMeter={}", static_cast<long>(req->MeterInfo.TMeter));
 
     res->ResponseCode = iso2_responseCodeType_OK;
 
@@ -1798,13 +1792,13 @@ static enum v2g_event handle_iso_certificate_installation(struct v2g_connection*
     /* At first, publish the received EV request message to the customer MQTT interface */
     if (publish_iso_certificate_installation_exi_req(conn->ctx, conn->buffer + V2GTP_HEADER_LENGTH,
                                                      conn->stream.data_size - V2GTP_HEADER_LENGTH) == false) {
-        dlog(DLOG_LEVEL_ERROR, "Failed to send CertificateInstallationExiReq");
+        EVLOG_error << "Failed to send CertificateInstallationExiReq";
         goto exit;
     }
     /* Waiting for the CertInstallationExiRes msg */
     clock_gettime(CLOCK_MONOTONIC, &ts_abs_timeout);
     timespec_add_ms(&ts_abs_timeout, V2G_SECC_MSG_CERTINSTALL_TIME);
-    dlog(DLOG_LEVEL_INFO, "Waiting for the CertInstallationExiRes msg");
+    EVLOG_info << "Waiting for the CertInstallationExiRes msg";
     while ((rv == 0) && (conn->ctx->evse_v2g_data.cert_install_res_b64_buffer.empty() == true) &&
            (conn->ctx->intl_emergency_shutdown == false) && (conn->ctx->stop_hlc == false) &&
            (conn->ctx->is_connection_terminated == false)) { // [V2G2-917]
@@ -1813,7 +1807,7 @@ static enum v2g_event handle_iso_certificate_installation(struct v2g_connection*
         if (rv == EINTR)
             rv = 0; /* restart */
         if (rv == ETIMEDOUT) {
-            dlog(DLOG_LEVEL_ERROR, "CertificateInstallationRes timeout occurred");
+            EVLOG_error << "CertificateInstallationRes timeout occurred";
             conn->ctx->intl_emergency_shutdown = true; // [V2G2-918] Initiating emergency shutdown, response code faild
                                                        // will be set in iso_validate_response_code() function
         }
@@ -1825,7 +1819,7 @@ static enum v2g_event handle_iso_certificate_installation(struct v2g_connection*
         const auto data = openssl::base64_decode(conn->ctx->evse_v2g_data.cert_install_res_b64_buffer.data(),
                                                  conn->ctx->evse_v2g_data.cert_install_res_b64_buffer.size());
         if (data.empty() || (data.size() > DEFAULT_BUFFER_SIZE)) {
-            dlog(DLOG_LEVEL_ERROR, "Failed to decode base64 stream");
+            EVLOG_error << "Failed to decode base64 stream";
             goto exit;
         } else {
             std::memcpy(conn->buffer + V2GTP_HEADER_LENGTH, data.data(), data.size());
@@ -2032,8 +2026,7 @@ static enum v2g_event handle_iso_current_demand(struct v2g_connection* conn) {
             conn->ctx->evse_v2g_data.evse_maximum_power_limit.Value < 0) {
             if (req->EVTargetCurrent.Value > 0) {
                 if (req_pos_value_count++ >= 1) {
-                    dlog(DLOG_LEVEL_WARNING, "SAE V2G Bidi handshake was not recognized by the ev side. Instead of "
-                                             "shutting down, it is better to wait for a correct response");
+                    EVLOG_warning << "SAE V2G Bidi handshake was not recognized by the ev side. Instead of shutting down, it is better to wait for a correct response";
                     req_pos_value_count = 0;
                 } else {
                     req_pos_value_count = 0;
@@ -2048,8 +2041,7 @@ static enum v2g_event handle_iso_current_demand(struct v2g_connection* conn) {
                    conn->ctx->evse_v2g_data.evse_maximum_power_limit.Value > 0) {
             if (req->EVTargetCurrent.Value < 0) {
                 if (req_pos_value_count++ >= 1) {
-                    dlog(DLOG_LEVEL_WARNING, "SAE V2G Bidi handshake was not recognized by the ev side. Instead of "
-                                             "shutting down, it is better to wait for a correct response");
+                    EVLOG_warning << "SAE V2G Bidi handshake was not recognized by the ev side. Instead of shutting down, it is better to wait for a correct response";
                     req_pos_value_count = 0;
                 } else {
                     req_pos_value_count = 0;
@@ -2199,7 +2191,7 @@ enum v2g_event iso_handle_request(v2g_connection* conn) {
      * request a little bit
      */
     if (exi_in->V2G_Message.Body.CurrentDemandReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling CurrentDemandReq");
+        EVLOG_verbose << "Handling CurrentDemandReq";
         if (conn->ctx->last_v2g_msg == V2G_POWER_DELIVERY_MSG) {
             conn->ctx->p_charger->publish_current_demand_started(nullptr);
             conn->ctx->session.is_charging = true;
@@ -2209,37 +2201,37 @@ enum v2g_event iso_handle_request(v2g_connection* conn) {
         init_iso2_CurrentDemandResType(&exi_out->V2G_Message.Body.CurrentDemandRes);
         next_v2g_event = handle_iso_current_demand(conn); //  [V2G2-592]
     } else if (exi_in->V2G_Message.Body.SessionSetupReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling SessionSetupReq");
+        EVLOG_verbose << "Handling SessionSetupReq";
         conn->ctx->current_v2g_msg = V2G_SESSION_SETUP_MSG;
         exi_out->V2G_Message.Body.SessionSetupRes_isUsed = 1u;
         init_iso2_SessionSetupResType(&exi_out->V2G_Message.Body.SessionSetupRes);
         next_v2g_event = handle_iso_session_setup(conn); // [V2G2-542]
     } else if (exi_in->V2G_Message.Body.ServiceDiscoveryReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ServiceDiscoveryReq");
+        EVLOG_verbose << "Handling ServiceDiscoveryReq";
         conn->ctx->current_v2g_msg = V2G_SERVICE_DISCOVERY_MSG;
         exi_out->V2G_Message.Body.ServiceDiscoveryRes_isUsed = 1u;
         init_iso2_ServiceDiscoveryResType(&exi_out->V2G_Message.Body.ServiceDiscoveryRes);
         next_v2g_event = handle_iso_service_discovery(conn); // [V2G2-544]
     } else if (exi_in->V2G_Message.Body.ServiceDetailReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ServiceDetailReq");
+        EVLOG_verbose << "Handling ServiceDetailReq";
         conn->ctx->current_v2g_msg = V2G_SERVICE_DETAIL_MSG;
         exi_out->V2G_Message.Body.ServiceDetailRes_isUsed = 1u;
         init_iso2_ServiceDetailResType(&exi_out->V2G_Message.Body.ServiceDetailRes);
         next_v2g_event = handle_iso_service_detail(conn); // [V2G2-547]
     } else if (exi_in->V2G_Message.Body.PaymentServiceSelectionReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PaymentServiceSelectionReq");
+        EVLOG_verbose << "Handling PaymentServiceSelectionReq";
         conn->ctx->current_v2g_msg = V2G_PAYMENT_SERVICE_SELECTION_MSG;
         exi_out->V2G_Message.Body.PaymentServiceSelectionRes_isUsed = 1u;
         init_iso2_PaymentServiceSelectionResType(&exi_out->V2G_Message.Body.PaymentServiceSelectionRes);
         next_v2g_event = handle_iso_payment_service_selection(conn); // [V2G2-550]
     } else if (exi_in->V2G_Message.Body.PaymentDetailsReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PaymentDetailsReq");
+        EVLOG_verbose << "Handling PaymentDetailsReq";
         conn->ctx->current_v2g_msg = V2G_PAYMENT_DETAILS_MSG;
         exi_out->V2G_Message.Body.PaymentDetailsRes_isUsed = 1u;
         init_iso2_PaymentDetailsResType(&exi_out->V2G_Message.Body.PaymentDetailsRes);
         next_v2g_event = handle_iso_payment_details(conn); // [V2G2-559]
     } else if (exi_in->V2G_Message.Body.AuthorizationReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling AuthorizationReq");
+        EVLOG_verbose << "Handling AuthorizationReq";
         conn->ctx->current_v2g_msg = V2G_AUTHORIZATION_MSG;
         if (conn->ctx->last_v2g_msg != V2G_AUTHORIZATION_MSG) {
             if (conn->ctx->session.iso_selected_payment_option == iso2_paymentOptionType_ExternalPayment) {
@@ -2250,50 +2242,50 @@ enum v2g_event iso_handle_request(v2g_connection* conn) {
         init_iso2_AuthorizationResType(&exi_out->V2G_Message.Body.AuthorizationRes);
         next_v2g_event = handle_iso_authorization(conn); // [V2G2-562]
     } else if (exi_in->V2G_Message.Body.ChargeParameterDiscoveryReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ChargeParameterDiscoveryReq");
+        EVLOG_verbose << "Handling ChargeParameterDiscoveryReq";
         conn->ctx->current_v2g_msg = V2G_CHARGE_PARAMETER_DISCOVERY_MSG;
         if (conn->ctx->last_v2g_msg == V2G_AUTHORIZATION_MSG) {
-            dlog(DLOG_LEVEL_INFO, "Parameter-phase started");
+            EVLOG_info << "Parameter-phase started";
         }
         exi_out->V2G_Message.Body.ChargeParameterDiscoveryRes_isUsed = 1u;
         init_iso2_ChargeParameterDiscoveryResType(&exi_out->V2G_Message.Body.ChargeParameterDiscoveryRes);
         next_v2g_event = handle_iso_charge_parameter_discovery(conn); // [V2G2-565]
     } else if (exi_in->V2G_Message.Body.PowerDeliveryReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PowerDeliveryReq");
+        EVLOG_verbose << "Handling PowerDeliveryReq";
         conn->ctx->current_v2g_msg = V2G_POWER_DELIVERY_MSG;
         exi_out->V2G_Message.Body.PowerDeliveryRes_isUsed = 1u;
         init_iso2_PowerDeliveryResType(&exi_out->V2G_Message.Body.PowerDeliveryRes);
         next_v2g_event = handle_iso_power_delivery(conn); // [V2G2-589]
     } else if (exi_in->V2G_Message.Body.ChargingStatusReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ChargingStatusReq");
+        EVLOG_verbose << "Handling ChargingStatusReq";
         conn->ctx->current_v2g_msg = V2G_CHARGING_STATUS_MSG;
 
         exi_out->V2G_Message.Body.ChargingStatusRes_isUsed = 1u;
         init_iso2_ChargingStatusResType(&exi_out->V2G_Message.Body.ChargingStatusRes);
         next_v2g_event = handle_iso_charging_status(conn);
     } else if (exi_in->V2G_Message.Body.MeteringReceiptReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling MeteringReceiptReq");
+        EVLOG_verbose << "Handling MeteringReceiptReq";
         conn->ctx->current_v2g_msg = V2G_METERING_RECEIPT_MSG;
         exi_out->V2G_Message.Body.MeteringReceiptRes_isUsed = 1u;
         init_iso2_MeteringReceiptResType(&exi_out->V2G_Message.Body.MeteringReceiptRes);
         next_v2g_event = handle_iso_metering_receipt(conn); // [V2G2-796]
     } else if (exi_in->V2G_Message.Body.CertificateUpdateReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling CertificateUpdateReq");
+        EVLOG_verbose << "Handling CertificateUpdateReq";
         conn->ctx->current_v2g_msg = V2G_CERTIFICATE_UPDATE_MSG;
 
         exi_out->V2G_Message.Body.CertificateUpdateRes_isUsed = 1u;
         init_iso2_CertificateUpdateResType(&exi_out->V2G_Message.Body.CertificateUpdateRes);
         next_v2g_event = handle_iso_certificate_update(conn); // [V2G2-556]
     } else if (exi_in->V2G_Message.Body.CertificateInstallationReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling CertificateInstallationReq");
+        EVLOG_verbose << "Handling CertificateInstallationReq";
         conn->ctx->current_v2g_msg = V2G_CERTIFICATE_INSTALLATION_MSG;
-        dlog(DLOG_LEVEL_INFO, "CertificateInstallation-phase started");
+        EVLOG_info << "CertificateInstallation-phase started";
 
         exi_out->V2G_Message.Body.CertificateInstallationRes_isUsed = 1u;
         init_iso2_CertificateInstallationResType(&exi_out->V2G_Message.Body.CertificateInstallationRes);
         next_v2g_event = handle_iso_certificate_installation(conn); // [V2G2-553]
     } else if (exi_in->V2G_Message.Body.CableCheckReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling CableCheckReq");
+        EVLOG_verbose << "Handling CableCheckReq";
         conn->ctx->current_v2g_msg = V2G_CABLE_CHECK_MSG;
         /* At first send mqtt charging phase signal to the customer interface */
         if (V2G_CHARGE_PARAMETER_DISCOVERY_MSG == conn->ctx->last_v2g_msg) {
@@ -2304,39 +2296,39 @@ enum v2g_event iso_handle_request(v2g_connection* conn) {
         init_iso2_CableCheckResType(&exi_out->V2G_Message.Body.CableCheckRes);
         next_v2g_event = handle_iso_cable_check(conn); // [V2G2-583
     } else if (exi_in->V2G_Message.Body.PreChargeReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PreChargeReq");
+        EVLOG_verbose << "Handling PreChargeReq";
         conn->ctx->current_v2g_msg = V2G_PRE_CHARGE_MSG;
         /* At first send  mqtt charging phase signal to the customer interface */
         if (conn->ctx->last_v2g_msg == V2G_CABLE_CHECK_MSG) {
             conn->ctx->p_charger->publish_start_pre_charge(nullptr);
-            dlog(DLOG_LEVEL_INFO, "Precharge-phase started");
+            EVLOG_info << "Precharge-phase started";
         }
 
         exi_out->V2G_Message.Body.PreChargeRes_isUsed = 1u;
         init_iso2_PreChargeResType(&exi_out->V2G_Message.Body.PreChargeRes);
         next_v2g_event = handle_iso_pre_charge(conn); // [V2G2-586]
     } else if (exi_in->V2G_Message.Body.WeldingDetectionReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling WeldingDetectionReq");
+        EVLOG_verbose << "Handling WeldingDetectionReq";
         conn->ctx->current_v2g_msg = V2G_WELDING_DETECTION_MSG;
         if (conn->ctx->last_v2g_msg != V2G_WELDING_DETECTION_MSG) {
-            dlog(DLOG_LEVEL_INFO, "Welding-phase started");
+            EVLOG_info << "Welding-phase started";
         }
         exi_out->V2G_Message.Body.WeldingDetectionRes_isUsed = 1u;
         init_iso2_WeldingDetectionResType(&exi_out->V2G_Message.Body.WeldingDetectionRes);
         next_v2g_event = handle_iso_welding_detection(conn); // [V2G2-596]
     } else if (exi_in->V2G_Message.Body.SessionStopReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling SessionStopReq");
+        EVLOG_verbose << "Handling SessionStopReq";
         conn->ctx->current_v2g_msg = V2G_SESSION_STOP_MSG;
         exi_out->V2G_Message.Body.SessionStopRes_isUsed = 1u;
         init_iso2_SessionStopResType(&exi_out->V2G_Message.Body.SessionStopRes);
         next_v2g_event = handle_iso_session_stop(conn); // [V2G2-570]
     } else {
-        dlog(DLOG_LEVEL_ERROR, "create_response_message: request type not found");
+        EVLOG_error << "create_response_message: request type not found";
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     }
-    dlog(DLOG_LEVEL_TRACE, "Current state: %s",
-         conn->ctx->is_dc_charger ? iso_dc_states[conn->ctx->state].description
-                                  : iso_ac_states[conn->ctx->state].description);
+    EVLOG_verbose << fmt::format("Current state: {}",
+                                 conn->ctx->is_dc_charger ? iso_dc_states[conn->ctx->state].description
+                                                          : iso_ac_states[conn->ctx->state].description);
 
     // If next_v2g_event == V2G_EVENT_IGNORE_MSG, keep the current state and ignore msg
     if (next_v2g_event != V2G_EVENT_IGNORE_MSG) {

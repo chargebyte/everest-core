@@ -3,10 +3,11 @@
 
 #include "tls_connection.hpp"
 #include "connection.hpp"
-#include "log.hpp"
 #include "v2g.hpp"
 #include "v2g_server.hpp"
+#include <everest/logging.hpp>
 #include <everest/tls/tls.hpp>
+#include <fmt/format.h>
 #include <new>
 
 #include <cassert>
@@ -35,7 +36,7 @@ void process_connection_thread(std::shared_ptr<tls::ServerConnection> con, struc
     connection->tls_connection = con.get();
     connection->pubkey = &contract_public_key;
 
-    dlog(DLOG_LEVEL_INFO, "Incoming TLS connection");
+    EVLOG_info << "Incoming TLS connection";
 
     bool loop{true};
     while (loop) {
@@ -45,9 +46,9 @@ void process_connection_thread(std::shared_ptr<tls::ServerConnection> con, struc
         case tls::Connection::result_t::success:
             if (ctx->state == 0) {
                 const auto rv = ::v2g_handle_connection(connection.get());
-                dlog(DLOG_LEVEL_INFO, "v2g_dispatch_connection exited with %d", rv);
+                EVLOG_info << "v2g_dispatch_connection exited with " << rv;
             } else {
-                dlog(DLOG_LEVEL_INFO, "%s", "Closing tls-connection. v2g-session is already running");
+                EVLOG_info << "Closing tls-connection. v2g-session is already running";
             }
 
             con->shutdown();
@@ -72,8 +73,8 @@ void handle_new_connection_cb(tls::Server::ConnectionPtr&& con, struct v2g_conte
     assert(con != nullptr);
     assert(ctx != nullptr);
     if (ctx->connection_initiated) {
-        dlog(DLOG_LEVEL_ERROR, "Incoming TLS connection on %s, but there is already an active connection.",
-             ctx->if_name);
+        EVLOG_error << fmt::format("Incoming TLS connection on {}, but there is already an active connection.",
+                                   ctx->if_name);
         return;
     }
     ctx->connection_initiated = true;
@@ -85,7 +86,7 @@ void handle_new_connection_cb(tls::Server::ConnectionPtr&& con, struct v2g_conte
         connection_loop.detach();
     } catch (const std::system_error&) {
         // unable to start thread
-        dlog(DLOG_LEVEL_ERROR, "pthread_create() failed: %s", strerror(errno));
+        EVLOG_error << "pthread_create() failed: " << strerror(errno);
         con->shutdown();
         ctx->connection_initiated = false;
     }
@@ -96,13 +97,13 @@ void server_loop_thread(struct v2g_context* ctx) {
     assert(ctx->tls_server != nullptr);
     const auto res = ctx->tls_server->serve([ctx](auto con) { handle_new_connection_cb(std::move(con), ctx); });
     if (res != tls::Server::state_t::stopped) {
-        dlog(DLOG_LEVEL_ERROR, "tls::Server failed to serve");
+        EVLOG_error << "tls::Server failed to serve";
     }
 }
 
 tls::Server::OptionalConfig configure_ssl(struct v2g_context* ctx) {
     try {
-        dlog(DLOG_LEVEL_WARNING, "configure_ssl");
+        EVLOG_warning << "configure_ssl";
         auto config = std::make_unique<tls::Server::config_t>();
 
         // The config of interest is from Evse Security, no point in updating
@@ -112,7 +113,7 @@ tls::Server::OptionalConfig configure_ssl(struct v2g_context* ctx) {
             return {{std::move(config)}};
         }
     } catch (const std::bad_alloc&) {
-        dlog(DLOG_LEVEL_ERROR, "unable to create TLS config");
+        EVLOG_error << "unable to create TLS config";
     }
     return std::nullopt;
 }
@@ -179,7 +180,7 @@ ssize_t connection_read(struct v2g_connection* conn, unsigned char* buf, const s
     timespec ts_start{};
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts_start) == -1) {
-        dlog(DLOG_LEVEL_ERROR, "clock_gettime(ts_start) failed: %s", strerror(errno));
+        EVLOG_error << "clock_gettime(ts_start) failed: " << strerror(errno);
         result = -1;
     }
 
@@ -207,7 +208,7 @@ ssize_t connection_read(struct v2g_connection* conn, unsigned char* buf, const s
         }
 
         if (conn->ctx->is_connection_terminated) {
-            dlog(DLOG_LEVEL_ERROR, "Reading from tcp-socket aborted");
+            EVLOG_error << "Reading from tcp-socket aborted";
             conn->tls_connection->shutdown();
             result = -2;
         }
@@ -294,7 +295,7 @@ bool build_config(tls::Server::config_t& config, struct v2g_context* ctx) {
     const auto cert_info =
         ctx->r_security->call_get_all_valid_certificates_info(LeafCertificateType::V2G, EncodingFormat::PEM, true);
     if (cert_info.status != GetCertificateInfoStatus::Accepted) {
-        dlog(DLOG_LEVEL_ERROR, "Failed to read cert_info! Not Accepted");
+        EVLOG_error << "Failed to read cert_info! Not Accepted";
     } else {
         if (!cert_info.info.empty()) {
             // process all known certificate chains
@@ -325,7 +326,7 @@ bool build_config(tls::Server::config_t& config, struct v2g_context* ctx) {
 
             bResult = true;
         } else {
-            dlog(DLOG_LEVEL_ERROR, "Failed to read cert_info! Empty response");
+            EVLOG_error << "Failed to read cert_info! Empty response";
         }
     }
 

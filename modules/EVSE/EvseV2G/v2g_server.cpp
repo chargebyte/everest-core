@@ -21,8 +21,9 @@
 #include "connection.hpp"
 #include "din_server.hpp"
 #include "iso_server.hpp"
-#include "log.hpp"
 #include "tools.hpp"
+#include <everest/logging.hpp>
+#include <fmt/format.h>
 
 #define MAX_RES_TIME 98
 
@@ -118,7 +119,7 @@ static void publish_var_V2G_Message(v2g_connection* conn, bool is_req) {
 
     EXI_Base64 = openssl::base64_encode(conn->buffer, conn->payload_len + V2GTP_HEADER_LENGTH);
     if (EXI_Base64.size() == 0) {
-        dlog(DLOG_LEVEL_WARNING, "Unable to base64 encode EXI buffer");
+        EVLOG_warning << "Unable to base64 encode EXI buffer";
     }
 
     v2g_message.exi_base64 = EXI_Base64;
@@ -141,8 +142,8 @@ static int v2g_incoming_v2gtp(struct v2g_connection* conn) {
     /* read and process header */
     rv = conn->read(conn, conn->buffer, V2GTP_HEADER_LENGTH);
     if (rv < 0) {
-        dlog(DLOG_LEVEL_ERROR, "connection_read(header) failed: %s",
-             (rv == -1) ? strerror(errno) : "connection terminated");
+        EVLOG_error << fmt::format("connection_read(header) failed: {}",
+                                   (rv == -1) ? strerror(errno) : "connection terminated");
         return -1;
     }
     /* connection was closed unexpectedly (timeout or closed by peer) */
@@ -150,25 +151,25 @@ static int v2g_incoming_v2gtp(struct v2g_connection* conn) {
         return 1;
 
     if (rv != V2GTP_HEADER_LENGTH) {
-        dlog(DLOG_LEVEL_ERROR, "connection_read(header) too short: expected %d, got %d", V2GTP_HEADER_LENGTH, rv);
+        EVLOG_error << fmt::format("connection_read(header) too short: expected {}, got {}", V2GTP_HEADER_LENGTH, rv);
         return -1;
     }
 
     rv = V2GTP_ReadHeader(conn->buffer, &conn->payload_len);
     if (rv == -1) {
-        dlog(DLOG_LEVEL_ERROR, "Invalid v2gtp header");
+        EVLOG_error << "Invalid v2gtp header";
         return -1;
     }
 
     if (conn->payload_len >= UINT32_MAX - V2GTP_HEADER_LENGTH) {
-        dlog(DLOG_LEVEL_ERROR, "Prevent integer overflow - payload too long: have %d, would need %u",
-             DEFAULT_BUFFER_SIZE, conn->payload_len);
+        EVLOG_error << fmt::format("Prevent integer overflow - payload too long: have {}, would need {}",
+                                   DEFAULT_BUFFER_SIZE, conn->payload_len);
         return -1;
     }
 
     if (conn->payload_len + V2GTP_HEADER_LENGTH > DEFAULT_BUFFER_SIZE) {
-        dlog(DLOG_LEVEL_ERROR, "payload too long: have %d, would need %u", DEFAULT_BUFFER_SIZE,
-             conn->payload_len + V2GTP_HEADER_LENGTH);
+        EVLOG_error << fmt::format("payload too long: have {}, would need {}", DEFAULT_BUFFER_SIZE,
+                                   conn->payload_len + V2GTP_HEADER_LENGTH);
 
         /* we have no way to flush/discard remaining unread data from the socket without reading it in chunks,
          * but this opens the chance to bind us in a "endless" read loop; so to protect us, simply close the connection
@@ -179,12 +180,12 @@ static int v2g_incoming_v2gtp(struct v2g_connection* conn) {
     /* read request */
     rv = conn->read(conn, &conn->buffer[V2GTP_HEADER_LENGTH], conn->payload_len);
     if (rv < 0) {
-        dlog(DLOG_LEVEL_ERROR, "connection_read(payload) failed: %s",
-             (rv == -1) ? strerror(errno) : "connection terminated");
+        EVLOG_error << fmt::format("connection_read(payload) failed: {}",
+                                   (rv == -1) ? strerror(errno) : "connection terminated");
         return -1;
     }
     if (rv != conn->payload_len) {
-        dlog(DLOG_LEVEL_ERROR, "connection_read(payload) too short: expected %d, got %d", conn->payload_len, rv);
+        EVLOG_error << fmt::format("connection_read(payload) too short: expected {}, got {}", conn->payload_len, rv);
         return -1;
     }
     /* adjust buffer pos to decode request */
@@ -209,7 +210,7 @@ int v2g_outgoing_v2gtp(struct v2g_connection* conn) {
     V2GTP_WriteHeader(conn->buffer, len - V2GTP_HEADER_LENGTH);
 
     if (conn->write(conn, conn->buffer, len) == -1) {
-        dlog(DLOG_LEVEL_ERROR, "connection_write(header) failed: %s", strerror(errno));
+        EVLOG_error << "connection_write(header) failed: " << strerror(errno);
         return -1;
     }
 
@@ -233,11 +234,11 @@ static enum v2g_event v2g_handle_apphandshake(struct v2g_connection* conn) {
     conn->handshake_resp.supportedAppProtocolRes.ResponseCode =
         appHand_responseCodeType_Failed_NoNegotiation; // [V2G2-172]
 
-    dlog(DLOG_LEVEL_INFO, "Handling SupportedAppProtocolReq");
+    EVLOG_info << "Handling SupportedAppProtocolReq";
     conn->ctx->current_v2g_msg = V2G_SUPPORTED_APP_PROTOCOL_MSG;
 
     if (decode_appHand_exiDocument(&conn->stream, &conn->handshake_req) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "decode_appHandExiDocument() failed");
+        EVLOG_error << "decode_appHandExiDocument() failed";
         return V2G_EVENT_TERMINATE_CONNECTION; // If the mesage can't be decoded we have to terminate the tcp-connection
                                                // (e.g. after an unexpected message)
     }
@@ -250,14 +251,13 @@ static enum v2g_event v2g_handle_apphandshake(struct v2g_connection* conn) {
                                  app_proto->ProtocolNamespace.charactersLen);
 
         if (!proto_ns) {
-            dlog(DLOG_LEVEL_ERROR, "out-of-memory condition");
+            EVLOG_error << "out-of-memory condition";
             return V2G_EVENT_TERMINATE_CONNECTION;
         }
 
-        dlog(DLOG_LEVEL_TRACE,
-             "handshake_req: Namespace: %s, Version: %" PRIu32 ".%" PRIu32 ", SchemaID: %" PRIu8 ", Priority: %" PRIu8,
-             proto_ns, app_proto->VersionNumberMajor, app_proto->VersionNumberMinor, app_proto->SchemaID,
-             app_proto->Priority);
+        EVLOG_verbose << fmt::format("handshake_req: Namespace: {}, Version: {}.{}, SchemaID: {}, Priority: {}",
+                                     proto_ns, app_proto->VersionNumberMajor, app_proto->VersionNumberMinor,
+                                     app_proto->SchemaID, app_proto->Priority);
 
         if ((conn->ctx->supported_protocols & (1 << V2G_PROTO_DIN70121)) &&
             (strcmp(proto_ns, DIN_70121_MSG_DEF) == 0) && (app_proto->VersionNumberMajor == DIN_70121_MAJOR) &&
@@ -309,17 +309,17 @@ static enum v2g_event v2g_handle_apphandshake(struct v2g_connection* conn) {
             appHand_responseCodeType_OK_SuccessfulNegotiationWithMinorDeviation) {
         conn->handshake_resp.supportedAppProtocolRes.SchemaID_isUsed = (unsigned int)1;
         if (V2G_PROTO_DIN70121 == conn->ctx->selected_protocol) {
-            dlog(DLOG_LEVEL_INFO, "Protocol negotiation was successful. Selected protocol is DIN70121");
+            EVLOG_info << "Protocol negotiation was successful. Selected protocol is DIN70121";
             selected_protocol_str = "DIN70121";
         } else if (V2G_PROTO_ISO15118_2013 == conn->ctx->selected_protocol) {
-            dlog(DLOG_LEVEL_INFO, "Protocol negotiation was successful. Selected protocol is ISO15118");
+            EVLOG_info << "Protocol negotiation was successful. Selected protocol is ISO15118";
             selected_protocol_str = "ISO15118-2-2013";
         } else if (V2G_PROTO_ISO15118_2010 == conn->ctx->selected_protocol) {
-            dlog(DLOG_LEVEL_INFO, "Protocol negotiation was successful. Selected protocol is ISO15118-2010");
+            EVLOG_info << "Protocol negotiation was successful. Selected protocol is ISO15118-2010";
             selected_protocol_str = "ISO15118-2-2010";
         }
     } else {
-        dlog(DLOG_LEVEL_ERROR, "No compatible protocol found");
+        EVLOG_error << "No compatible protocol found";
         selected_protocol_str = "None";
         next_event = V2G_EVENT_SEND_AND_TERMINATE; // Send response and terminate tcp-connection
     }
@@ -329,7 +329,7 @@ static enum v2g_event v2g_handle_apphandshake(struct v2g_connection* conn) {
     }
 
     if (conn->ctx->is_connection_terminated == true) {
-        dlog(DLOG_LEVEL_ERROR, "Connection is terminated. Abort charging");
+        EVLOG_error << "Connection is terminated. Abort charging";
         return V2G_EVENT_TERMINATE_CONNECTION; // Abort charging without sending a response
     }
 
@@ -337,7 +337,7 @@ static enum v2g_event v2g_handle_apphandshake(struct v2g_connection* conn) {
     if ((conn->ctx->intl_emergency_shutdown == true) || (conn->ctx->stop_hlc == true) ||
         (V2G_EVENT_SEND_AND_TERMINATE == next_event)) {
         conn->handshake_resp.supportedAppProtocolRes.ResponseCode = appHand_responseCodeType_Failed_NoNegotiation;
-        dlog(DLOG_LEVEL_ERROR, "Abort charging session");
+        EVLOG_error << "Abort charging session";
 
         if (conn->ctx->terminate_connection_on_failed_response == true) {
             next_event = V2G_EVENT_SEND_AND_TERMINATE; // send response and terminate the TCP-connection
@@ -349,7 +349,7 @@ static enum v2g_event v2g_handle_apphandshake(struct v2g_connection* conn) {
     conn->stream.bit_count = 0;
 
     if (encode_appHand_exiDocument(&conn->stream, &conn->handshake_resp) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "Encoding of the protocol handshake message failed");
+        EVLOG_error << "Encoding of the protocol handshake message failed";
         next_event = V2G_EVENT_SEND_AND_TERMINATE;
     }
 
@@ -387,7 +387,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
         rv = v2g_incoming_v2gtp(conn);
 
         if (rv != 0) {
-            dlog(DLOG_LEVEL_ERROR, "v2g_incoming_v2gtp() failed");
+            EVLOG_error << "v2g_incoming_v2gtp() failed";
             goto error_out;
         }
 
@@ -400,7 +400,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
         rvAppHandshake = v2g_handle_apphandshake(conn);
 
         if (rvAppHandshake == V2G_EVENT_IGNORE_MSG) {
-            dlog(DLOG_LEVEL_WARNING, "v2g_handle_apphandshake() failed, ignoring packet");
+            EVLOG_warning << "v2g_handle_apphandshake() failed, ignoring packet";
         }
     } while ((rv == 1) && (rvAppHandshake == V2G_EVENT_IGNORE_MSG));
 
@@ -415,7 +415,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
         rv = v2g_outgoing_v2gtp(conn);
 
         if (rv == -1) {
-            dlog(DLOG_LEVEL_ERROR, "v2g_outgoing_v2gtp() failed");
+            EVLOG_error << "v2g_outgoing_v2gtp() failed";
             goto error_out;
         }
     }
@@ -435,12 +435,12 @@ int v2g_handle_connection(struct v2g_connection* conn) {
     case V2G_PROTO_ISO15118_2010:
         conn->exi_in.dinEXIDocument = static_cast<struct din_exiDocument*>(calloc(1, sizeof(struct din_exiDocument)));
         if (conn->exi_in.dinEXIDocument == NULL) {
-            dlog(DLOG_LEVEL_ERROR, "out-of-memory");
+            EVLOG_error << "out-of-memory";
             goto error_out;
         }
         conn->exi_out.dinEXIDocument = static_cast<struct din_exiDocument*>(calloc(1, sizeof(struct din_exiDocument)));
         if (conn->exi_out.dinEXIDocument == NULL) {
-            dlog(DLOG_LEVEL_ERROR, "out-of-memory");
+            EVLOG_error << "out-of-memory";
             goto error_out;
         }
         break;
@@ -448,13 +448,13 @@ int v2g_handle_connection(struct v2g_connection* conn) {
         conn->exi_in.iso2EXIDocument =
             static_cast<struct iso2_exiDocument*>(calloc(1, sizeof(struct iso2_exiDocument)));
         if (conn->exi_in.iso2EXIDocument == NULL) {
-            dlog(DLOG_LEVEL_ERROR, "out-of-memory");
+            EVLOG_error << "out-of-memory";
             goto error_out;
         }
         conn->exi_out.iso2EXIDocument =
             static_cast<struct iso2_exiDocument*>(calloc(1, sizeof(struct iso2_exiDocument)));
         if (conn->exi_out.iso2EXIDocument == NULL) {
-            dlog(DLOG_LEVEL_ERROR, "out-of-memory");
+            EVLOG_error << "out-of-memory";
             goto error_out;
         }
         break;
@@ -473,11 +473,11 @@ int v2g_handle_connection(struct v2g_connection* conn) {
         rv = v2g_incoming_v2gtp(conn);
 
         if (rv == 1) {
-            dlog(DLOG_LEVEL_ERROR, "Timeout waiting for next request or peer closed connection");
+            EVLOG_error << "Timeout waiting for next request or peer closed connection";
             break;
         } else if (rv == -1) {
-            dlog(DLOG_LEVEL_ERROR, "v2g_incoming_v2gtp() (previous message \"%s\") failed",
-                 v2g_msg_type[conn->ctx->last_v2g_msg]);
+            EVLOG_error << fmt::format("v2g_incoming_v2gtp() (previous message \"{}\") failed",
+                                        v2g_msg_type[conn->ctx->last_v2g_msg]);
             break;
         }
 
@@ -491,8 +491,8 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             memset(conn->exi_in.dinEXIDocument, 0, sizeof(struct din_exiDocument));
             rv = decode_din_exiDocument(&conn->stream, conn->exi_in.dinEXIDocument);
             if (rv != 0) {
-                dlog(DLOG_LEVEL_ERROR, "decode_dinExiDocument() (previous message \"%s\") failed: %d",
-                     v2g_msg_type[conn->ctx->last_v2g_msg], rv);
+                EVLOG_error << fmt::format("decode_dinExiDocument() (previous message \"{}\") failed: {}",
+                                            v2g_msg_type[conn->ctx->last_v2g_msg], rv);
                 /* we must ignore packet which we cannot decode, so reset rv to zero to stay in loop */
                 rv = 0;
                 v2gEvent = V2G_EVENT_IGNORE_MSG;
@@ -508,8 +508,8 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             memset(conn->exi_in.iso2EXIDocument, 0, sizeof(struct iso2_exiDocument));
             rv = decode_iso2_exiDocument(&conn->stream, conn->exi_in.iso2EXIDocument);
             if (rv != 0) {
-                dlog(DLOG_LEVEL_ERROR, "decode_iso2_exiDocument() (previous message \"%s\") failed: %d",
-                     v2g_msg_type[conn->ctx->last_v2g_msg], rv);
+                EVLOG_error << fmt::format("decode_iso2_exiDocument() (previous message \"{}\") failed: {}",
+                                            v2g_msg_type[conn->ctx->last_v2g_msg], rv);
                 /* we must ignore packet which we cannot decode, so reset rv to zero to stay in loop */
                 rv = 0;
                 v2gEvent = V2G_EVENT_IGNORE_MSG;
@@ -545,14 +545,14 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             case V2G_PROTO_DIN70121:
             case V2G_PROTO_ISO15118_2010:
                 if ((rv = encode_din_exiDocument(&conn->stream, conn->exi_out.dinEXIDocument)) != 0) {
-                    dlog(DLOG_LEVEL_ERROR, "encode_dinExiDocument() (message \"%s\") failed: %d",
-                         v2g_msg_type[conn->ctx->current_v2g_msg], rv);
+                    EVLOG_error << fmt::format("encode_dinExiDocument() (message \"{}\") failed: {}",
+                                                v2g_msg_type[conn->ctx->current_v2g_msg], rv);
                 }
                 break;
             case V2G_PROTO_ISO15118_2013:
                 if ((rv = encode_iso2_exiDocument(&conn->stream, conn->exi_out.iso2EXIDocument)) != 0) {
-                    dlog(DLOG_LEVEL_ERROR, "encode_iso2_exiDocument() (message \"%s\") failed: %d",
-                         v2g_msg_type[conn->ctx->current_v2g_msg], rv);
+                    EVLOG_error << fmt::format("encode_iso2_exiDocument() (message \"{}\") failed: {}",
+                                                v2g_msg_type[conn->ctx->current_v2g_msg], rv);
                 }
                 break;
             default:
@@ -562,11 +562,12 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             int64_t time_to_conf_res = getmonotonictime() - start_time;
 
             if (time_to_conf_res < MAX_RES_TIME) {
-                // dlog(DLOG_LEVEL_ERROR,"time_to_conf_res %llu", time_to_conf_res);
+                // EVLOG_error << fmt::format("time_to_conf_res {}", time_to_conf_res);
                 std::this_thread::sleep_for(std::chrono::microseconds((MAX_RES_TIME - time_to_conf_res) * 1000));
             } else {
-                dlog(DLOG_LEVEL_WARNING, "Response message (type %d) not configured within %d ms (took %" PRIi64 " ms)",
-                     conn->ctx->current_v2g_msg, MAX_RES_TIME, time_to_conf_res);
+                EVLOG_warning << fmt::format(
+                    "Response message (type {}) not configured within {} ms (took {} ms)",
+                    conn->ctx->current_v2g_msg, MAX_RES_TIME, time_to_conf_res);
             }
         }
         case V2G_EVENT_SEND_RECV_EXI_MSG: { // fall-through intended
@@ -577,20 +578,20 @@ int v2g_handle_connection(struct v2g_connection* conn) {
 
             /* Write header and send next res-msg */
             if ((rv != 0) || ((rv = v2g_outgoing_v2gtp(conn)) == -1)) {
-                dlog(DLOG_LEVEL_ERROR, "v2g_outgoing_v2gtp() \"%s\" failed: %d",
-                     v2g_msg_type[conn->ctx->current_v2g_msg], rv);
+                EVLOG_error << fmt::format("v2g_outgoing_v2gtp() \"{}\" failed: {}",
+                                            v2g_msg_type[conn->ctx->current_v2g_msg], rv);
                 break;
             }
             break;
         }
         case V2G_EVENT_IGNORE_MSG:
-            dlog(DLOG_LEVEL_ERROR, "Ignoring V2G request message \"%s\". Waiting for next request",
-                 v2g_msg_type[conn->ctx->current_v2g_msg]);
+            EVLOG_error << fmt::format("Ignoring V2G request message \"{}\". Waiting for next request",
+                                        v2g_msg_type[conn->ctx->current_v2g_msg]);
             break;
         case V2G_EVENT_TERMINATE_CONNECTION: // fall-through intended
         default:
-            dlog(DLOG_LEVEL_ERROR, "Failed to handle V2G request message \"%s\"",
-                 v2g_msg_type[conn->ctx->current_v2g_msg]);
+            EVLOG_error << fmt::format("Failed to handle V2G request message \"{}\"",
+                                        v2g_msg_type[conn->ctx->current_v2g_msg]);
             stop_receiving_loop = true;
             break;
         }

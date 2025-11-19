@@ -9,7 +9,8 @@
 #include <math.h>
 #include <unistd.h> // sleep
 
-#include "log.hpp"
+#include <everest/logging.hpp>
+#include <fmt/format.h>
 #include "v2g_ctx.hpp"
 
 #include <cbv2g/iso_2/iso2_msgDefDatatypes.h>
@@ -34,7 +35,7 @@ bool populate_physical_value(struct iso2_PhysicalValueType* pv, long long int va
 
     if ((pv->Multiplier < PHY_VALUE_MULT_MIN) || (pv->Multiplier > PHY_VALUE_MULT_MAX)) {
         memcpy(pv, &physic_tmp, sizeof(struct iso2_PhysicalValueType));
-        dlog(DLOG_LEVEL_WARNING, "Physical value out of scope. Ignore value");
+        EVLOG_warning << "Physical value out of scope. Ignore value";
         return false;
     }
 
@@ -59,9 +60,9 @@ void populate_physical_value_float(struct iso2_PhysicalValueType* pv, float valu
     }
 
     if (pv->Multiplier != -decimal_places) {
-        dlog(DLOG_LEVEL_WARNING,
-             "Possible precision loss while converting to physical value type, requested %i, actual %i (value %f)",
-             decimal_places, -pv->Multiplier, value);
+        EVLOG_warning << fmt::format(
+            "Possible precision loss while converting to physical value type, requested {}, actual {} (value {})",
+            decimal_places, -pv->Multiplier, value);
     }
 
     pv->Value = value;
@@ -91,11 +92,11 @@ static int v2g_ctx_start_events(struct v2g_context* ctx) {
 
     /* create the thread in detached state so we don't need to join it later */
     if (pthread_attr_init(&attr) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "pthread_attr_init failed: %s", strerror(errno));
+        EVLOG_error << "pthread_attr_init failed: " << strerror(errno);
         return -1;
     }
     if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
-        dlog(DLOG_LEVEL_ERROR, "pthread_attr_setdetachstate failed: %s", strerror(errno));
+        EVLOG_error << "pthread_attr_setdetachstate failed: " << strerror(errno);
         return -1;
     }
 
@@ -320,7 +321,7 @@ struct v2g_context* v2g_ctx_create(ISO15118_chargerImplBase* p_chargerImplBase,
 
     ctx->event_base = event_base_new();
     if (!ctx->event_base) {
-        dlog(DLOG_LEVEL_ERROR, "event_base_new failed");
+        EVLOG_error << "event_base_new failed";
         goto free_out;
     }
 
@@ -452,10 +453,10 @@ void publish_dc_ev_remaining_time(struct v2g_context* ctx, const float& v2g_dc_e
 void log_selected_energy_transfer_type(int selected_energy_transfer_mode) {
     if (selected_energy_transfer_mode >= iso2_EnergyTransferModeType_AC_single_phase_core &&
         selected_energy_transfer_mode <= iso2_EnergyTransferModeType_DC_unique) {
-        dlog(DLOG_LEVEL_INFO, "Selected energy transfer mode: %s",
-             selected_energy_transfer_mode_string[selected_energy_transfer_mode]);
+        EVLOG_info << fmt::format("Selected energy transfer mode: {}",
+                                   selected_energy_transfer_mode_string[selected_energy_transfer_mode]);
     } else {
-        dlog(DLOG_LEVEL_WARNING, "Selected energy transfer mode %d is invalid", selected_energy_transfer_mode);
+        EVLOG_warning << fmt::format("Selected energy transfer mode {} is invalid", selected_energy_transfer_mode);
     }
 }
 
@@ -476,8 +477,8 @@ bool add_service_to_service_list(struct v2g_context* v2g_ctx, const struct iso2_
     if (service_found == false and (v2g_ctx->evse_v2g_data.evse_service_list.size() < iso2_ServiceType_8_ARRAY_SIZE)) {
         v2g_ctx->evse_v2g_data.evse_service_list.push_back(evse_service);
     } else if (v2g_ctx->evse_v2g_data.evse_service_list.size() == iso2_ServiceType_8_ARRAY_SIZE) {
-        dlog(DLOG_LEVEL_ERROR, "Maximum service list size reached. Unable to add service ID %u",
-             evse_service.ServiceID);
+        EVLOG_error << fmt::format("Maximum service list size reached. Unable to add service ID {}",
+                                    evse_service.ServiceID);
         return false;
     }
 
@@ -518,8 +519,8 @@ void configure_parameter_set(iso2_ServiceParameterListType& parameterSetList, in
         write_idx = parameterSetList.ParameterSet.arrayLen;
         parameterSetList.ParameterSet.arrayLen++;
     } else if (parameterSetList.ParameterSet.arrayLen == iso2_ParameterSetType_5_ARRAY_SIZE) {
-        dlog(DLOG_LEVEL_ERROR, "Maximum parameter-set list size reached. Unable to add parameter-set-ID %d",
-             parameterSetId);
+        EVLOG_error << fmt::format("Maximum parameter-set list size reached. Unable to add parameter-set-ID {}",
+                                    parameterSetId);
         return;
     }
 
@@ -558,6 +559,6 @@ void configure_parameter_set(iso2_ServiceParameterListType& parameterSetList, in
             parameterSet.Parameter.arrayLen = 1;
         }
     } else {
-        dlog(DLOG_LEVEL_WARNING, "Parameter-set-ID of service ID %u is not supported", serviceId);
+        EVLOG_warning << fmt::format("Parameter-set-ID of service ID {} is not supported", serviceId);
     }
 }

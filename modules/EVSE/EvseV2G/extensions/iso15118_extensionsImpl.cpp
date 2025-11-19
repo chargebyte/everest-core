@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Pionix GmbH and Contributors to EVerest
 #include "iso15118_extensionsImpl.hpp"
-#include "log.hpp"
 #include "v2g_ctx.hpp"
+#include <everest/logging.hpp>
 
 namespace module {
 namespace extensions {
 
 void iso15118_extensionsImpl::init() {
     if (!v2g_ctx) {
-        dlog(DLOG_LEVEL_ERROR, "v2g_ctx not created");
+        EVLOG_error << "v2g_ctx not created";
         return;
     }
 }

@@ -8,10 +8,11 @@
 #include <string.h>
 
 #include "din_server.hpp"
-#include "log.hpp"
 #include "tools.hpp"
 #include "v2g_ctx.hpp"
 #include "v2g_server.hpp"
+#include <everest/logging.hpp>
+#include <fmt/format.h>
 
 #define SASCHEDULETUPLEID 1
 
@@ -81,7 +82,7 @@ v2g_event din_validate_response_code(din_responseCodeType* const din_response_co
     din_responseCodeType response_code_tmp;
 
     if (conn->ctx->is_connection_terminated == true) {
-        dlog(DLOG_LEVEL_ERROR, "Connection is terminated. Abort charging");
+        EVLOG_error << "Connection is terminated. Abort charging";
         return V2G_EVENT_TERMINATE_CONNECTION;
     }
 
@@ -112,8 +113,8 @@ v2g_event din_validate_response_code(din_responseCodeType* const din_response_co
     /* log failed response code message */
     if (*din_response_code >= din_responseCodeType_FAILED &&
         *din_response_code <= din_responseCodeType_FAILED_WrongEnergyTransferType) {
-        dlog(DLOG_LEVEL_ERROR, "Failed response code detected for message \"%s\", error: %s",
-             v2g_msg_type[conn->ctx->current_v2g_msg], dinResponse[*din_response_code]);
+        EVLOG_error << fmt::format("Failed response code detected for message \"{}\", error: {}",
+                                   v2g_msg_type[conn->ctx->current_v2g_msg], dinResponse[*din_response_code]);
     }
 
     return nextEvent;
@@ -315,8 +316,8 @@ enum v2g_event handle_din_session_setup(struct v2g_connection* conn) {
 
     conn->ctx->p_charger->publish_evcc_id(mac_addr); // publish EVCC ID
 
-    dlog(DLOG_LEVEL_INFO, "SessionSetupReq.EVCCID: %s",
-         (mac_addr.empty()) ? "(zero length provided)" : mac_addr.c_str());
+    EVLOG_info << "SessionSetupReq.EVCCID: "
+               << (mac_addr.empty() ? "(zero length provided)" : mac_addr);
 
     /* Now fill the evse response message */
     res->ResponseCode = din_responseCodeType_OK_NewSessionEstablished; // [V2G-DC-393]
@@ -326,10 +327,10 @@ enum v2g_event handle_din_session_setup(struct v2g_connection* conn) {
     srand((unsigned int)time(NULL));
     if (conn->ctx->evse_v2g_data.session_id == (uint64_t)0) {
         generate_random_data(&conn->ctx->evse_v2g_data.session_id, 8);
-        dlog(DLOG_LEVEL_INFO, "No session_id found. Generating random session id.");
+        EVLOG_info << "No session_id found. Generating random session id.";
     }
 
-    dlog(DLOG_LEVEL_INFO, "Created new session with id 0x%016" PRIx64, be64toh(conn->ctx->evse_v2g_data.session_id));
+    EVLOG_info << fmt::format("Created new session with id 0x{:016x}", be64toh(conn->ctx->evse_v2g_data.session_id));
 
     res->EVSEID.bytesLen = std::min((int)conn->ctx->evse_v2g_data.evse_id.bytesLen, iso2_EVSEID_CHARACTER_SIZE);
     memcpy(res->EVSEID.bytes, conn->ctx->evse_v2g_data.evse_id.bytes, res->EVSEID.bytesLen);
@@ -370,8 +371,7 @@ enum v2g_event handle_din_service_discovery(struct v2g_connection* conn) {
             iso2_EnergyTransferModeType_DC_extended) {
         conn->ctx->evse_v2g_data.charge_service.SupportedEnergyTransferMode.EnergyTransferMode.array[0] =
             iso2_EnergyTransferModeType_DC_extended;
-        dlog(DLOG_LEVEL_WARNING, "Selected EnergyTransferType is not supported in DIN 70121. Correcting value of field "
-                                 "SupportedEnergyTransferType0 to 'DC_extended'");
+        EVLOG_warning << "Selected EnergyTransferType is not supported in DIN 70121. Correcting value of field SupportedEnergyTransferType0 to 'DC_extended'";
     }
 
     res->ChargeService.ServiceTag.ServiceID =
@@ -605,8 +605,8 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
     /* Set next expected req msg */
     if (res->EVSEProcessing == din_EVSEProcessingType_Finished) {
         if (res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode != din_DC_EVSEStatusCodeType_EVSE_Ready) {
-            dlog(DLOG_LEVEL_WARNING,
-                 "EVSE wants to finish charge parameter phase, but status code is not set to 'ready' (1)");
+            EVLOG_warning
+                << "EVSE wants to finish charge parameter phase, but status code is not set to 'ready' (1)";
         }
         if (conn->ctx->evse_v2g_data.no_energy_pause == NoEnergyPauseStatus::BeforeCableCheck or
             conn->ctx->evse_v2g_data.no_energy_pause == NoEnergyPauseStatus::AfterCableCheckPreCharge) {
@@ -677,8 +677,9 @@ static enum v2g_event handle_din_power_delivery(struct v2g_connection* conn) {
                                             pow(10, conn->ctx->evse_v2g_data.evse_maximum_power_limit.Multiplier)))) {
                 // res->ResponseCode = din_responseCodeType_FAILED_ChargingProfileInvalid; //[V2G-DC-399]. Currently
                 // commented to increase compatibility with EV'S
-                dlog(DLOG_LEVEL_WARNING, "EV's charging profile is invalid (ChargingProfileEntryMaxPower %d too high)!",
-                     req->ChargingProfile.ProfileEntry.array[idx].ChargingProfileEntryMaxPower);
+                EVLOG_warning << fmt::format(
+                    "EV's charging profile is invalid (ChargingProfileEntryMaxPower {} too high)!",
+                    req->ChargingProfile.ProfileEntry.array[idx].ChargingProfileEntryMaxPower);
                 break;
             }
         }
@@ -760,8 +761,8 @@ static enum v2g_event handle_din_cable_check(struct v2g_connection* conn) {
             ((res->DC_EVSEStatus.EVSEIsolationStatus_isUsed == (unsigned int)0) ||
              ((res->DC_EVSEStatus.EVSEIsolationStatus != din_isolationLevelType_Valid) &&
               (din_isolationLevelType_Warning != res->DC_EVSEStatus.EVSEIsolationStatus)))) {
-            dlog(DLOG_LEVEL_WARNING, "EVSE wants to finish cable check phase, but either status code is not set to "
-                                     "'ready' (1) or isolation status is not valid");
+            EVLOG_warning
+                << "EVSE wants to finish cable check phase, but either status code is not set to 'ready' (1) or isolation status is not valid";
         }
 
         conn->ctx->state = WAIT_FOR_CABLECHECK; // [V2G-DC-455]
@@ -947,7 +948,7 @@ enum v2g_event din_handle_request(v2g_connection* conn) {
 
     // === Start request handling ===
     if (exi_in->V2G_Message.Body.CurrentDemandReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling CurrentDemandReq");
+        EVLOG_verbose << "Handling CurrentDemandReq";
         if (conn->ctx->last_v2g_msg == V2G_POWER_DELIVERY_MSG) {
             conn->ctx->p_charger->publish_current_demand_started(nullptr);
             conn->ctx->session.is_charging = true;
@@ -957,118 +958,118 @@ enum v2g_event din_handle_request(v2g_connection* conn) {
         init_din_CurrentDemandResType(&exi_out->V2G_Message.Body.CurrentDemandRes);
         next_v2g_event = handle_din_current_demand(conn);
     } else if (exi_in->V2G_Message.Body.SessionSetupReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling SessionSetupReq");
+        EVLOG_verbose << "Handling SessionSetupReq";
         conn->ctx->current_v2g_msg = V2G_SESSION_SETUP_MSG;
         exi_out->V2G_Message.Body.SessionSetupRes_isUsed = 1u;
         init_din_SessionSetupResType(&exi_out->V2G_Message.Body.SessionSetupRes);
         /* Handle v2g msg */
         next_v2g_event = handle_din_session_setup(conn);
     } else if (exi_in->V2G_Message.Body.ServiceDiscoveryReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ServiceDiscoveryReq");
+        EVLOG_verbose << "Handling ServiceDiscoveryReq";
         conn->ctx->current_v2g_msg = V2G_SERVICE_DISCOVERY_MSG;
         exi_out->V2G_Message.Body.ServiceDiscoveryRes_isUsed = 1u;
         init_din_ServiceDiscoveryResType(&exi_out->V2G_Message.Body.ServiceDiscoveryRes);
         next_v2g_event = handle_din_service_discovery(conn);
     } else if (exi_in->V2G_Message.Body.ServicePaymentSelectionReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PaymentServiceSelectionReq");
+        EVLOG_verbose << "Handling PaymentServiceSelectionReq";
         conn->ctx->current_v2g_msg = V2G_PAYMENT_SERVICE_SELECTION_MSG;
         exi_out->V2G_Message.Body.ServicePaymentSelectionRes_isUsed = 1u;
         init_din_ServicePaymentSelectionResType(&exi_out->V2G_Message.Body.ServicePaymentSelectionRes);
         next_v2g_event = handle_din_service_payment_selection(conn);
     } else if (exi_in->V2G_Message.Body.ContractAuthenticationReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ContractAuthenticationReq");
+        EVLOG_verbose << "Handling ContractAuthenticationReq";
         conn->ctx->current_v2g_msg = V2G_AUTHORIZATION_MSG;
         if (conn->ctx->last_v2g_msg != V2G_AUTHORIZATION_MSG) {
-            dlog(DLOG_LEVEL_INFO, "Auth-phase started");
+        EVLOG_info << "Auth-phase started";
             conn->ctx->p_charger->publish_require_auth_eim(nullptr);
         }
         exi_out->V2G_Message.Body.ContractAuthenticationRes_isUsed = 1u;
         init_din_ContractAuthenticationResType(&exi_out->V2G_Message.Body.ContractAuthenticationRes);
         next_v2g_event = handle_din_contract_authentication(conn);
     } else if (exi_in->V2G_Message.Body.PaymentDetailsReq_isUsed) {
-        dlog(DLOG_LEVEL_ERROR, "PaymentDetails request is not supported in DIN 70121");
+        EVLOG_error << "PaymentDetails request is not supported in DIN 70121";
         conn->ctx->current_v2g_msg = V2G_UNKNOWN_MSG;
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     } else if (exi_in->V2G_Message.Body.ServiceDetailReq_isUsed) {
-        dlog(DLOG_LEVEL_ERROR, "ServiceDetail request is not supported in DIN 70121");
+        EVLOG_error << "ServiceDetail request is not supported in DIN 70121";
         conn->ctx->current_v2g_msg = V2G_UNKNOWN_MSG;
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     } else if (exi_in->V2G_Message.Body.ChargeParameterDiscoveryReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling ChargeParameterDiscoveryReq");
+        EVLOG_verbose << "Handling ChargeParameterDiscoveryReq";
         conn->ctx->current_v2g_msg = V2G_CHARGE_PARAMETER_DISCOVERY_MSG;
         if (conn->ctx->last_v2g_msg == V2G_AUTHORIZATION_MSG) {
-            dlog(DLOG_LEVEL_INFO, "Parameter-phase started");
+            EVLOG_info << "Parameter-phase started";
         }
         exi_out->V2G_Message.Body.ChargeParameterDiscoveryRes_isUsed = 1u;
         init_din_ChargeParameterDiscoveryResType(&exi_out->V2G_Message.Body.ChargeParameterDiscoveryRes);
         next_v2g_event = handle_din_charge_parameter(conn);
     } else if (exi_in->V2G_Message.Body.CableCheckReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling CableCheckReq");
+        EVLOG_verbose << "Handling CableCheckReq";
         conn->ctx->current_v2g_msg = V2G_CABLE_CHECK_MSG;
         if (conn->ctx->last_v2g_msg == V2G_CHARGE_PARAMETER_DISCOVERY_MSG) {
             conn->ctx->p_charger->publish_start_cable_check(nullptr);
-            dlog(DLOG_LEVEL_INFO, "Isolation-phase started");
+            EVLOG_info << "Isolation-phase started";
         }
         exi_out->V2G_Message.Body.CableCheckRes_isUsed = 1u;
         init_din_CableCheckResType(&exi_out->V2G_Message.Body.CableCheckRes);
         next_v2g_event = handle_din_cable_check(conn);
     } else if (exi_in->V2G_Message.Body.PreChargeReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PreChargeReq");
+        EVLOG_verbose << "Handling PreChargeReq";
         conn->ctx->current_v2g_msg = V2G_PRE_CHARGE_MSG;
         if (conn->ctx->last_v2g_msg == V2G_CABLE_CHECK_MSG) {
             conn->ctx->p_charger->publish_start_pre_charge(nullptr);
-            dlog(DLOG_LEVEL_INFO, "Precharge-phase started");
+            EVLOG_info << "Precharge-phase started";
         }
         exi_out->V2G_Message.Body.PreChargeRes_isUsed = 1u;
         init_din_PreChargeResType(&exi_out->V2G_Message.Body.PreChargeRes);
         next_v2g_event = handle_din_pre_charge(conn);
     } else if (exi_in->V2G_Message.Body.PowerDeliveryReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling PowerDeliveryReq");
+        EVLOG_verbose << "Handling PowerDeliveryReq";
         conn->ctx->current_v2g_msg = V2G_POWER_DELIVERY_MSG;
         if (conn->ctx->last_v2g_msg == V2G_PRE_CHARGE_MSG) {
-            dlog(DLOG_LEVEL_INFO, "Charge-phase started");
+            EVLOG_info << "Charge-phase started";
         }
         exi_out->V2G_Message.Body.PowerDeliveryRes_isUsed = 1u;
         init_din_PowerDeliveryResType(&exi_out->V2G_Message.Body.PowerDeliveryRes);
         next_v2g_event = handle_din_power_delivery(conn);
     } else if (exi_in->V2G_Message.Body.ChargingStatusReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "ChargingStatus request is not supported in DIN 70121");
+        EVLOG_verbose << "ChargingStatus request is not supported in DIN 70121";
         conn->ctx->current_v2g_msg = V2G_UNKNOWN_MSG;
         exi_out->V2G_Message.Body.ChargingStatusRes_isUsed = 0u;
         init_din_ChargingStatusResType(&exi_out->V2G_Message.Body.ChargingStatusRes);
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     } else if (exi_in->V2G_Message.Body.MeteringReceiptReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "MeteringReceipt request is not supported in DIN 70121");
+        EVLOG_verbose << "MeteringReceipt request is not supported in DIN 70121";
         conn->ctx->current_v2g_msg = V2G_UNKNOWN_MSG;
         exi_out->V2G_Message.Body.MeteringReceiptRes_isUsed = 0u;
         init_din_MeteringReceiptResType(&exi_out->V2G_Message.Body.MeteringReceiptRes);
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     } else if (exi_in->V2G_Message.Body.CertificateUpdateReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "CertificateUpdate request is not supported in DIN 70121");
+        EVLOG_verbose << "CertificateUpdate request is not supported in DIN 70121";
         conn->ctx->current_v2g_msg = V2G_UNKNOWN_MSG;
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     } else if (exi_in->V2G_Message.Body.CertificateInstallationReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "CertificateInstallation request is not supported in DIN 70121");
+        EVLOG_verbose << "CertificateInstallation request is not supported in DIN 70121";
         conn->ctx->current_v2g_msg = V2G_UNKNOWN_MSG;
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     } else if (exi_in->V2G_Message.Body.WeldingDetectionReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling WeldingDetectionReq");
+        EVLOG_verbose << "Handling WeldingDetectionReq";
         conn->ctx->current_v2g_msg = V2G_WELDING_DETECTION_MSG;
         if (conn->ctx->last_v2g_msg == V2G_POWER_DELIVERY_MSG) {
-            dlog(DLOG_LEVEL_INFO, "Welding-phase started");
+            EVLOG_info << "Welding-phase started";
         }
         exi_out->V2G_Message.Body.WeldingDetectionRes_isUsed = 1u;
         init_din_WeldingDetectionResType(&exi_out->V2G_Message.Body.WeldingDetectionRes);
         next_v2g_event = handle_din_welding_detection(conn);
     } else if (exi_in->V2G_Message.Body.SessionStopReq_isUsed) {
-        dlog(DLOG_LEVEL_TRACE, "Handling SessionStopReq");
+        EVLOG_verbose << "Handling SessionStopReq";
         conn->ctx->current_v2g_msg = V2G_SESSION_STOP_MSG;
 
         exi_out->V2G_Message.Body.SessionStopRes_isUsed = 1u;
         init_din_SessionStopResType(&exi_out->V2G_Message.Body.SessionStopRes);
         next_v2g_event = handle_din_session_stop(conn);
     } else {
-        dlog(DLOG_LEVEL_ERROR, "Create_response_message: request type not found");
+        EVLOG_error << "Create_response_message: request type not found";
         next_v2g_event = V2G_EVENT_IGNORE_MSG;
     }
 
@@ -1079,7 +1080,7 @@ enum v2g_event din_handle_request(v2g_connection* conn) {
         // TODO: Set byteLen
         exi_out->V2G_Message.Header.SessionID.bytesLen = din_sessionIDType_BYTES_SIZE;
 
-        dlog(DLOG_LEVEL_TRACE, "Current state: %s", din_states[conn->ctx->state].description);
+    EVLOG_verbose << fmt::format("Current state: {}", din_states[conn->ctx->state].description);
         conn->ctx->last_v2g_msg = conn->ctx->current_v2g_msg;
     }
 

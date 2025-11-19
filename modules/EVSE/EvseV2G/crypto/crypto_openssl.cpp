@@ -6,7 +6,8 @@
 
 #include "crypto_openssl.hpp"
 #include "iso_server.hpp"
-#include "log.hpp"
+#include <everest/logging.hpp>
+#include <fmt/format.h>
 
 #include <cbv2g/common/exi_bitstream.h>
 #include <cbv2g/exi_v2gtp.h> //for V2GTP_HEADER_LENGTHs
@@ -48,7 +49,7 @@ bool check_iso2_signature(const struct iso2_SignatureType* iso2_signature, EVP_P
 
     auto err = encode_iso2_exiFragment(&stream, iso2_exi_fragment);
     if (err != 0) {
-        dlog(DLOG_LEVEL_ERROR, "Unable to encode fragment, error code = %d", err);
+        EVLOG_error << fmt::format("Unable to encode fragment, error code = {}", err);
         bRes = false;
     }
 
@@ -63,13 +64,13 @@ bool check_iso2_signature(const struct iso2_SignatureType* iso2_signature, EVP_P
     // check hash matches the value in the message
     if (bRes) {
         if (req_ref->DigestValue.bytesLen != digest.size()) {
-            dlog(DLOG_LEVEL_ERROR, "Invalid digest length %u in signature", req_ref->DigestValue.bytesLen);
+            EVLOG_error << fmt::format("Invalid digest length {} in signature", req_ref->DigestValue.bytesLen);
             bRes = false;
         }
     }
     if (bRes) {
         if (std::memcmp(req_ref->DigestValue.bytes, digest.data(), digest.size()) != 0) {
-            dlog(DLOG_LEVEL_ERROR, "Invalid digest in signature");
+            EVLOG_error << "Invalid digest in signature";
             bRes = false;
         }
     }
@@ -99,7 +100,7 @@ bool check_iso2_signature(const struct iso2_SignatureType* iso2_signature, EVP_P
         err = encode_iso2_xmldsigFragment(&stream, &sig_fragment);
 
         if (err != 0) {
-            dlog(DLOG_LEVEL_ERROR, "Unable to encode XML signature fragment, error code = %d", err);
+            EVLOG_error << fmt::format("Unable to encode XML signature fragment, error code = {}", err);
             bRes = false;
         }
     }
@@ -113,7 +114,7 @@ bool check_iso2_signature(const struct iso2_SignatureType* iso2_signature, EVP_P
     if (bRes) {
         /* Validate the ecdsa signature using the public key */
         if (signature_len != ::openssl::signature_size) {
-            dlog(DLOG_LEVEL_ERROR, "Signature len is invalid (%i)", signature_len);
+            EVLOG_error << fmt::format("Signature len is invalid ({})", signature_len);
             bRes = false;
         }
     }
@@ -180,7 +181,7 @@ std::string chain_to_pem(const ::openssl::certificate_ptr& cert, const ::openssl
     for (const auto& crt : *chain) {
         const auto pem = ::openssl::certificate_to_pem(crt.get());
         if (pem.empty()) {
-            dlog(DLOG_LEVEL_ERROR, "Unable to encode certificate chain");
+            EVLOG_error << "Unable to encode certificate chain";
             break;
         }
         contract_cert_chain_pem.append(pem);

@@ -4,7 +4,6 @@
 #include "EvseV2G.hpp"
 #include "connection/connection.hpp"
 #include "connection/tls_connection.hpp"
-#include "log.hpp"
 #include "sdp.hpp"
 #include <everest/logging.hpp>
 
@@ -61,13 +60,13 @@ void EvseV2G::init() {
                 return;
             }
 
-            dlog(DLOG_LEVEL_INFO, "Certificate store update received, reconfiguring TLS server");
+            EVLOG_info << "Certificate store update received, reconfiguring TLS server";
             auto config = std::make_unique<tls::Server::config_t>();
             if (build_config(*config, v2g_ctx)) {
-                dlog(DLOG_LEVEL_INFO, "Configuration of TLS server successful, updating it");
+                EVLOG_info << "Configuration of TLS server successful, updating it";
                 v2g_ctx->tls_server->update(*config);
             } else {
-                dlog(DLOG_LEVEL_INFO, "Configuration of TLS server failed, suspending it");
+                EVLOG_info << "Configuration of TLS server failed, suspending it";
                 v2g_ctx->tls_server->suspend();
             }
         });
@@ -79,12 +78,12 @@ void EvseV2G::init() {
 void EvseV2G::ready() {
     int rv = 0;
 
-    dlog(DLOG_LEVEL_DEBUG, "Starting SDP responder");
+    EVLOG_debug << "Starting SDP responder";
 
     rv = connection_init(v2g_ctx);
 
     if (rv == -1) {
-        dlog(DLOG_LEVEL_ERROR, "Failed to initialize connection");
+        EVLOG_error << "Failed to initialize connection";
         goto err_out;
     }
 
@@ -92,14 +91,14 @@ void EvseV2G::ready() {
         rv = sdp_init(v2g_ctx);
 
         if (rv == -1) {
-            dlog(DLOG_LEVEL_ERROR, "Failed to start SDP responder");
+            EVLOG_error << "Failed to start SDP responder";
             goto err_out;
         }
     }
 
-    dlog(DLOG_LEVEL_DEBUG, "starting socket server(s)");
+    EVLOG_debug << "starting socket server(s)";
     if (connection_start_servers(v2g_ctx)) {
-        dlog(DLOG_LEVEL_ERROR, "start_connection_servers() failed");
+        EVLOG_error << "start_connection_servers() failed";
         goto err_out;
     }
 
@@ -109,7 +108,7 @@ void EvseV2G::ready() {
     rv = sdp_listen(v2g_ctx);
 
     if (rv == -1) {
-        dlog(DLOG_LEVEL_ERROR, "sdp_listen() failed");
+        EVLOG_error << "sdp_listen() failed";
         goto err_out;
     }
 
