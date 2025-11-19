@@ -85,6 +85,7 @@ public:
     void set_pwm(double value);
     void set_pwm_off();
     void set_pwm_F();
+    void set_cp_state_E();
 
     void set_three_phases(bool t) {
         three_phases = t;
@@ -123,6 +124,7 @@ private:
     std::atomic<double> pp_ampacity{0.0};
     std::atomic<double> last_amps{-1};
     std::atomic_bool three_phases{true};
+    std::atomic_bool state_e_triggered_through_bsp{false};
 
     bool car_plugged_in{false};
 

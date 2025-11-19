@@ -722,6 +722,8 @@ const std::string cpevent_to_string(CPEvent e) {
         return "EvseReplugStarted";
     case CPEvent::EvseReplugFinished:
         return "EvseReplugFinished";
+    case CPEvent::Reinit:
+        return "Reinit";
     }
     throw std::out_of_range("No known string conversion for provided enum of type CPEvent");
 }
