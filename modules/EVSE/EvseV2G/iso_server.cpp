@@ -1211,11 +1211,14 @@ error_out:
  * \return Returns the next V2G-event.
  */
 static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connection* conn) {
+    static bool first_req = true;
     struct iso2_ChargeParameterDiscoveryReqType* req =
         &conn->exi_in.iso2EXIDocument->V2G_Message.Body.ChargeParameterDiscoveryReq;
     struct iso2_ChargeParameterDiscoveryResType* res =
         &conn->exi_out.iso2EXIDocument->V2G_Message.Body.ChargeParameterDiscoveryRes;
     enum v2g_event next_event = V2G_EVENT_NO_EVENT;
+
+    first_req = (conn->ctx->last_v2g_msg == V2G_CHARGE_PARAMETER_DISCOVERY_MSG) ? false : true;
 
     /* At first, publish the received ev request message to the MQTT interface */
     publish_iso_charge_parameter_discovery_req(conn->ctx, req);
@@ -1358,11 +1361,8 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
     } else {
 
         if (conn->ctx->evse_v2g_data.sae_bidi_data.enabled_sae_v2h == true) {
-            static bool first_req = true;
-
             if (first_req == true) {
                 res->EVSEProcessing = iso2_EVSEProcessingType_Ongoing;
-                first_req = false;
             } else {
                 // Check if second req message contains neg values
                 // Check if bulk soc is set
@@ -1376,8 +1376,6 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
                     res->ResponseCode = iso2_responseCodeType::iso2_responseCodeType_FAILED_WrongEnergyTransferMode;
                 }
                 res->EVSEProcessing = iso2_EVSEProcessingType_Finished;
-                // reset first_req
-                first_req = true;
             }
         }
 
@@ -1452,11 +1450,12 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
      * If the EV is ignoring the shutdown request, stop the charging session in the next response message with a failed response code.
      */
     if (conn->ctx->is_fake_dc) {
-        if (conn->ctx->last_v2g_msg == V2G_AUTHORIZATION_MSG) {
+        if (first_req == true) {
             dlog(DLOG_LEVEL_INFO, "Initiate stop of the fake HLC ISO DC session");
             res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSENotification = iso2_EVSENotificationType_StopCharging;
             res->DC_EVSEChargeParameter.DC_EVSEStatus.NotificationMaxDelay = 0;
             res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode = iso2_DC_EVSEStatusCodeType_EVSE_Shutdown;
+            res->EVSEProcessing = iso2_EVSEProcessingType_Ongoing;
         } else {
             res->ResponseCode = iso2_responseCodeType_FAILED;
         }

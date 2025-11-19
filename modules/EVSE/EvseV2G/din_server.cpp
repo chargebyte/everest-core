@@ -482,11 +482,14 @@ enum v2g_event states::handle_din_contract_authentication(struct v2g_connection*
  * \return Returns the next V2G-event.
  */
 static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
+    static bool first_req = true;
     struct din_ChargeParameterDiscoveryReqType* req =
         &conn->exi_in.dinEXIDocument->V2G_Message.Body.ChargeParameterDiscoveryReq;
     struct din_ChargeParameterDiscoveryResType* res =
         &conn->exi_out.dinEXIDocument->V2G_Message.Body.ChargeParameterDiscoveryRes;
     enum v2g_event nextEvent = V2G_EVENT_NO_EVENT;
+
+    first_req = (conn->ctx->last_v2g_msg == V2G_CHARGE_PARAMETER_DISCOVERY_MSG) ? false : true;
 
     /* At first, publish the received EV request message to the customer MQTT interface */
     publish_din_charge_parameter_discovery_req(conn->ctx, req);
@@ -607,11 +610,12 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
      * If the EV is ignoring the shutdown request, stop the charging session in the next response message with a failed response code.
      */
     if (conn->ctx->is_fake_dc) {
-        if (conn->ctx->last_v2g_msg == V2G_AUTHORIZATION_MSG) {
+        if (first_req == true) {
             dlog(DLOG_LEVEL_INFO, "Initiate stop of the fake HLC DIN DC session");
             res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSENotification = din_EVSENotificationType_StopCharging;
             res->DC_EVSEChargeParameter.DC_EVSEStatus.NotificationMaxDelay = 0;
             res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode = din_DC_EVSEStatusCodeType_EVSE_Shutdown;
+            res->EVSEProcessing = din_EVSEProcessingType_Ongoing;
         } else {
             res->ResponseCode = din_responseCodeType_FAILED;
         }
