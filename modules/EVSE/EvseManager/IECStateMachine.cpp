@@ -185,8 +185,10 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
                 connector_unlock();
             }
 
-            if (last_cp_state != RawCPState::A && last_cp_state != RawCPState::B) {
-
+            if (state_e_triggered_through_bsp == true && last_cp_state == RawCPState::E) {
+                // Ignore this transition as it is caused by our own reinit
+                state_e_triggered_through_bsp = false;
+            } else if (last_cp_state != RawCPState::A && last_cp_state != RawCPState::B) {
                 events.push(CPEvent::CarRequestedStopPower);
                 // Need to switch off according to Table A.6 Sequence 8.1
                 // within 100ms
