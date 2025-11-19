@@ -71,6 +71,7 @@ struct Conf {
     bool ac_hlc_use_5percent;
     bool ac_enforce_hlc;
     bool ac_with_soc;
+    int reinit_duration_ms;
     int dc_isolation_voltage_V;
     bool dbg_hlc_auth_after_tstep;
     int hack_sleep_in_cable_check;
@@ -320,7 +321,7 @@ private:
     int32_t reservation_id;
     Everest::timed_mutex_traceable reservation_mutex;
 
-    void setup_AC_mode();
+    void setup_AC_mode(const bool hlc_enabled = false);
     void setup_fake_DC_mode();
     void setup_ac_with_soc_handling();
 

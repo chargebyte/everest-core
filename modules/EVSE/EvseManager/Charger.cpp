@@ -157,6 +157,7 @@ void Charger::run_state_machine() {
     // run over state machine loop until current_state does not change anymore
     do {
         mainloop_runs++;
+        process_pending_reinit_request();
         // If a state change happened or an error recovered during a state we reinitialize the state
         bool initialize_state =
             (internal_context.last_state_detect_state_change not_eq shared_context.current_state) or
@@ -1062,6 +1063,13 @@ void Charger::process_cp_events_independent(CPEvent cp_event) {
     case CPEvent::EvseReplugFinished:
         shared_context.current_state = EvseState::WaitingForAuthentication;
         break;
+    case CPEvent::BCDtoEF:
+        if (shared_context.reinit_requested == true) {
+            shared_context.current_state = EvseState::Reinit;
+            shared_context.reinit_requested = false;
+            shared_context.reinit_running = true;
+        }
+        break;
     case CPEvent::CarRequestedStopPower:
         shared_context.iec_allow_close_contactor = false;
         break;
@@ -1248,15 +1256,23 @@ bool Charger::resume_charging_power_available() {
     return false;
 }
 
-// pause charging since we run through replug sequence
-bool Charger::evse_replug() {
-    // call BSP to start the replug sequence. It BSP actually does it,
-    // it will emit a EvseReplugStarted event which will then modify our state.
-    // If BSP never executes the replug, we also never change state and nothing happens.
-    // After replugging finishes, BSP will emit EvseReplugFinished event and we will go back to WaitingForAuth
-    EVLOG_info << fmt::format("Calling evse_replug({})...", T_REPLUG_MS);
-    bsp->evse_replug(T_REPLUG_MS);
+bool Charger::start_reinit() {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
+    shared_context.reinit_requested = true;
+    EVLOG_debug << "Reinit requested, delegating to main loop.";
     return true;
+}
+
+void Charger::process_pending_reinit_request() {
+    if (not shared_context.reinit_requested) {
+        return;
+    }
+
+    shared_context.reinit_requested = false;
+    if (shared_context.current_state not_eq EvseState::Reinit) {
+        EVLOG_info << "Processing pending reinit request.";
+        shared_context.current_state = EvseState::Reinit;
+    }
 }
 
 // Cancel transaction/charging from external EvseManager interface (e.g. via OCPP)
@@ -1473,7 +1489,8 @@ void Charger::setup(bool has_ventilation, const ChargeMode _charge_mode, bool _a
                     const int _switch_3ph1ph_delay_s, const std::string _switch_3ph1ph_cp_state,
                     const int _soft_over_current_timeout_ms, const int _state_F_after_fault_ms,
                     const bool fail_on_powermeter_errors, const bool raise_mrec9,
-                    const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type) {
+                    const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type,
+                    const int _reinit_duration_ms) {
     // set up board support package
     bsp->setup(has_ventilation);
 
@@ -1497,6 +1514,7 @@ void Charger::setup(bool has_ventilation, const ChargeMode _charge_mode, bool _a
     config_context.raise_mrec9 = raise_mrec9;
     config_context.sleep_before_enabling_pwm_hlc_mode_ms = sleep_before_enabling_pwm_hlc_mode_ms;
     config_context.session_id_type = session_id_type;
+    config_context.reinit_duration_ms = _reinit_duration_ms;
 
     if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled)
         EVLOG_info << "AC HLC mode enabled.";
@@ -1806,6 +1824,9 @@ std::string Charger::evse_state_to_string(EvseState s) {
         break;
     case EvseState::Replug:
         return ("Replug");
+        break;
+    case EvseState::Reinit:
+        return ("Reinit");
         break;
     case EvseState::PrepareCharging:
         return ("PrepareCharging");
