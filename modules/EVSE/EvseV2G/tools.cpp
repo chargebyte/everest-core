@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
+#include <everest/logging.hpp>
 #include <fcntl.h>
 #include <ifaddrs.h>
 #include <iomanip>
@@ -17,7 +18,6 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <everest/logging.hpp>
 
 #include <array>
 

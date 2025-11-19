@@ -9,9 +9,9 @@
 #include <math.h>
 #include <unistd.h> // sleep
 
+#include "v2g_ctx.hpp"
 #include <everest/logging.hpp>
 #include <fmt/format.h>
-#include "v2g_ctx.hpp"
 
 #include <cbv2g/iso_2/iso2_msgDefDatatypes.h>
 
@@ -454,7 +454,7 @@ void log_selected_energy_transfer_type(int selected_energy_transfer_mode) {
     if (selected_energy_transfer_mode >= iso2_EnergyTransferModeType_AC_single_phase_core &&
         selected_energy_transfer_mode <= iso2_EnergyTransferModeType_DC_unique) {
         EVLOG_info << fmt::format("Selected energy transfer mode: {}",
-                                   selected_energy_transfer_mode_string[selected_energy_transfer_mode]);
+                                  selected_energy_transfer_mode_string[selected_energy_transfer_mode]);
     } else {
         EVLOG_warning << fmt::format("Selected energy transfer mode {} is invalid", selected_energy_transfer_mode);
     }
@@ -478,7 +478,7 @@ bool add_service_to_service_list(struct v2g_context* v2g_ctx, const struct iso2_
         v2g_ctx->evse_v2g_data.evse_service_list.push_back(evse_service);
     } else if (v2g_ctx->evse_v2g_data.evse_service_list.size() == iso2_ServiceType_8_ARRAY_SIZE) {
         EVLOG_error << fmt::format("Maximum service list size reached. Unable to add service ID {}",
-                                    evse_service.ServiceID);
+                                   evse_service.ServiceID);
         return false;
     }
 
@@ -520,7 +520,7 @@ void configure_parameter_set(iso2_ServiceParameterListType& parameterSetList, in
         parameterSetList.ParameterSet.arrayLen++;
     } else if (parameterSetList.ParameterSet.arrayLen == iso2_ParameterSetType_5_ARRAY_SIZE) {
         EVLOG_error << fmt::format("Maximum parameter-set list size reached. Unable to add parameter-set-ID {}",
-                                    parameterSetId);
+                                   parameterSetId);
         return;
     }
 

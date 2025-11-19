@@ -3,9 +3,9 @@
 // Copyright (C) 2022-2023 Contributors to EVerest
 #include "ISO15118_chargerImpl.hpp"
 #include "v2g_ctx.hpp"
-#include <string_view>
 #include <everest/logging.hpp>
 #include <fmt/format.h>
+#include <string_view>
 
 const std::string CERTS_SUB_DIR = "certs"; // relativ path of the certs
 
@@ -500,8 +500,8 @@ void ISO15118_chargerImpl::handle_update_meter_info(types::powermeter::Powermete
             memcpy(v2g_ctx->meter_info.meter_id.bytes, powermeter.meter_id->c_str(), len);
             v2g_ctx->meter_info.meter_id.bytesLen = len;
         } else {
-        EVLOG_warning << fmt::format("MeterID_CHARACTER_SIZEexceeded (received: {}, max: {})", len,
-                                     iso2_MeterID_CHARACTER_SIZE);
+            EVLOG_warning << fmt::format("MeterID_CHARACTER_SIZEexceeded (received: {}, max: {})", len,
+                                         iso2_MeterID_CHARACTER_SIZE);
         }
     }
 }

@@ -316,8 +316,7 @@ enum v2g_event handle_din_session_setup(struct v2g_connection* conn) {
 
     conn->ctx->p_charger->publish_evcc_id(mac_addr); // publish EVCC ID
 
-    EVLOG_info << "SessionSetupReq.EVCCID: "
-               << (mac_addr.empty() ? "(zero length provided)" : mac_addr);
+    EVLOG_info << "SessionSetupReq.EVCCID: " << (mac_addr.empty() ? "(zero length provided)" : mac_addr);
 
     /* Now fill the evse response message */
     res->ResponseCode = din_responseCodeType_OK_NewSessionEstablished; // [V2G-DC-393]
@@ -371,7 +370,8 @@ enum v2g_event handle_din_service_discovery(struct v2g_connection* conn) {
             iso2_EnergyTransferModeType_DC_extended) {
         conn->ctx->evse_v2g_data.charge_service.SupportedEnergyTransferMode.EnergyTransferMode.array[0] =
             iso2_EnergyTransferModeType_DC_extended;
-        EVLOG_warning << "Selected EnergyTransferType is not supported in DIN 70121. Correcting value of field SupportedEnergyTransferType0 to 'DC_extended'";
+        EVLOG_warning << "Selected EnergyTransferType is not supported in DIN 70121. Correcting value of field "
+                         "SupportedEnergyTransferType0 to 'DC_extended'";
     }
 
     res->ChargeService.ServiceTag.ServiceID =
@@ -605,8 +605,7 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
     /* Set next expected req msg */
     if (res->EVSEProcessing == din_EVSEProcessingType_Finished) {
         if (res->DC_EVSEChargeParameter.DC_EVSEStatus.EVSEStatusCode != din_DC_EVSEStatusCodeType_EVSE_Ready) {
-            EVLOG_warning
-                << "EVSE wants to finish charge parameter phase, but status code is not set to 'ready' (1)";
+            EVLOG_warning << "EVSE wants to finish charge parameter phase, but status code is not set to 'ready' (1)";
         }
         if (conn->ctx->evse_v2g_data.no_energy_pause == NoEnergyPauseStatus::BeforeCableCheck or
             conn->ctx->evse_v2g_data.no_energy_pause == NoEnergyPauseStatus::AfterCableCheckPreCharge) {
@@ -761,8 +760,8 @@ static enum v2g_event handle_din_cable_check(struct v2g_connection* conn) {
             ((res->DC_EVSEStatus.EVSEIsolationStatus_isUsed == (unsigned int)0) ||
              ((res->DC_EVSEStatus.EVSEIsolationStatus != din_isolationLevelType_Valid) &&
               (din_isolationLevelType_Warning != res->DC_EVSEStatus.EVSEIsolationStatus)))) {
-            EVLOG_warning
-                << "EVSE wants to finish cable check phase, but either status code is not set to 'ready' (1) or isolation status is not valid";
+            EVLOG_warning << "EVSE wants to finish cable check phase, but either status code is not set to 'ready' (1) "
+                             "or isolation status is not valid";
         }
 
         conn->ctx->state = WAIT_FOR_CABLECHECK; // [V2G-DC-455]
@@ -980,7 +979,7 @@ enum v2g_event din_handle_request(v2g_connection* conn) {
         EVLOG_verbose << "Handling ContractAuthenticationReq";
         conn->ctx->current_v2g_msg = V2G_AUTHORIZATION_MSG;
         if (conn->ctx->last_v2g_msg != V2G_AUTHORIZATION_MSG) {
-        EVLOG_info << "Auth-phase started";
+            EVLOG_info << "Auth-phase started";
             conn->ctx->p_charger->publish_require_auth_eim(nullptr);
         }
         exi_out->V2G_Message.Body.ContractAuthenticationRes_isUsed = 1u;
@@ -1080,7 +1079,7 @@ enum v2g_event din_handle_request(v2g_connection* conn) {
         // TODO: Set byteLen
         exi_out->V2G_Message.Header.SessionID.bytesLen = din_sessionIDType_BYTES_SIZE;
 
-    EVLOG_verbose << fmt::format("Current state: {}", din_states[conn->ctx->state].description);
+        EVLOG_verbose << fmt::format("Current state: {}", din_states[conn->ctx->state].description);
         conn->ctx->last_v2g_msg = conn->ctx->current_v2g_msg;
     }
 
