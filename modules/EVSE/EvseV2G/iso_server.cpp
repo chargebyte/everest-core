@@ -1554,7 +1554,7 @@ static enum v2g_event handle_iso_power_delivery(struct v2g_connection* conn) {
         break;
 
     default:
-        EVLOG_error << fmt::format("Unknown ChargeProgress {} received, signaling error", req->ChargeProgress);
+        EVLOG_error << fmt::format("Unknown ChargeProgress {} received, signaling error", static_cast<int>(req->ChargeProgress));
         res->ResponseCode = iso2_responseCodeType_FAILED;
     }
 
@@ -1735,7 +1735,8 @@ static enum v2g_event handle_iso_metering_receipt(struct v2g_connection* conn) {
     EVLOG_verbose << fmt::format("\t\t SessionID={}", req->SessionID.bytes[1]);
     EVLOG_verbose << fmt::format("\t\t MeterInfo.MeterStatus={}", req->MeterInfo.MeterStatus);
     EVLOG_verbose << fmt::format("\t\t MeterInfo.MeterID={}", req->MeterInfo.MeterID.characters[0]);
-    EVLOG_verbose << fmt::format("\t\t MeterInfo.isused.MeterReading={}", req->MeterInfo.MeterReading_isUsed);
+    const int meterreading_isUsed = req->MeterInfo.MeterReading_isUsed; // bitfield to int
+    EVLOG_verbose << fmt::format("\t\t MeterInfo.isused.MeterReading={}", meterreading_isUsed);
     EVLOG_verbose << fmt::format("\t\t MeterReading.Value={}",
                                  static_cast<unsigned long>(req->MeterInfo.MeterReading));
     EVLOG_verbose << fmt::format("\t\t MeterInfo.TMeter={}", static_cast<long>(req->MeterInfo.TMeter));

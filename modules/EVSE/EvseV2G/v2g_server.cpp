@@ -567,7 +567,7 @@ int v2g_handle_connection(struct v2g_connection* conn) {
             } else {
                 EVLOG_warning << fmt::format(
                     "Response message (type {}) not configured within {} ms (took {} ms)",
-                    conn->ctx->current_v2g_msg, MAX_RES_TIME, time_to_conf_res);
+                    static_cast<int>(conn->ctx->current_v2g_msg), MAX_RES_TIME, time_to_conf_res);
             }
         }
         case V2G_EVENT_SEND_RECV_EXI_MSG: { // fall-through intended
