@@ -562,10 +562,10 @@ static enum v2g_event handle_iso_session_setup(struct v2g_connection* conn) {
         generate_random_data(&conn->ctx->evse_v2g_data.session_id, 4);
         EVLOG_info << "No session_id found or not equal to the id from the preceding v2g session. Generating random "
                       "session id.";
-        EVLOG_info << fmt::format("Created new session with id 0x{0:08}", conn->ctx->evse_v2g_data.session_id);
+        EVLOG_info << fmt::format("Created new session with id 0x{:08x}", be64toh(conn->ctx->evse_v2g_data.session_id));
     } else {
-        EVLOG_info << fmt::format("Found Session_id from the old session: 0x{0:08}",
-                                  conn->ctx->evse_v2g_data.session_id);
+        EVLOG_info << fmt::format("Found Session_id from the old session: 0x{:08x}",
+                                  be64toh(conn->ctx->evse_v2g_data.session_id));
         res->ResponseCode = iso2_responseCodeType_OK_OldSessionJoined;
     }
 

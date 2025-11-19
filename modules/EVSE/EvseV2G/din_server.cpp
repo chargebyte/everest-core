@@ -339,7 +339,7 @@ enum v2g_event handle_din_session_setup(struct v2g_connection* conn) {
         EVLOG_info << "No session_id found. Generating random session id.";
     }
 
-    EVLOG_info << fmt::format("Created new session with id 0x{0:08}", conn->ctx->evse_v2g_data.session_id);
+    EVLOG_info << fmt::format("Created new session with id 0x{:08x}", be64toh(conn->ctx->evse_v2g_data.session_id));
 
     res->EVSEID.bytesLen = std::min((int)conn->ctx->evse_v2g_data.evse_id.bytesLen, iso2_EVSEID_CHARACTER_SIZE);
     memcpy(res->EVSEID.bytes, conn->ctx->evse_v2g_data.evse_id.bytes, res->EVSEID.bytesLen);
