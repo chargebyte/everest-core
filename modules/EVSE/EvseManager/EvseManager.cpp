@@ -160,6 +160,8 @@ void EvseManager::init() {
                 hw_capabilities.max_current_A_export = config.max_current_export_A;
             }
         }
+        const bool supports_cp_state_E = hw_capabilities.supports_cp_state_E.value_or(false);
+        charger->set_supports_cp_state_E(supports_cp_state_E);
 
         if (ac_nr_phases_active == 0) {
             ac_nr_phases_active = c.max_phase_count_import;
