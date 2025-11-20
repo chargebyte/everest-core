@@ -110,6 +110,7 @@ public:
                const int _state_F_after_fault_ms, const bool fail_on_powermeter_errors, const bool raise_mrec9,
                const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type,
                const int reinit_duration_ms, const std::string& reinit_method);
+    void set_supports_cp_state_E(bool value);
 
     void enable_disable_initial_state_publish();
     bool enable_disable(int connector_id, const types::evse_manager::EnableDisableSource& source);
@@ -354,6 +355,8 @@ private:
     std::atomic_bool hlc_use_5percent_current_session;
     // HLC enabled in current AC session. This can change during the session if e.g. HLC fails.
     std::atomic_bool ac_hlc_enabled_current_session;
+    // Indicates whether CP state E is supported by the hardware
+    std::atomic_bool supports_cp_state_E{true};
 
     // This struct is only used from main loop thread
     struct InternalContext {
