@@ -249,6 +249,7 @@ private:
     void update_pwm_max_every_5seconds_ampere(float duty_cycle);
     void pwm_off();
     void pwm_F();
+    void set_cp_state_E();
 
     void process_cp_events_independent(CPEvent cp_event);
     void process_cp_events_state(CPEvent cp_event);

@@ -203,8 +203,7 @@ void Charger::run_state_machine() {
             break;
         case EvseState::Reinit:
             if (initialize_state) {
-                session_log.evse(false, "Reinit sequence started (placeholder CP state E).");
-                bsp->set_cp_state_E();
+                set_cp_state_E();
                 if (config_context.reinit_duration_ms > 0) {
                     internal_context.reinit_timer_active = true;
                     internal_context.reinit_deadline =
@@ -1160,6 +1159,15 @@ void Charger::pwm_F() {
     internal_context.pwm_set_last_ampere = 0.;
     internal_context.pwm_F_active = true;
     bsp->set_pwm_F();
+}
+
+void Charger::set_cp_state_E() {
+    session_log.evse(false, "Set CP state E");
+    shared_context.pwm_running = false;
+    internal_context.update_pwm_last_dc = 0.;
+    internal_context.pwm_set_last_ampere = 0.;
+    internal_context.pwm_F_active = false;
+    bsp->set_cp_state_E();
 }
 
 void Charger::run() {
