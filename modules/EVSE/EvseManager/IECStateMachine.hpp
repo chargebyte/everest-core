@@ -123,7 +123,7 @@ private:
     std::atomic<double> pp_ampacity{0.0};
     std::atomic<double> last_amps{-1};
     std::atomic_bool three_phases{true};
-    std::atomic_bool state_e_triggered_through_bsp{false};
+    std::atomic_bool state_ef_triggered_through_reinit{false};
 
     bool car_plugged_in{false};
 
