@@ -18,6 +18,7 @@ types::evse_board_support::HardwareCapabilities set_default_capabilities() {
             1,                                                             // min_phase_count_export
             true,                                                          // supports_changing_phases_during_charging
             types::evse_board_support::Connector_type::IEC62196Type2Cable, // connector_type
+            true,                                                          // supports_cp_state_E
             std::nullopt};                                                 // max_plug_temperature_C
 }
 } // namespace
