@@ -1076,12 +1076,23 @@ void Charger::pwm_F() {
 }
 
 void Charger::set_cp_state_E() {
+    if (!supports_cp_state_E) {
+        EVLOG_warning << "CP state E requested but not supported by hardware. Ignoring.";
+        return;
+    }
     session_log.evse(false, "Set CP state E");
     shared_context.pwm_running = false;
     internal_context.update_pwm_last_dc = 0.;
     internal_context.pwm_set_last_ampere = 0.;
     internal_context.pwm_F_active = false;
     bsp->set_cp_state_E();
+}
+
+void Charger::set_supports_cp_state_E(bool value) {
+    supports_cp_state_E = value;
+    if (!value and config_context.reinit_method == types::evse_manager::ReinitStateEnum::CPStateE) {
+        EVLOG_warning << "Reinit method CPStateE configured but BSP does not support CP state E.";
+    }
 }
 
 void Charger::run() {
