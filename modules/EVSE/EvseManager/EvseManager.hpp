@@ -76,6 +76,7 @@ struct Conf {
     bool ac_with_soc;
     int internal_over_voltage_duration_ms;
     int reinit_duration_ms;
+    std::string reinit_method;
     bool dbg_hlc_auth_after_tstep;
     int dc_isolation_voltage_V;
     int cable_check_wait_number_of_imd_measurements;

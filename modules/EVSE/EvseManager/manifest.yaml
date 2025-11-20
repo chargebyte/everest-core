@@ -89,13 +89,25 @@ config:
     description: >-
       Time in milliseconds the internal software over voltage monitor waits before raising MREC5 once the measured
       voltage exceeds the negotiated limit.
+    type: integer
+    minimum: 0
+    default: 400
   reinit_duration_ms:
     description: Duration in milliseconds of the reinit state before going back to normal operation
     type: integer
     default: 3000
-    type: integer
-    minimum: 0
-    default: 400
+  reinit_method:
+    description: >-
+      Control pilot behaviour during reinitialization.
+        CPStateE: set CP to state E (0 V) to simulate an unplug.
+        CPStateF: set CP to state F (-12 V) to signal a temporary unavailability.
+        CPStateX1: keep CP powered with 100% duty cycle to signal that no energy is available.
+    type: string
+    enum:
+      - CPStateE
+      - CPStateF
+      - CPStateX1
+    default: CPStateF
   dbg_hlc_auth_after_tstep:
     description: >-
       Special mode: send HLC auth ok only after t_step_XX is finished (true) or directly when available (false)
