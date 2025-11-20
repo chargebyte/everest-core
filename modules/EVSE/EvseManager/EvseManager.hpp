@@ -72,6 +72,7 @@ struct Conf {
     bool ac_enforce_hlc;
     bool ac_with_soc;
     int reinit_duration_ms;
+    std::string reinit_method;
     int dc_isolation_voltage_V;
     bool dbg_hlc_auth_after_tstep;
     int hack_sleep_in_cable_check;

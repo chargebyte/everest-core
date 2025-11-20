@@ -196,9 +196,10 @@ std::queue<CPEvent> IECStateMachine::state_machine() {
                 connector_unlock();
             }
 
-            if (state_e_triggered_through_bsp == true && last_cp_state == RawCPState::E) {
+            if (state_ef_triggered_through_reinit == true &&
+                (last_cp_state == RawCPState::E || last_cp_state == RawCPState::F)) {
                 // Ignore this transition as it is caused by our own reinit
-                state_e_triggered_through_bsp = false;
+                state_ef_triggered_through_reinit = false;
             } else if (last_cp_state != RawCPState::A && last_cp_state != RawCPState::B) {
                 events.push(CPEvent::CarRequestedStopPower);
                 // Need to switch off according to Table A.6 Sequence 8.1
@@ -293,7 +294,7 @@ std::queue<CPEvent> IECStateMachine::state_machine() {
             break;
 
         case RawCPState::E:
-            if (state_e_triggered_through_bsp == false) {
+            if (state_ef_triggered_through_reinit == false) {
                 connector_unlock();
             }
             if (last_cp_state != RawCPState::E) {
@@ -403,13 +404,15 @@ void IECStateMachine::set_pwm_F() {
         pwm_running = false;
     }
     r_bsp->call_pwm_F();
+    state_ef_triggered_through_reinit = true;
     // Don't run the state machine in the callers context
     feed_state_machine();
 }
 
+// High level state machine sets state E
 void IECStateMachine::set_cp_state_E() {
     r_bsp->call_cp_state_E();
-    state_e_triggered_through_bsp = true;
+    state_ef_triggered_through_reinit = true;
 }
 
 // The higher level state machine in Charger.cpp calls this to indicate it allows contactors to be switched on
