@@ -207,14 +207,26 @@ void Charger::run_state_machine() {
             break;
         case EvseState::Reinit:
             if (initialize_state) {
-                set_cp_state_E();
+                session_log.evse(
+                    false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
+                                       types::evse_manager::reinit_state_enum_to_string(config_context.reinit_method),
+                                       config_context.reinit_duration_ms));
+                shared_context.reinit_running = true;
+                switch (config_context.reinit_method) {
+                case types::evse_manager::ReinitStateEnum::CPStateE:
+                    set_cp_state_E();
+                    break;
+                case types::evse_manager::ReinitStateEnum::CPStateF:
+                    pwm_F();
+                    break;
+                case types::evse_manager::ReinitStateEnum::CPStateX1:
+                    pwm_off();
+                    break;
+                }
                 if (config_context.reinit_duration_ms > 0) {
                     internal_context.reinit_timer_active = true;
                     internal_context.reinit_deadline =
                         std::chrono::steady_clock::now() + std::chrono::milliseconds(config_context.reinit_duration_ms);
-                    EVLOG_error << "Reinit will timeout in " << config_context.reinit_duration_ms
-                                << " ms. If the EV does not unplug by itself, the EVSE will return to "
-                                   "WaitingForAuthentication afterwards.";
                 } else {
                     internal_context.reinit_timer_active = false;
                 }
@@ -1410,13 +1422,12 @@ bool Charger::switch_three_phases_while_charging(bool n) {
 }
 
 void Charger::setup(bool has_ventilation, const ChargeMode _charge_mode, bool _ac_hlc_enabled,
-                    bool _ac_hlc_use_5percent, bool _ac_enforce_hlc,
-                    float _soft_over_current_tolerance_percent, float _soft_over_current_measurement_noise_A,
-                    const int _switch_3ph1ph_delay_s, const std::string _switch_3ph1ph_cp_state,
-                    const int _soft_over_current_timeout_ms, const int _state_F_after_fault_ms,
-                    const bool fail_on_powermeter_errors, const bool raise_mrec9,
+                    bool _ac_hlc_use_5percent, bool _ac_enforce_hlc, float _soft_over_current_tolerance_percent,
+                    float _soft_over_current_measurement_noise_A, const int _switch_3ph1ph_delay_s,
+                    const std::string _switch_3ph1ph_cp_state, const int _soft_over_current_timeout_ms,
+                    const int _state_F_after_fault_ms, const bool fail_on_powermeter_errors, const bool raise_mrec9,
                     const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type,
-                    const int _reinit_duration_ms) {
+                    const int _reinit_duration_ms, const std::string& _reinit_method) {
     // set up board support package
     bsp->setup(has_ventilation);
 
@@ -1439,6 +1450,7 @@ void Charger::setup(bool has_ventilation, const ChargeMode _charge_mode, bool _a
     config_context.sleep_before_enabling_pwm_hlc_mode_ms = sleep_before_enabling_pwm_hlc_mode_ms;
     config_context.session_id_type = session_id_type;
     config_context.reinit_duration_ms = _reinit_duration_ms;
+    config_context.reinit_method = types::evse_manager::string_to_reinit_state_enum(_reinit_method);
 
     if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled)
         EVLOG_info << "AC HLC mode enabled.";

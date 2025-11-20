@@ -93,6 +93,18 @@ config:
     description: Duration in milliseconds of the reinit state before going back to normal operation
     type: integer
     default: 3000
+  reinit_method:
+    description: >-
+      Control pilot behaviour during reinitialization.
+        CPStateE: set CP to state E (0 V) to simulate an unplug.
+        CPStateF: set CP to state F (-12 V) to signal a temporary unavailability.
+        CPStateX1: keep CP powered with 100% duty cycle to signal that no energy is available.
+    type: string
+    enum:
+      - CPStateE
+      - CPStateF
+      - CPStateX1
+    default: CPStateF
   dc_isolation_voltage_V:
     description: Override DC voltage used to test isolation in CableCheck.
       Default is 0, which means the voltage will be determined according to IEC 61851-23 (2023) CC.4.1.2
