@@ -1142,7 +1142,8 @@ void EvseManager::ready_to_start_charging() {
     charger->enable_disable_initial_state_publish();
 
     this->p_evse->publish_ready(true);
-    EVLOG_info << fmt::format(fmt::emphasis::bold | fg(fmt::terminal_color::green), "🌀🌀🌀 Ready to start charging 🌀🌀🌀");
+    EVLOG_info << fmt::format(fmt::emphasis::bold | fg(fmt::terminal_color::green),
+                              "🌀🌀🌀 Ready to start charging 🌀🌀🌀");
     if (!initial_powermeter_value_received) {
         EVLOG_warning << "No powermeter value received yet!";
     }
@@ -1163,12 +1164,7 @@ int32_t EvseManager::get_reservation_id() {
     return reservation_id;
 }
 
-void EvseManager::switch_DC_mode() {
-    setup_fake_DC_mode();
-}
-
 void EvseManager::switch_AC_mode() {
-    charger->start_reinit();
     setup_AC_mode();
 }
 
@@ -1220,13 +1216,14 @@ void EvseManager::setup_ac_with_soc_handling() {
     bsp->signal_event.connect([this](const CPEvent event) {
         if (event == CPEvent::CarUnplugged) {
             // configure for DC again for next session. Will reset to AC when SoC is received
-            switch_DC_mode();
+            setup_fake_DC_mode();
         }
     });
 
     // subscribe to SoC updates: As soon as we get the SoC, we can switch to basic AC mode
     r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus status) {
-        EVLOG_info << fmt::format("SoC received: {}.", status.dc_ev_ress_soc);
+        EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
+        charger->start_reinit();
         switch_AC_mode();
     });
 }
