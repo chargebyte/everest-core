@@ -328,7 +328,6 @@ private:
 
     // special funtion to switch mode while session is active
     void switch_AC_mode();
-    void switch_DC_mode();
 
     // DC handlers
     void cable_check();
