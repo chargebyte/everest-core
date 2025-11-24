@@ -207,12 +207,17 @@ void Charger::run_state_machine() {
             break;
         case EvseState::Reinit:
             if (initialize_state) {
-                session_log.evse(
-                    false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
-                                       types::evse_manager::reinit_state_enum_to_string(config_context.reinit_method),
-                                       config_context.reinit_duration_ms));
+                types::evse_manager::ReinitConfiguration config_reinit_config{config_context.reinit_method,
+                                                                              config_context.reinit_duration_ms};
+                const auto reinit_configuration = shared_context.reinit_override.value_or(config_reinit_config);
+                shared_context.reinit_override.reset();
+
+                session_log.evse(false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
+                                                    types::evse_manager::reinit_state_enum_to_string(
+                                                        reinit_configuration.state_transition),
+                                                    reinit_configuration.duration));
                 shared_context.reinit_running = true;
-                switch (config_context.reinit_method) {
+                switch (reinit_configuration.state_transition) {
                 case types::evse_manager::ReinitStateEnum::CPStateE:
                     set_cp_state_E();
                     break;
@@ -223,10 +228,10 @@ void Charger::run_state_machine() {
                     pwm_off();
                     break;
                 }
-                if (config_context.reinit_duration_ms > 0) {
+                if (reinit_configuration.duration > 0) {
                     internal_context.reinit_timer_active = true;
                     internal_context.reinit_deadline =
-                        std::chrono::steady_clock::now() + std::chrono::milliseconds(config_context.reinit_duration_ms);
+                        std::chrono::steady_clock::now() + std::chrono::milliseconds(reinit_configuration.duration);
                 } else {
                     internal_context.reinit_timer_active = false;
                 }
@@ -1206,9 +1211,31 @@ bool Charger::resume_charging_power_available() {
 }
 
 bool Charger::start_reinit() {
+    types::evse_manager::ReinitConfiguration reinit_configuration;
+    reinit_configuration.state_transition = config_context.reinit_method;
+    reinit_configuration.duration = config_context.reinit_duration_ms;
+    return start_reinit(reinit_configuration);
+}
+
+bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reinit) {
+    if (reinit.duration < 0) {
+        EVLOG_warning << "Reinit requested with negative duration: " << reinit.duration << " ms";
+        return false;
+    }
+
+    const auto reinit_duration_ms = reinit.duration;
+    const auto reinit_method = reinit.state_transition;
+
+    if (reinit_method == types::evse_manager::ReinitStateEnum::CPStateE && !supports_cp_state_E) {
+        EVLOG_warning << "Reinit requested with CP state E but BSP does not support CP state E.";
+        return false;
+    }
+
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
+    shared_context.reinit_override = reinit;
     shared_context.reinit_requested = true;
-    EVLOG_debug << "Reinit requested, delegating to main loop.";
+    EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
+                              types::evse_manager::reinit_state_enum_to_string(reinit_method), reinit_duration_ms);
     return true;
 }
 

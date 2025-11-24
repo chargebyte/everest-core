@@ -552,7 +552,7 @@ types:
         type: object
         $ref: /evse_manager#/ReinitStateEnum
       duration:
-        description: Duration of the reinitialization state transition in seconds
+        description: Duration of the reinitialization state transition in milliseconds
         type: integer
   ReinitStateEnum:
     description: >-
