@@ -143,6 +143,7 @@ public:
     bool resume_charging();
     bool resume_charging_power_available();
     bool start_reinit();
+    bool start_reinit(const types::evse_manager::ReinitConfiguration& reinit);
 
     bool cancel_transaction(const types::evse_manager::StopTransactionRequest&
                                 request); // cancel transaction ahead of time when car is still plugged
@@ -319,6 +320,7 @@ private:
         bool switch_3ph1ph_threephase_ongoing{false};
         bool reinit_requested{false};
         bool reinit_running{false};
+        std::optional<types::evse_manager::ReinitConfiguration> reinit_override;
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;

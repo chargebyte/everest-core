@@ -404,7 +404,9 @@ bool evse_managerImpl::handle_stop_transaction(types::evse_manager::StopTransact
 };
 
 bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
-    return false;
+    types::evse_manager::ReinitConfiguration reinit_configuration_ms = reinit_configuration;
+    reinit_configuration_ms.duration = reinit_configuration.duration;
+    return mod->charger->start_reinit(reinit_configuration_ms);
 }
 
 bool evse_managerImpl::handle_set_ac_charging_session_configuration(
