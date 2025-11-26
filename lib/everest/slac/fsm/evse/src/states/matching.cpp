@@ -62,7 +62,7 @@ void MatchingState::enter() {
     ctx.log_info("Entered Matching state, waiting for CM_SLAC_PARM_REQ");
     // timeout for getting CM_SLAC_PARM_REQ
     timeout_slac_parm_req =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(slac::defs::TT_EVSE_SLAC_INIT_MS);
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(ctx.slac_config.slac_init_timeout_ms);
 }
 
 FSMSimpleState::CallbackReturnType MatchingState::callback() {
@@ -160,7 +160,7 @@ FSMSimpleState::HandleEventReturnType MatchingState::handle_event(AllocatorType&
 
         // otherwise, reset timeout
         timeout_slac_parm_req =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(slac::defs::TT_EVSE_SLAC_INIT_MS);
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(ctx.slac_config.slac_init_timeout_ms);
         return sa.HANDLED_INTERNALLY;
     } else if (ev == Event::FAILED) {
         failed_count++;
@@ -171,7 +171,7 @@ FSMSimpleState::HandleEventReturnType MatchingState::handle_event(AllocatorType&
             sessions.clear();
             // timeout for getting CM_SLAC_PARM_REQ
             timeout_slac_parm_req =
-                std::chrono::steady_clock::now() + std::chrono::milliseconds(slac::defs::TT_EVSE_SLAC_INIT_MS);
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(ctx.slac_config.slac_init_timeout_ms);
             seen_slac_parm_req = false;
             num_retries = 0;
 
