@@ -82,6 +82,12 @@ provides:
           On some hardware platforms with multiple EvseSlac modules loaded this can be necessary to ensure that the initial query of the device information does not happen at the same time.
         type: integer
         default: 0
+      slac_init_timeout_ms:
+        description: Timeout for CM_SLAC_PARM.REQ. Any value below 20000 violates ISO15118-3.
+        type: integer
+        minimum: 10000
+        maximum: 50000
+        default: 40000
 metadata:
   base_license: https://directory.fsf.org/wiki/License:BSD-3-Clause-Clear
   license: https://opensource.org/licenses/Apache-2.0
