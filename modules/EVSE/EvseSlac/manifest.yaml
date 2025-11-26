@@ -76,6 +76,12 @@ provides:
           To react to this message and restart the SLAC process, the EVSE go to the reset state here.
         type: boolean
         default: true
+      slac_init_timeout_ms:
+        description: Timeout for CM_SLAC_PARM.REQ. Any value below 20000 violates ISO15118-3.
+        type: integer
+        minimum: 10000
+        maximum: 50000
+        default: 40000
 metadata:
   base_license: https://directory.fsf.org/wiki/License:BSD-3-Clause-Clear
   license: https://opensource.org/licenses/Apache-2.0
