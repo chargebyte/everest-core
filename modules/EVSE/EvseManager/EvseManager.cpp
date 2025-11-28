@@ -1429,8 +1429,8 @@ void EvseManager::setup_fake_DC_mode() {
     // Set up energy transfer modes for HLC. For now we only support either DC or AC, not both at the same time.
     std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
 
-    transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
     transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
+    transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
     transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_combo_core);
     transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_unique);
 
