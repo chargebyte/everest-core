@@ -1431,8 +1431,6 @@ void EvseManager::setup_fake_DC_mode() {
 
     transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
     transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
-    transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_combo_core);
-    transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_unique);
 
     types::iso15118::DcEvsePresentVoltageCurrent present_values;
     present_values.evse_present_voltage = 400; // FIXME: set a correct values
