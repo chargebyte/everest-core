@@ -417,6 +417,7 @@ static void wait_for_peer_close(int fd, int timeout_ms) {
 static void* connection_handle_tcp(void* data) {
     struct v2g_connection* conn = static_cast<struct v2g_connection*>(data);
     int rv = 0;
+    bool error_occurred{false};
 
     dlog(DLOG_LEVEL_INFO, "Started new TCP connection thread");
 
@@ -441,6 +442,7 @@ static void* connection_handle_tcp(void* data) {
 
     if (shutdown(conn->conn.socket_fd, SHUT_WR) == -1) {
         dlog(DLOG_LEVEL_ERROR, "shutdown() failed: %s", strerror(errno));
+        error_occurred = true;
     }
 
     /* wait briefly for peer FIN or timeout */
@@ -448,8 +450,12 @@ static void* connection_handle_tcp(void* data) {
 
     if (close(conn->conn.socket_fd) == -1) {
         dlog(DLOG_LEVEL_ERROR, "close() failed: %s", strerror(errno));
+        error_occurred = true;
     }
-    dlog(DLOG_LEVEL_INFO, "TCP connection closed gracefully");
+
+    if (not error_occurred) {
+        dlog(DLOG_LEVEL_INFO, "TCP connection closed gracefully");
+    }
 
     if (rv != ERROR_SESSION_ALREADY_STARTED) {
         /* cleanup and notify lower layers */
