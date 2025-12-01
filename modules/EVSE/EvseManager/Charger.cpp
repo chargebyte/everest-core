@@ -1316,8 +1316,8 @@ bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reini
         return false;
     }
 
-    const auto reinit_duration_ms = reinit.duration;
-    const auto reinit_method = reinit.state_transition;
+    const auto& reinit_duration_ms = reinit.duration;
+    const auto& reinit_method = reinit.state_transition;
 
     if (reinit_method == types::evse_manager::ReinitStateEnum::CPStateE && !supports_cp_state_E) {
         EVLOG_warning << "Reinit requested with CP state E but BSP does not support CP state E.";
