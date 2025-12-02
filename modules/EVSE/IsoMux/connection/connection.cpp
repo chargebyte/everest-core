@@ -383,6 +383,7 @@ static void wait_for_peer_close(int fd, int timeout_ms) {
  */
 void* connection_handle_tcp(void* data) {
     struct v2g_connection* conn = static_cast<struct v2g_connection*>(data);
+    bool error_occurred{false};
     connection_handle(data);
     /* tear down connection gracefully */
     dlog(DLOG_LEVEL_INFO, "Multiplexer: Closing TCP connection");
@@ -391,6 +392,7 @@ void* connection_handle_tcp(void* data) {
 
     if (shutdown(conn->conn.socket_fd, SHUT_WR) == -1) {
         dlog(DLOG_LEVEL_ERROR, "shutdown() failed: %s", strerror(errno));
+        error_occurred = true;
     }
 
     /* wait briefly for peer FIN or timeout */
@@ -398,8 +400,11 @@ void* connection_handle_tcp(void* data) {
 
     if (close(conn->conn.socket_fd) == -1) {
         dlog(DLOG_LEVEL_ERROR, "close() failed: %s", strerror(errno));
+        error_occurred = true;
     }
-    dlog(DLOG_LEVEL_INFO, "Multiplexer: TCP connection closed gracefully");
+    if (not error_occurred) {
+        dlog(DLOG_LEVEL_INFO, "Multiplexer: TCP connection closed gracefully");
+    }
 
     free(conn);
     return nullptr;
