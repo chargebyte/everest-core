@@ -1359,8 +1359,11 @@ void Charger::process_pending_reinit_request() {
 
     shared_context.reinit_requested = false;
     if (shared_context.current_state not_eq EvseState::Reinit) {
-        EVLOG_info << "Processing pending reinit request.";
+        EVLOG_info << "Processing pending reinit request";
         shared_context.current_state = EvseState::Reinit;
+    }
+    else {
+        EVLOG_info << "skip reinit request. Reinit process already running";
     }
 }
 
