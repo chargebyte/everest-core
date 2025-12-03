@@ -1164,10 +1164,6 @@ int32_t EvseManager::get_reservation_id() {
     return reservation_id;
 }
 
-void EvseManager::switch_AC_mode() {
-    setup_AC_mode();
-}
-
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
@@ -1222,7 +1218,7 @@ void EvseManager::setup_ac_with_soc_handling() {
     r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus status) {
         EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
         charger->start_reinit();
-        switch_AC_mode();
+        setup_AC_mode();
     });
 }
 
