@@ -1347,6 +1347,16 @@ void Charger::process_pending_reinit_request() {
         return;
     }
 
+    if (shared_context.hlc_charging_terminate_pause != HlcTerminatePause::Pause and
+        shared_context.hlc_charging_terminate_pause != HlcTerminatePause::Terminate) {
+        if (shared_context.current_state not_eq EvseState::StoppingCharging) {
+            signal_hlc_stop_charging();
+            shared_context.current_state = EvseState::StoppingCharging;
+            return;
+        }
+        return;
+    }
+
     shared_context.reinit_requested = false;
     if (shared_context.current_state not_eq EvseState::Reinit) {
         EVLOG_info << "Processing pending reinit request.";
