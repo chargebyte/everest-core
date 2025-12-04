@@ -191,6 +191,7 @@ public:
     types::powermeter::Powermeter get_latest_powermeter_data_billing();
     types::evse_board_support::HardwareCapabilities get_hw_capabilities();
     std::atomic<bool> ready_for_capabilities{false};
+    Charger::SeccConfig build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const;
 
     std::mutex external_local_limits_mutex;
     bool update_max_current_limit(types::energy::ExternalLimits& limits, float max_current_import,
