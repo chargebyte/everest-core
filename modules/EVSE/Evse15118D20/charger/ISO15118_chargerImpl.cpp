@@ -174,6 +174,11 @@ void ISO15118_chargerImpl::ready() {
 
     const auto session_logger = std::make_unique<SessionLogger>(mod->config.logging_path);
 
+    // Publish supported app protocols
+    const types::iso15118::SupportedAppProtocols supported_app_protocols{
+        {types::iso15118::SupportedAppProtocol::ISO15118d20}};
+    this->mod->p_charger->publish_supported_app_protocols_secc(supported_app_protocols);
+
     // Obtain certificate location from the security module
     const auto certificate_response = mod->r_security->call_get_leaf_certificate_info(
         types::evse_security::LeafCertificateType::V2G, types::evse_security::EncodingFormat::PEM, false);
@@ -818,8 +823,17 @@ void ISO15118_chargerImpl::handle_no_energy_pause_charging(types::iso15118::NoEn
 
 bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     types::iso15118::SupportedAppProtocols& supported_app_protocols) {
-    // your code for cmd no_energy_pause_charging goes here
-    return false;
+    const bool supports_iso20 =
+        std::any_of(supported_app_protocols.app_protocols.begin(), supported_app_protocols.app_protocols.end(),
+                    [](const auto protocol) { return protocol == types::iso15118::SupportedAppProtocol::ISO15118d20; });
+
+    if (!supports_iso20) {
+        EVLOG_warning << "Ignoring supported app protocols update: Evse15118D20 supports ISO15118-20 only.";
+        return false;
+    }
+
+    // Nothing to update yet because this implementation only supports ISO15118-20.
+    return true;
 }
 
 void ISO15118_chargerImpl::handle_update_energy_transfer_modes(
