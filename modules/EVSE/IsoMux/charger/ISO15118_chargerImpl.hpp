@@ -75,7 +75,10 @@ private:
     const Conf& config;
     types::iso15118::SupportedAppProtocols supported_app_protocols; // aggregated set of protocols from iso2/iso20
     std::mutex supported_app_protocols_mutex;                       // guards shared protocol state
-    enum class ProtocolSource { Iso2, Iso20 };
+    enum class ProtocolSource {
+        Iso2,
+        Iso20
+    };
     std::unordered_map<types::iso15118::SupportedAppProtocol, ProtocolSource>
         protocol_sources; // tracks which instance advertised each protocol
 

@@ -2,9 +2,9 @@
 // Copyright (C) 2022-2023 chargebyte GmbH
 // Copyright (C) 2022-2023 Contributors to EVerest
 #include "ISO15118_chargerImpl.hpp"
-#include <algorithm>
 #include "log.hpp"
 #include "v2g_ctx.hpp"
+#include <algorithm>
 
 const std::string CERTS_SUB_DIR = "certs"; // relativ path of the certs
 
@@ -604,10 +604,9 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
         std::lock_guard<std::mutex> lock(supported_app_protocols_mutex);
         for (const auto protocol : supported_app_protocols.app_protocols) {
             const auto source_it = protocol_sources.find(protocol);
-            const bool known_protocol =
-                std::find(this->supported_app_protocols.app_protocols.begin(),
-                          this->supported_app_protocols.app_protocols.end(), protocol) !=
-                this->supported_app_protocols.app_protocols.end();
+            const bool known_protocol = std::find(this->supported_app_protocols.app_protocols.begin(),
+                                                  this->supported_app_protocols.app_protocols.end(),
+                                                  protocol) != this->supported_app_protocols.app_protocols.end();
             if (source_it == protocol_sources.end() || !known_protocol) {
                 EVLOG_warning << "Received update for unsupported app protocol: "
                               << types::iso15118::supported_app_protocol_to_string(protocol);
