@@ -1228,14 +1228,9 @@ void EvseManager::ready() {
     if (config.ac_with_soc) {
         setup_fake_DC_mode();
     } else {
-        charger->setup(
-            config.has_ventilation, (config.charge_mode == "DC" ? Charger::ChargeMode::DC : Charger::ChargeMode::AC),
-            hlc_enabled, config.ac_hlc_use_5percent, config.ac_enforce_hlc, config.soft_over_current_tolerance_percent,
-            config.soft_over_current_measurement_noise_A, config.switch_3ph1ph_delay_s, config.switch_3ph1ph_cp_state,
-            config.soft_over_current_timeout_ms, config.state_F_after_fault_ms, config.fail_on_powermeter_errors,
-            config.raise_mrec9, config.sleep_before_enabling_pwm_hlc_mode_ms,
-            utils::get_session_id_type_from_string(config.session_id_type), config.reinit_duration_ms,
-            config.reinit_method);
+        const auto setup_cfg = build_charger_setup_config(
+            config.charge_mode == "DC" ? Charger::ChargeMode::DC : Charger::ChargeMode::AC, hlc_enabled);
+        charger->setup(setup_cfg);
     }
 
     telemetryThreadHandle = std::thread([this]() {
@@ -1404,6 +1399,26 @@ types::evse_board_support::HardwareCapabilities EvseManager::get_hw_capabilities
     return hw_capabilities;
 }
 
+Charger::SeccConfig EvseManager::build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const {
+    return Charger::SeccConfig{config.has_ventilation,
+                               mode,
+                               ac_hlc_enabled,
+                               config.ac_hlc_use_5percent,
+                               config.ac_enforce_hlc,
+                               static_cast<float>(config.soft_over_current_tolerance_percent),
+                               static_cast<float>(config.soft_over_current_measurement_noise_A),
+                               config.switch_3ph1ph_delay_s,
+                               config.switch_3ph1ph_cp_state,
+                               config.soft_over_current_timeout_ms,
+                               config.state_F_after_fault_ms,
+                               config.fail_on_powermeter_errors,
+                               config.raise_mrec9,
+                               config.sleep_before_enabling_pwm_hlc_mode_ms,
+                               utils::get_session_id_type_from_string(config.session_id_type),
+                               config.reinit_duration_ms,
+                               config.reinit_method};
+}
+
 int32_t EvseManager::get_reservation_id() {
     Everest::scoped_lock_timeout lock(reservation_mutex, Everest::MutexDescription::EVSE_get_reservation_id);
     return reservation_id;
@@ -1412,13 +1427,7 @@ int32_t EvseManager::get_reservation_id() {
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
-    charger->setup(config.has_ventilation, Charger::ChargeMode::DC, hlc_enabled, config.ac_hlc_use_5percent,
-                   config.ac_enforce_hlc, config.soft_over_current_tolerance_percent,
-                   config.soft_over_current_measurement_noise_A, config.switch_3ph1ph_delay_s,
-                   config.switch_3ph1ph_cp_state, config.soft_over_current_timeout_ms, config.state_F_after_fault_ms,
-                   config.fail_on_powermeter_errors, config.raise_mrec9, config.sleep_before_enabling_pwm_hlc_mode_ms,
-                   utils::get_session_id_type_from_string(config.session_id_type), config.reinit_duration_ms,
-                   config.reinit_method);
+    charger->setup(build_charger_setup_config(Charger::ChargeMode::DC, hlc_enabled));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
@@ -1468,13 +1477,7 @@ void EvseManager::setup_ac_with_soc_handling() {
 }
 
 void EvseManager::setup_AC_mode(const bool hlc_enabled) {
-    charger->setup(config.has_ventilation, Charger::ChargeMode::AC, hlc_enabled, config.ac_hlc_use_5percent,
-                   config.ac_enforce_hlc, config.soft_over_current_tolerance_percent,
-                   config.soft_over_current_measurement_noise_A, config.switch_3ph1ph_delay_s,
-                   config.switch_3ph1ph_cp_state, config.soft_over_current_timeout_ms, config.state_F_after_fault_ms,
-                   config.fail_on_powermeter_errors, config.raise_mrec9, config.sleep_before_enabling_pwm_hlc_mode_ms,
-                   utils::get_session_id_type_from_string(config.session_id_type), config.reinit_duration_ms,
-                   config.reinit_method);
+    charger->setup(build_charger_setup_config(Charger::ChargeMode::AC, hlc_enabled));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
