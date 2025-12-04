@@ -4,6 +4,7 @@
 #include "ISO15118_chargerImpl.hpp"
 #include "log.hpp"
 #include "v2g_ctx.hpp"
+#include <algorithm>
 #include <string_view>
 
 const std::string CERTS_SUB_DIR = "certs"; // relativ path of the certs
@@ -27,10 +28,13 @@ void ISO15118_chargerImpl::init() {
     /* Configure hlc_protocols */
     if (mod->config.supported_DIN70121 == true) {
         v2g_ctx->supported_protocols |= (1 << V2G_PROTO_DIN70121);
+        supp_app_protocols_secc.app_protocols.push_back(types::iso15118::SupportedAppProtocol::DIN70121);
     }
     if (mod->config.supported_ISO15118_2 == true) {
         v2g_ctx->supported_protocols |= (1 << V2G_PROTO_ISO15118_2013);
+        supp_app_protocols_secc.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
     }
+    publish_supported_app_protocols_secc(supp_app_protocols_secc);
 
     /* Configure tls_security */
     if (mod->config.tls_security == "force") {
@@ -290,8 +294,43 @@ void ISO15118_chargerImpl::handle_no_energy_pause_charging(types::iso15118::NoEn
 
 bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     types::iso15118::SupportedAppProtocols& supported_app_protocols) {
-    // your code for cmd no_energy_pause_charging goes here
-    return false;
+    bool rv{true};
+    v2g_ctx->supported_protocols = 0;
+
+    for (const auto& protocol : supported_app_protocols.app_protocols) {
+        // Check if the supported app protocol is in the SECC list
+        const bool allowed = std::find(this->supp_app_protocols_secc.app_protocols.begin(),
+                                       this->supp_app_protocols_secc.app_protocols.end(),
+                                       protocol) != this->supp_app_protocols_secc.app_protocols.end();
+
+        if (!allowed) {
+            dlog(DLOG_LEVEL_WARNING, "Skip unsupported app protocol: %s",
+                 types::iso15118::supported_app_protocol_to_string(protocol).c_str());
+            rv = false;
+            continue;
+        }
+        /* Configure supported app bitmask. This bitmark is used in the supportedAppHandshake handle
+           to select the protocol */
+        switch (protocol) {
+        case types::iso15118::SupportedAppProtocol::DIN70121:
+            v2g_ctx->supported_protocols |= (1 << V2G_PROTO_DIN70121);
+            break;
+        case types::iso15118::SupportedAppProtocol::ISO15118d2:
+            v2g_ctx->supported_protocols |= (1 << V2G_PROTO_ISO15118_2013);
+            break;
+        case types::iso15118::SupportedAppProtocol::ISO15118d20:
+        default:
+            dlog(DLOG_LEVEL_WARNING, "Unsupported app protocol: %s",
+                 types::iso15118::supported_app_protocol_to_string(protocol).c_str());
+            rv = false;
+        }
+    }
+
+    if (v2g_ctx->supported_protocols == 0) {
+        dlog(DLOG_LEVEL_WARNING, "No supported app protocols provided");
+        rv = false;
+    }
+    return rv;
 }
 
 void ISO15118_chargerImpl::handle_update_energy_transfer_modes(
