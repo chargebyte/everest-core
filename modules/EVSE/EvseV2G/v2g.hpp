@@ -240,8 +240,9 @@ struct v2g_context {
     bool is_dc_charger; /* Is set to true if it is a DC charger. Value is configured after configuration of the
                            supported energy type */
     bool is_fake_dc;
-    bool debugMode;             /* To activate/deactivate the debug mode */
-    int8_t supported_protocols; /* Is an bit mask and holds the supported app protocols. See v2g_protocol enum */
+    bool debugMode; /* To activate/deactivate the debug mode */
+    std::atomic<int8_t>
+        supported_protocols; /* Is an bit mask and holds the supported app protocols. See v2g_protocol enum */
     enum v2g_protocol selected_protocol; /* Holds the selected protocole after supported app protocol */
     std::atomic<bool>
         intl_emergency_shutdown; /* Is set to true if an internal emergency_shutdown has occurred (send failed response,
