@@ -1355,8 +1355,7 @@ void Charger::process_pending_reinit_request() {
         return;
     }
 
-    if (shared_context.hlc_charging_terminate_pause != HlcTerminatePause::Pause and
-        shared_context.hlc_charging_terminate_pause != HlcTerminatePause::Terminate) {
+    if (shared_context.hlc_session_running) {
         if (shared_context.current_state not_eq EvseState::StoppingCharging) {
             signal_hlc_stop_charging();
             shared_context.current_state = EvseState::StoppingCharging;
@@ -2065,6 +2064,7 @@ void Charger::dlink_pause() {
     shared_context.hlc_allow_close_contactor = false;
     cp_state_X1();
     shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Pause;
+    shared_context.hlc_session_running = false;
 }
 
 // HLC requested end of charging session, so we can stop the 5% PWM
@@ -2073,6 +2073,7 @@ void Charger::dlink_terminate() {
     shared_context.hlc_allow_close_contactor = false;
     cp_state_X1();
     shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Terminate;
+    shared_context.hlc_session_running = false;
 }
 
 void Charger::dlink_error() {
@@ -2123,9 +2124,10 @@ void Charger::dlink_error() {
     }
 }
 
-void Charger::set_hlc_charging_active() {
+void Charger::set_hlc_session_running() {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_set_hlc_charging_active);
     shared_context.hlc_charging_active = true;
+    shared_context.hlc_session_running = true;
 }
 
 void Charger::set_hlc_allow_close_contactor(bool on) {
