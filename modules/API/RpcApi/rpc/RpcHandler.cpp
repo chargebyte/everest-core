@@ -147,6 +147,9 @@ void RpcHandler::init_rpc_api() {
     m_rpc_server->Add(methods::METHOD_EVSE_SET_AC_CHARGING_PHASE_COUNT,
                       get_handle(&methods::Evse::set_ac_charging_phase_count, m_methods_evse, m_precision),
                       {"evse_index", "phase_count"});
+    m_rpc_server->Add(methods::METHOD_EVSE_SET_AC_SESSION_CONFIGURATION,
+                      get_handle(&methods::Evse::set_ac_charging_session_configuration, m_methods_evse, m_precision),
+                      {"evse_index", "ac_session_configuration"});
     // TODO: m_rpc_server->Add(methods::METHOD_EVSE_SET_DC_CHARGING, (get_handle(&methods::Evse::set_dc_charging,
     // m_methods_evse, m_precision)),
     //                  {"evse_index", "charging_allowed", "max_power"});
@@ -156,6 +159,9 @@ void RpcHandler::init_rpc_api() {
     m_rpc_server->Add(methods::METHOD_EVSE_ENABLE_CONNECTOR,
                       get_handle(&methods::Evse::enable_connector, m_methods_evse, m_precision),
                       {"evse_index", "connector_index", "enable", "priority"});
+    m_rpc_server->Add(methods::METHOD_EVSE_REINIT_CHARGING_SESSION,
+                      get_handle(&methods::Evse::reinit_charging_session, m_methods_evse, m_precision),
+                      {"evse_index", "reinit_configuration"});
 }
 
 void RpcHandler::init_transport_interfaces() {

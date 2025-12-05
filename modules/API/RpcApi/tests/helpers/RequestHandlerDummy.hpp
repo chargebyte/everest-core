@@ -21,9 +21,15 @@ public:
     types::json_rpc_api::ErrorResObj set_ac_charging_phase_count(const int32_t evse_index, int phase_count) override;
     types::json_rpc_api::ErrorResObj set_dc_charging(const int32_t evse_index, bool charging_allowed,
                                                      float max_power) override;
+    types::json_rpc_api::ErrorResObj set_ac_charging_session_configuration(
+        const int32_t evse_index,
+        const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) override;
     types::json_rpc_api::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power) override;
     types::json_rpc_api::ErrorResObj enable_connector(const int32_t evse_index, int connector_id, bool enable,
                                                       int priority) override;
+    types::json_rpc_api::ErrorResObj
+    reinit_charging_session(const int32_t evse_index,
+                            std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) override;
 
 private:
     data::DataStoreCharger& data_store;

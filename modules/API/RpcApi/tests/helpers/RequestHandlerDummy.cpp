@@ -48,6 +48,11 @@ types::json_rpc_api::ErrorResObj RequestHandlerDummy::set_ac_charging_phase_coun
     types::json_rpc_api::ErrorResObj res{types::json_rpc_api::ResponseErrorEnum::NoError};
     return res;
 }
+types::json_rpc_api::ErrorResObj RequestHandlerDummy::set_ac_charging_session_configuration(
+    const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) {
+    types::json_rpc_api::ErrorResObj res{types::json_rpc_api::ResponseErrorEnum::NoError};
+    return res;
+}
 types::json_rpc_api::ErrorResObj RequestHandlerDummy::set_dc_charging(const int32_t evse_index, bool charging_allowed,
                                                                       float max_power) {
     types::json_rpc_api::ErrorResObj res{types::json_rpc_api::ResponseErrorEnum::NoError};
@@ -59,6 +64,11 @@ types::json_rpc_api::ErrorResObj RequestHandlerDummy::set_dc_charging_power(cons
 }
 types::json_rpc_api::ErrorResObj RequestHandlerDummy::enable_connector(const int32_t evse_index, int connector_id,
                                                                        bool enable, int priority) {
+    types::json_rpc_api::ErrorResObj res{types::json_rpc_api::ResponseErrorEnum::NoError};
+    return res;
+}
+types::json_rpc_api::ErrorResObj RequestHandlerDummy::reinit_charging_session(
+    const int32_t evse_index, std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) {
     types::json_rpc_api::ErrorResObj res{types::json_rpc_api::ResponseErrorEnum::NoError};
     return res;
 }

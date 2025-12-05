@@ -295,6 +295,58 @@ ErrorResObj RpcApiRequestHandler::set_ac_charging_phase_count(const int32_t evse
     return res;
 }
 
+ErrorResObj RpcApiRequestHandler::set_ac_charging_session_configuration(
+    const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) {
+    ErrorResObj res{};
+
+    // find the EVSE manager for the given index
+    const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [&evse_index](const auto& manager) {
+        return (manager->get_mapping().has_value() && (manager->get_mapping().value().evse == evse_index));
+    });
+
+    if (it == evse_managers.end()) {
+        res.error = ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        EVLOG_warning << "No EVSE manager found for index: " << evse_index;
+        return res;
+    }
+
+    auto& evse_manager = *it;
+
+    types::evse_manager::ACChargingSessionConfiguration ac_charging_session_configuration;
+    ac_charging_session_configuration.allow_isod20 = ac_session_configuration.allow_isod20;
+    ac_charging_session_configuration.allow_isod2 = ac_session_configuration.allow_isod2;
+    ac_charging_session_configuration.allow_isod2_fake_dc = ac_session_configuration.allow_hlc_fake_dc;
+    ac_charging_session_configuration.disable_isod2_fake_dc_after_replug =
+        ac_session_configuration.disable_isod2_fake_dc_after_replug;
+    if (ac_session_configuration.reinit_configuration.has_value()) {
+        types::evse_manager::ReinitConfiguration reinit_config;
+        reinit_config.state_transition = json_rpc_api_reinit_state_enum_to_evse_manager(
+            ac_session_configuration.reinit_configuration.value().state_transition);
+        reinit_config.duration = ac_session_configuration.reinit_configuration.value().duration;
+        ac_charging_session_configuration.reinit_configuration = reinit_config;
+    }
+    if (ac_session_configuration.phase_switch_configuration.has_value()) {
+        types::evse_manager::PhaseSwitchConfiguration phase_switch_config;
+        phase_switch_config.reinit_configuration.state_transition = json_rpc_api_reinit_state_enum_to_evse_manager(
+            ac_session_configuration.phase_switch_configuration.value().state_transition);
+        phase_switch_config.reinit_configuration.duration =
+            ac_session_configuration.phase_switch_configuration.value().duration;
+        ac_charging_session_configuration.phase_switch_configuration = phase_switch_config;
+    }
+    ac_charging_session_configuration.mac_filter = ac_session_configuration.mac_filter;
+
+    const bool result = evse_manager->call_set_ac_charging_session_configuration(ac_charging_session_configuration);
+    if (result) {
+        res.error = ResponseErrorEnum::NoError;
+        EVLOG_debug << "Set AC charging session configuration on EVSE index: " << evse_index;
+    } else {
+        res.error = ResponseErrorEnum::ErrorValuesNotApplied;
+        EVLOG_warning << "Failed to set AC charging session configuration on EVSE index: " << evse_index;
+    }
+
+    return res;
+}
+
 ErrorResObj RpcApiRequestHandler::set_dc_charging(const int32_t evse_index, bool charging_allowed, float max_power) {
     (void)evse_index;
     (void)charging_allowed;
@@ -320,6 +372,7 @@ ErrorResObj RpcApiRequestHandler::enable_connector(const int32_t evse_index, int
                                                    int priority) {
     ErrorResObj res{};
 
+    // find the EVSE manager for the given index
     const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [&evse_index](const auto& manager) {
         return (manager->get_mapping().has_value() && (manager->get_mapping().value().evse == evse_index));
     });
@@ -352,6 +405,45 @@ ErrorResObj RpcApiRequestHandler::enable_connector(const int32_t evse_index, int
     return res;
 }
 
+ErrorResObj RpcApiRequestHandler::reinit_charging_session(
+    const int32_t evse_index, std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) {
+    ErrorResObj res{};
+
+    // find the EVSE manager for the given index
+    const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [&evse_index](const auto& manager) {
+        return (manager->get_mapping().has_value() && (manager->get_mapping().value().evse == evse_index));
+    });
+
+    if (it == evse_managers.end()) {
+        res.error = ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        EVLOG_warning << "No EVSE manager found for index: " << evse_index;
+        return res;
+    }
+
+    auto& evse_manager = *it;
+
+    types::evse_manager::ReinitConfiguration evse_reinit_configuration;
+    if (reinit_configuration.has_value()) {
+        evse_reinit_configuration.state_transition =
+            json_rpc_api_reinit_state_enum_to_evse_manager(reinit_configuration.value().state_transition);
+        evse_reinit_configuration.duration = reinit_configuration.value().duration;
+    } else {
+        // FIXME evse_reinit_configuration now has empty, but possibly non-default values
+    }
+
+    const bool result_reinit = evse_manager->call_reinit_charging_session(evse_reinit_configuration);
+
+    if (result_reinit) {
+        res.error = ResponseErrorEnum::NoError;
+        EVLOG_debug << "Reinit configuration on EVSE index: " << evse_index << " has been updated";
+    } else {
+        res.error = ResponseErrorEnum::ErrorValuesNotApplied;
+        EVLOG_warning << "Failed to update reinit configuration on EVSE index: " << evse_index;
+    }
+
+    return res;
+}
+
 types::json_rpc_api::ErrorResObj RpcApiRequestHandler::check_active_phases_and_set_limits(const int32_t evse_index,
                                                                                           const float phy_value,
                                                                                           const bool is_power) {
@@ -378,4 +470,17 @@ types::json_rpc_api::ErrorResObj RpcApiRequestHandler::check_active_phases_and_s
     }
 
     return res;
+}
+
+types::evse_manager::ReinitStateEnum
+RpcApiRequestHandler::json_rpc_api_reinit_state_enum_to_evse_manager(types::json_rpc_api::ReinitStateEnum state) {
+    switch (state) {
+    case types::json_rpc_api::ReinitStateEnum::CPStateE:
+        return types::evse_manager::ReinitStateEnum::CPStateE;
+    case types::json_rpc_api::ReinitStateEnum::CPStateF:
+        return types::evse_manager::ReinitStateEnum::CPStateF;
+    case types::json_rpc_api::ReinitStateEnum::CPStateX1:
+        return types::evse_manager::ReinitStateEnum::CPStateX1;
+    }
+    throw std::out_of_range("Could not convert unknown ReinitStateEnum");
 }
