@@ -108,7 +108,7 @@ public:
         int sleep_before_enabling_pwm_hlc_mode_ms;
         utils::SessionIdType session_id_type;
         int reinit_duration_ms;
-        std::string reinit_method;
+        types::evse_manager::ReinitStateEnum reinit_method;
     };
 
     // Public interface to configure Charger
@@ -124,6 +124,7 @@ public:
     sigslot::signal<float> signal_max_current;
 
     void setup(const SeccConfig& cfg);
+    void setup_if_idle(const SeccConfig& cfg);
     void set_supports_cp_state_E(bool value);
 
     void enable_disable_initial_state_publish();
@@ -469,6 +470,10 @@ private:
     std::vector<types::evse_manager::EnableDisableSource> enable_disable_source_table;
     bool parse_enable_disable_source_table();
     void enable_disable_source_table_update(const types::evse_manager::EnableDisableSource& source);
+
+    void apply_setup_locked(const SeccConfig& cfg);
+    void apply_pending_setup();
+    std::optional<SeccConfig> pending_secc_setup;
 
 protected:
     // provide access for unit tests

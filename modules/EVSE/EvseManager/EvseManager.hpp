@@ -187,6 +187,7 @@ public:
     std::mutex hw_caps_mutex;
     types::evse_board_support::HardwareCapabilities get_hw_capabilities();
     Charger::SeccConfig build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const;
+    mutable std::optional<Charger::SeccConfig> current_secc_config;
 
     std::mutex external_local_limits_mutex;
     bool update_max_current_limit(types::energy::ExternalLimits& limits, float max_current_import,
@@ -214,6 +215,8 @@ public:
     void set_pnc_enabled(const bool pnc_enabled);
     void set_central_contract_validation_allowed(const bool central_contract_validation_allowed);
     void set_contract_certificate_installation_enabled(const bool contract_certificate_installation_enabled);
+
+    bool allow_isod2_fake_dc{false};
 
     sigslot::signal<types::evse_manager::SessionEvent> signalReservationEvent;
 
