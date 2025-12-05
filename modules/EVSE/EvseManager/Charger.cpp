@@ -1345,6 +1345,10 @@ void Charger::process_pending_reinit_request() {
         }
         return;
     }
+    /* in case of AC basic charging, directly stop charging */
+    if (config_context.charge_mode == ChargeMode::AC and not ac_hlc_enabled_current_session) {
+        shared_context.current_state = EvseState::StoppingCharging;
+    }
 
     shared_context.reinit_requested = false;
     if (shared_context.current_state not_eq EvseState::Reinit) {
