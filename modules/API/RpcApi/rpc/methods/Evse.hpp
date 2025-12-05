@@ -20,9 +20,11 @@ static const std::string METHOD_EVSE_GET_METER_DATA = "EVSE.GetMeterData";
 static const std::string METHOD_EVSE_SET_AC_CHARGING = "EVSE.SetACCharging";
 static const std::string METHOD_EVSE_SET_AC_CHARGING_CURRENT = "EVSE.SetACChargingCurrent";
 static const std::string METHOD_EVSE_SET_AC_CHARGING_PHASE_COUNT = "EVSE.SetACChargingPhaseCount";
+static const std::string METHOD_EVSE_SET_AC_SESSION_CONFIGURATION = "EVSE.SetACSessionConfiguration";
 static const std::string METHOD_EVSE_SET_DC_CHARGING = "EVSE.SetDCCharging";
 static const std::string METHOD_EVSE_SET_DC_CHARGING_POWER = "EVSE.SetDCChargingPower";
 static const std::string METHOD_EVSE_ENABLE_CONNECTOR = "EVSE.EnableConnector";
+static const std::string METHOD_EVSE_REINIT_CHARGING_SESSION = "EVSE.ReinitChargingSession";
 
 /// This class includes all methods of the EVSE namespace.
 /// It contains the data object and the methods to access it.
@@ -47,9 +49,18 @@ public:
                                               std::optional<int> phase_count);
     RPCDataTypes::ErrorResObj set_ac_charging_current(const int32_t evse_index, float max_current);
     RPCDataTypes::ErrorResObj set_ac_charging_phase_count(const int32_t evse_index, int phase_count);
+    RPCDataTypes::ErrorResObj set_ac_charging_session_configuration(
+        const int32_t evse_index, bool allow_isod20, bool allow_isod2, bool allow_din, bool allow_hlc_fake_dc,
+        std::optional<bool> disable_isod2_fake_dc_after_replug,
+        std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration,
+        std::optional<types::json_rpc_api::ReinitStateEnum> phase_switch_state_transition,
+        std::optional<int> phase_switch_duration, std::optional<std::vector<std::string>> mac_filter);
     RPCDataTypes::ErrorResObj set_dc_charging(const int32_t evse_index, bool charging_allowed, float max_power);
     RPCDataTypes::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power);
     RPCDataTypes::ErrorResObj enable_connector(const int32_t evse_index, int connector_id, bool enable, int priority);
+    RPCDataTypes::ErrorResObj
+    reinit_charging_session(const int32_t evse_index,
+                            std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration);
 
 private:
     // Reference to the DataStoreCharger object that holds and manages EVSE-related data.

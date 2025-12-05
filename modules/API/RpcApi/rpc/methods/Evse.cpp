@@ -158,6 +158,25 @@ RPCDataTypes::ErrorResObj Evse::set_ac_charging_phase_count(const int32_t evse_i
     return m_request_handler_ptr->set_ac_charging_phase_count(evse_index, phase_count);
 }
 
+RPCDataTypes::ErrorResObj Evse::set_ac_charging_session_configuration(
+    const int32_t evse_index, bool allow_isod20, bool allow_isod2, bool allow_din, bool allow_hlc_fake_dc,
+    std::optional<bool> disable_isod2_fake_dc_after_replug,
+    std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration,
+    std::optional<types::json_rpc_api::ReinitStateEnum> phase_switch_state_transition,
+    std::optional<int> phase_switch_duration, std::optional<std::vector<std::string>> mac_filter) {
+    RPCDataTypes::ErrorResObj res{};
+
+    const auto evse = m_dataobj.get_evse_store(evse_index);
+    if (!evse) {
+        res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        return res;
+    }
+    // TODO: Currently not implemented.
+    return m_request_handler_ptr->set_ac_charging_session_configuration(
+        evse_index, allow_isod20, allow_isod2, allow_din, allow_hlc_fake_dc, disable_isod2_fake_dc_after_replug,
+        reinit_configuration, phase_switch_state_transition, phase_switch_duration, mac_filter);
+}
+
 RPCDataTypes::ErrorResObj Evse::set_dc_charging(const int32_t evse_index, bool charging_allowed, float max_power) {
     RPCDataTypes::ErrorResObj res{};
 
@@ -199,6 +218,20 @@ RPCDataTypes::ErrorResObj Evse::enable_connector(const int32_t evse_index, int c
         return res;
     }
     return m_request_handler_ptr->enable_connector(evse_index, connector_index, enable, priority);
+}
+
+RPCDataTypes::ErrorResObj
+Evse::reinit_charging_session(const int32_t evse_index,
+                              std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) {
+    RPCDataTypes::ErrorResObj res{};
+
+    const auto evse = m_dataobj.get_evse_store(evse_index);
+    if (!evse) {
+        res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        return res;
+    }
+    // TODO: Currently not implemented.
+    return m_request_handler_ptr->reinit_charging_session(evse_index, reinit_configuration);
 }
 
 } // namespace methods

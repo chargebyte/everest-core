@@ -97,6 +97,17 @@ types:
       - DC_ACDP
       - DC_ACDP_BPT
       - WPT
+  ReinitStateEnum:
+    description: >-
+      State to use for reinitialization or AC phase switching
+        CPStateE: CP State E (0V). This state appears as an unplug event on the Control Pilot line for the EV.
+        CPStateF: CP State F (-12V), 0% duty cycle
+        CPStateX1: CP powered on with 100% duty cycle
+    type: string
+    enum:
+      - CPStateE
+      - CPStateF
+      - CPStateX1
   Severity:
     description: Severity of an error
     type: string
@@ -414,6 +425,21 @@ types:
       firmware_version:
         description: firmware_version
         type: string
+  ReinitConfigurationObj:
+    description: Reinit configuration
+    type: object
+    additionalProperties: false
+    required:
+      - state_transition
+      - duration
+    properties:
+      state_transition:
+        description: which state should be applied to initiate a re-init
+        type: object
+        $ref: /json_rpc_api#/ReinitStateEnum
+      duration:
+        description: how long the state should be applied, in seconds
+        type: integer
   HardwareCapabilitiesObj:
     description: Hardware capabilities
     type: object

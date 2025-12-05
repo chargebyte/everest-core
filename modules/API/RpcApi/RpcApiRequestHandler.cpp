@@ -289,6 +289,52 @@ ErrorResObj RpcApiRequestHandler::set_ac_charging_phase_count(const int32_t evse
     return res;
 }
 
+ErrorResObj RpcApiRequestHandler::set_ac_charging_session_configuration(
+    const int32_t evse_index, bool allow_isod20, bool allow_isod2, bool allow_din, bool allow_hlc_fake_dc,
+    std::optional<bool> disable_isod2_fake_dc_after_replug,
+    std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration,
+    std::optional<types::json_rpc_api::ReinitStateEnum> phase_switch_state_transition,
+    std::optional<int> phase_switch_duration, std::optional<std::vector<std::string>> mac_filter) {
+    ErrorResObj res{};
+
+    // find the EVSE manager for the given index
+    const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [&evse_index](const auto& manager) {
+        return (manager->get_mapping().has_value() && (manager->get_mapping().value().evse == evse_index));
+    });
+
+    if (it == evse_managers.end()) {
+        res.error = ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        EVLOG_warning << "No EVSE manager found for index: " << evse_index;
+        return res;
+    }
+
+    auto& evse_manager = *it;
+
+    // TODO: Currently not implemented.
+    types::evse_manager::ACChargingSessionConfiguration ac_charging_session_configuration;
+    ac_charging_session_configuration.allow_isod20 = allow_isod20;
+    ac_charging_session_configuration.allow_isod2 = allow_isod2;
+    // FIXME rename allow_hlc_fake_dc to allow_isod2_fake_dc or vide versa?
+    ac_charging_session_configuration.allow_isod2_fake_dc = allow_hlc_fake_dc;
+    // FIXME: drop allow_din from EVSE.SetACSessionConfiguration
+    if (disable_isod2_fake_dc_after_replug.has_value()) {
+        ac_charging_session_configuration.disable_isod2_fake_dc_after_replug =
+            disable_isod2_fake_dc_after_replug.value();
+    }
+    // FIXME map and copy the other optional values
+
+    const bool result = evse_manager->call_set_ac_charging_session_configuration(ac_charging_session_configuration);
+    if (result) {
+        res.error = ResponseErrorEnum::NoError;
+        EVLOG_debug << "Set AC charging session configuration on EVSE index: " << evse_index;
+    } else {
+        res.error = ResponseErrorEnum::ErrorValuesNotApplied;
+        EVLOG_warning << "Failed to set AC charging session configuration on EVSE index: " << evse_index;
+    }
+
+    return res;
+}
+
 ErrorResObj RpcApiRequestHandler::set_dc_charging(const int32_t evse_index, bool charging_allowed, float max_power) {
     ErrorResObj res{};
     res.error = ResponseErrorEnum::ErrorValuesNotApplied;
@@ -309,6 +355,7 @@ ErrorResObj RpcApiRequestHandler::enable_connector(const int32_t evse_index, int
                                                    int priority) {
     ErrorResObj res{};
 
+    // find the EVSE manager for the given index
     const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [&evse_index](const auto& manager) {
         return (manager->get_mapping().has_value() && (manager->get_mapping().value().evse == evse_index));
     });
@@ -338,6 +385,27 @@ ErrorResObj RpcApiRequestHandler::enable_connector(const int32_t evse_index, int
         EVLOG_warning << "Failed to enable/disable connector " << connector_id << " on EVSE index: " << evse_index;
     }
 
+    return res;
+}
+
+ErrorResObj RpcApiRequestHandler::reinit_charging_session(
+    const int32_t evse_index, std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) {
+    ErrorResObj res{};
+
+    // find the EVSE manager for the given index
+    const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [&evse_index](const auto& manager) {
+        return (manager->get_mapping().has_value() && (manager->get_mapping().value().evse == evse_index));
+    });
+
+    if (it == evse_managers.end()) {
+        res.error = ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        EVLOG_warning << "No EVSE manager found for index: " << evse_index;
+        return res;
+    }
+
+    auto& evse_manager = *it;
+
+    // TODO: Currently not implemented.
     return res;
 }
 
