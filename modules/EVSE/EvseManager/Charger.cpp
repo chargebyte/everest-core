@@ -1335,10 +1335,18 @@ bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reini
     }
 
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
-    shared_context.reinit_override = reinit;
-    shared_context.reinit_requested = true;
-    EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
-                              types::evse_manager::reinit_state_enum_to_string(reinit_method), reinit_duration_ms);
+
+    if (shared_context.reinit_running == false) {
+        shared_context.reinit_override = reinit;
+        shared_context.reinit_requested = true;
+        EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
+                                  types::evse_manager::reinit_state_enum_to_string(reinit_method), reinit_duration_ms);
+    }
+    else {
+        EVLOG_warning << "Skip reinit request. Reinit process already running";
+        return false;
+    }
+
     return true;
 }
 
@@ -1361,13 +1369,7 @@ void Charger::process_pending_reinit_request() {
     }
 
     shared_context.reinit_requested = false;
-    if (shared_context.current_state not_eq EvseState::Reinit) {
-        EVLOG_info << "Processing pending reinit request";
-        shared_context.current_state = EvseState::Reinit;
-    }
-    else {
-        EVLOG_info << "skip reinit request. Reinit process already running";
-    }
+    shared_context.current_state = EvseState::Reinit;
 }
 
 // Cancel transaction/charging from external EvseManager interface (e.g. via OCPP)
