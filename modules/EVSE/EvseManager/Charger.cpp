@@ -178,6 +178,12 @@ void Charger::run_state_machine() {
         if (initialize_state) {
             internal_context.current_state_started = now;
             signal_state(shared_context.current_state);
+            if (shared_context.current_state == EvseState::Idle or
+                shared_context.current_state == EvseState::ChargingPausedEV or
+                shared_context.current_state == EvseState::ChargingPausedEVSE) {
+                // Only apply pending setups on state transitions to Idle or PausedEV/EVSE to avoid reapplying on every loop iteration
+                apply_pending_setup();
+            }
         }
 
         auto time_in_current_state =
@@ -1575,6 +1581,21 @@ void Charger::setup(const SeccConfig& cfg) {
     bsp->setup(cfg.has_ventilation);
 
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
+    apply_setup_locked(cfg);
+}
+
+void Charger::setup_if_idle(const SeccConfig& cfg) {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
+    if (shared_context.current_state != EvseState::Idle) {
+        pending_secc_setup = cfg;
+        return;
+    }
+
+    bsp->setup(cfg.has_ventilation);
+    apply_setup_locked(cfg);
+}
+
+void Charger::apply_setup_locked(const SeccConfig& cfg) {
     // cache our config variables
     config_context.charge_mode = cfg.charge_mode;
     ac_hlc_enabled_current_session = config_context.ac_hlc_enabled = cfg.ac_hlc_enabled;
@@ -1593,10 +1614,23 @@ void Charger::setup(const SeccConfig& cfg) {
     config_context.sleep_before_enabling_pwm_hlc_mode_ms = cfg.sleep_before_enabling_pwm_hlc_mode_ms;
     config_context.session_id_type = cfg.session_id_type;
     config_context.reinit_duration_ms = cfg.reinit_duration_ms;
-    config_context.reinit_method = types::evse_manager::string_to_reinit_state_enum(cfg.reinit_method);
+    config_context.reinit_method = cfg.reinit_method;
 
     if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled)
         EVLOG_info << "AC HLC mode enabled.";
+}
+
+void Charger::apply_pending_setup() {
+    // Called from run_state_machine while already holding state_machine_mutex
+    if (!pending_secc_setup.has_value() || shared_context.current_state != EvseState::Idle) {
+        return;
+    }
+
+    auto cfg = *pending_secc_setup;
+    pending_secc_setup.reset();
+
+    bsp->setup(cfg.has_ventilation);
+    apply_setup_locked(cfg);
 }
 
 Charger::EvseState Charger::get_current_state() {

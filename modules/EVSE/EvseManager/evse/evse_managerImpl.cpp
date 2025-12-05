@@ -426,9 +426,49 @@ bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::Reini
 
 bool evse_managerImpl::handle_set_ac_charging_session_configuration(
     types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
-    (void)ac_charging_session_configuration;
-    EVLOG_warning << "handle_set_ac_charging_session_configuration is not implemented yet";
-    return false;
+
+    types::iso15118::SupportedAppProtocols supported;
+    if (ac_charging_session_configuration.allow_isod2) {
+        supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
+    }
+    if (ac_charging_session_configuration.allow_isod20) {
+        supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d20);
+    }
+    if (ac_charging_session_configuration.allow_isod2_fake_dc) {
+        supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::DIN70121);
+
+        // Allow DIN70121 and ISO15118-2 in the fake-dc mode
+        if (ac_charging_session_configuration.allow_isod2 == false) {
+            supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
+        }
+    }
+    if (!supported.app_protocols.empty()) {
+        mod->r_hlc[0]->call_update_supported_app_protocols(supported);
+    }
+
+    if (ac_charging_session_configuration.mac_filter.has_value()) {
+        EVLOG_warning << "Ignoring AC charging session configuration with mac_filter set (not supported yet)";
+        return false;
+    }
+    auto setup_cfg = mod->build_charger_setup_config(Charger::ChargeMode::AC, mod->config.ac_hlc_enabled);
+
+    if (ac_charging_session_configuration.reinit_configuration.has_value()) {
+        setup_cfg.reinit_duration_ms = ac_charging_session_configuration.reinit_configuration->duration;
+        setup_cfg.reinit_method = ac_charging_session_configuration.reinit_configuration->state_transition;
+    }
+
+    if (ac_charging_session_configuration.phase_switch_configuration.has_value()) {
+        setup_cfg.reinit_duration_ms =
+            ac_charging_session_configuration.phase_switch_configuration->reinit_configuration.duration;
+        setup_cfg.reinit_method =
+            ac_charging_session_configuration.phase_switch_configuration->reinit_configuration.state_transition;
+    }
+
+    mod->allow_isod2_fake_dc = ac_charging_session_configuration.allow_isod2_fake_dc;
+    mod->current_secc_config = setup_cfg;
+    mod->charger->setup_if_idle(setup_cfg);
+
+    return true;
 }
 
 bool evse_managerImpl::handle_external_ready_to_start_charging() {

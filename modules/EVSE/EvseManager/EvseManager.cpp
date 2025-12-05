@@ -110,6 +110,7 @@ void EvseManager::init() {
     pnc_enabled = config.payment_enable_contract;
     central_contract_validation_allowed = config.central_contract_validation_allowed;
     contract_certificate_installation_enabled = config.contract_certificate_installation_enabled;
+    allow_isod2_fake_dc = config.ac_with_soc;
 
     reserved = false;
     reservation_id = -1;
@@ -1155,23 +1156,32 @@ types::evse_board_support::HardwareCapabilities EvseManager::get_hw_capabilities
 }
 
 Charger::SeccConfig EvseManager::build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const {
-    return Charger::SeccConfig{config.has_ventilation,
-                               mode,
-                               ac_hlc_enabled,
-                               config.ac_hlc_use_5percent,
-                               config.ac_enforce_hlc,
-                               static_cast<float>(config.soft_over_current_tolerance_percent),
-                               static_cast<float>(config.soft_over_current_measurement_noise_A),
-                               config.switch_3ph1ph_delay_s,
-                               config.switch_3ph1ph_cp_state,
-                               config.soft_over_current_timeout_ms,
-                               config.state_F_after_fault_ms,
-                               config.fail_on_powermeter_errors,
-                               config.raise_mrec9,
-                               config.sleep_before_enabling_pwm_hlc_mode_ms,
-                               utils::get_session_id_type_from_string(config.session_id_type),
-                               config.reinit_duration_ms,
-                               config.reinit_method};
+    if (!current_secc_config.has_value()) {
+        current_secc_config = Charger::SeccConfig{
+            config.has_ventilation,
+            mode,
+            ac_hlc_enabled,
+            config.ac_hlc_use_5percent,
+            config.ac_enforce_hlc,
+            static_cast<float>(config.soft_over_current_tolerance_percent),
+            static_cast<float>(config.soft_over_current_measurement_noise_A),
+            config.switch_3ph1ph_delay_s,
+            config.switch_3ph1ph_cp_state,
+            config.soft_over_current_timeout_ms,
+            config.state_F_after_fault_ms,
+            config.fail_on_powermeter_errors,
+            config.raise_mrec9,
+            config.sleep_before_enabling_pwm_hlc_mode_ms,
+            utils::get_session_id_type_from_string(config.session_id_type),
+            config.reinit_duration_ms,
+            types::evse_manager::string_to_reinit_state_enum(config.reinit_method)};
+    }
+
+    auto cfg = *current_secc_config;
+    cfg.charge_mode = mode;
+    cfg.ac_hlc_enabled = ac_hlc_enabled;
+    current_secc_config = cfg;
+    return cfg;
 }
 
 int32_t EvseManager::get_reservation_id() {
@@ -1217,7 +1227,7 @@ void EvseManager::setup_fake_DC_mode() {
 
 void EvseManager::setup_ac_with_soc_handling() {
     bsp->signal_event.connect([this](const CPEvent event) {
-        if (event == CPEvent::CarUnplugged) {
+        if (allow_isod2_fake_dc && event == CPEvent::CarPluggedIn) {
             // configure for DC again for next session. Will reset to AC when SoC is received
             setup_fake_DC_mode();
         }
@@ -1225,9 +1235,11 @@ void EvseManager::setup_ac_with_soc_handling() {
 
     // subscribe to SoC updates: As soon as we get the SoC, we can switch to basic AC mode
     r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus status) {
-        EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
-        charger->start_reinit();
-        setup_AC_mode();
+        if (allow_isod2_fake_dc) {
+            EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
+            charger->start_reinit();
+            setup_AC_mode();
+        }
     });
 }
 
