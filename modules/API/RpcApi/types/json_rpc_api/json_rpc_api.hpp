@@ -180,6 +180,7 @@ enum class EVSEStateEnum {
     ChargingPausedEV,
     ChargingPausedEVSE,
     Charging,
+    Reinit,
     AuthTimeout,
     Finished,
     FinishedEVSE,
@@ -211,6 +212,8 @@ inline std::string evsestate_enum_to_string(EVSEStateEnum e) {
         return "ChargingPausedEVSE";
     case EVSEStateEnum::Charging:
         return "Charging";
+    case EVSEStateEnum::Reinit:
+        return "Reinit";
     case EVSEStateEnum::AuthTimeout:
         return "AuthTimeout";
     case EVSEStateEnum::Finished:
@@ -259,6 +262,9 @@ inline EVSEStateEnum string_to_evsestate_enum(const std::string& s) {
     if (s == "Charging") {
         return EVSEStateEnum::Charging;
     }
+    if (s == "Reinit") {
+        return EVSEStateEnum::Reinit;
+    }
     if (s == "AuthTimeout") {
         return EVSEStateEnum::AuthTimeout;
     }
@@ -282,6 +288,50 @@ inline EVSEStateEnum string_to_evsestate_enum(const std::string& s) {
 /// os \returns an output stream with the EVSEStateEnum written to
 inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::EVSEStateEnum& evsestate_enum) {
     os << types::json_rpc_api::evsestate_enum_to_string(evsestate_enum);
+    return os;
+}
+
+enum class ReinitStateEnum {
+    CPStateE,
+    CPStateF,
+    CPStateX1,
+};
+
+/// \brief Converts the given ReinitStateEnum \p e to human readable string
+/// \returns a string representation of the ReinitStateEnum
+inline std::string reinit_state_enum_to_string(ReinitStateEnum e) {
+    switch (e) {
+    case ReinitStateEnum::CPStateE:
+        return "CPStateE";
+    case ReinitStateEnum::CPStateF:
+        return "CPStateF";
+    case ReinitStateEnum::CPStateX1:
+        return "CPStateX1";
+    }
+
+    throw std::out_of_range("No known string conversion for provided enum of type ReinitStateEnum");
+}
+
+/// \brief Converts the given std::string \p s to ReinitStateEnum
+/// \returns a ReinitStateEnum from a string representation
+inline ReinitStateEnum string_to_reinit_state_enum(const std::string& s) {
+    if (s == "CPStateE") {
+        return ReinitStateEnum::CPStateE;
+    }
+    if (s == "CPStateF") {
+        return ReinitStateEnum::CPStateF;
+    }
+    if (s == "CPStateX1") {
+        return ReinitStateEnum::CPStateX1;
+    }
+
+    throw std::out_of_range("Provided string " + s + " could not be converted to enum of type ReinitStateEnum");
+}
+
+/// \brief Writes the string representation of the given ReinitStateEnum \p reinit_state_enum to the given output
+/// stream \p os \returns an output stream with the ReinitStateEnum written to
+inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::ReinitStateEnum& reinit_state_enum) {
+    os << types::json_rpc_api::reinit_state_enum_to_string(reinit_state_enum);
     return os;
 }
 
@@ -1290,6 +1340,127 @@ struct DisplayParametersObj {
         return os;
     }
 };
+struct ReinitConfigurationObj {
+    types::json_rpc_api::ReinitStateEnum state_transition; ///< which state should be applied to initiate a re-init
+    int32_t duration;                                      ///< how long the state should be applied, in milliseconds
+
+    /// \brief Conversion from a given ReinitConfigurationObj \p k to a given json object \p j
+    friend void to_json(json& j, const ReinitConfigurationObj& k) {
+        // the required parts of the type
+        j = json{
+            {"state_transition", types::json_rpc_api::reinit_state_enum_to_string(k.state_transition)},
+            {"duration", k.duration},
+        };
+        // the optional parts of the type
+    }
+
+    /// \brief Conversion from a given json object \p j to a given ReinitConfigurationObj \p k
+    friend void from_json(const json& j, ReinitConfigurationObj& k) {
+        // the required parts of the type
+        k.state_transition = types::json_rpc_api::string_to_reinit_state_enum(j.at("state_transition"));
+        k.duration = j.at("duration");
+
+        // the optional parts of the type
+    }
+
+    /// \brief Compares objects of type ReinitConfigurationObj for equality
+    friend constexpr bool operator==(const ReinitConfigurationObj& k, const ReinitConfigurationObj& l) {
+        const auto& lhs_tuple = std::tie(k.state_transition, k.duration);
+        const auto& rhs_tuple = std::tie(l.state_transition, l.duration);
+        return lhs_tuple == rhs_tuple;
+    }
+
+    /// \brief Compares objects of type ReinitConfigurationObj for inequality
+    friend constexpr bool operator!=(const ReinitConfigurationObj& k, const ReinitConfigurationObj& l) {
+        return not operator==(k, l);
+    }
+
+    /// \brief Writes the string representation of the given ReinitConfigurationObj \p k to the given output stream \p
+    /// os \returns an output stream with the ReinitConfigurationObj written to
+    friend std::ostream& operator<<(std::ostream& os, const ReinitConfigurationObj& k) {
+        os << json(k).dump(4);
+        return os;
+    }
+};
+
+struct ACSessionConfigurationObj {
+    bool allow_isod20;                                  ///< offer ISO 15118-20 for AC charging
+    bool allow_isod2;                                   ///< offer ISO 15118-2 for AC charging
+    bool allow_hlc_fake_dc;                             ///< offer HLC DC in an AC session to expose SoC
+    std::optional<bool> disable_isod2_fake_dc_after_replug; ///< optional behavior after replug
+    std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration; ///< Reinit configuration
+    std::optional<types::json_rpc_api::ReinitConfigurationObj> phase_switch_configuration; ///< Phase switch config
+    std::optional<std::vector<std::string>> mac_filter; ///< MAC address filter list
+
+    /// \brief Conversion from a given ACSessionConfigurationObj \p k to a given json object \p j
+    friend void to_json(json& j, const ACSessionConfigurationObj& k) {
+        // the required parts of the type
+        j = json{
+            {"allow_isod20", k.allow_isod20},
+            {"allow_isod2", k.allow_isod2},
+            {"allow_hlc_fake_dc", k.allow_hlc_fake_dc},
+        };
+        // the optional parts of the type
+        if (k.disable_isod2_fake_dc_after_replug) {
+            j["disable_isod2_fake_dc_after_replug"] = k.disable_isod2_fake_dc_after_replug.value();
+        }
+        if (k.reinit_configuration) {
+            j["reinit_configuration"] = k.reinit_configuration.value();
+        }
+        if (k.phase_switch_configuration) {
+            j["phase_switch_configuration"] = k.phase_switch_configuration.value();
+        }
+        if (k.mac_filter) {
+            j["mac_filter"] = k.mac_filter.value();
+        }
+    }
+
+    /// \brief Conversion from a given json object \p j to a given ACSessionConfigurationObj \p k
+    friend void from_json(const json& j, ACSessionConfigurationObj& k) {
+        // the required parts of the type
+        k.allow_isod20 = j.at("allow_isod20");
+        k.allow_isod2 = j.at("allow_isod2");
+        k.allow_hlc_fake_dc = j.at("allow_hlc_fake_dc");
+
+        // the optional parts of the type
+        if (j.contains("disable_isod2_fake_dc_after_replug")) {
+            k.disable_isod2_fake_dc_after_replug.emplace(j.at("disable_isod2_fake_dc_after_replug"));
+        }
+        if (j.contains("reinit_configuration")) {
+            k.reinit_configuration.emplace(j.at("reinit_configuration"));
+        }
+        if (j.contains("phase_switch_configuration")) {
+            k.phase_switch_configuration.emplace(j.at("phase_switch_configuration"));
+        }
+        if (j.contains("mac_filter")) {
+            k.mac_filter.emplace(j.at("mac_filter").get<std::vector<std::string>>());
+        }
+    }
+
+    /// \brief Compares objects of type ACSessionConfigurationObj for equality
+    friend constexpr bool operator==(const ACSessionConfigurationObj& k, const ACSessionConfigurationObj& l) {
+        const auto& lhs_tuple =
+            std::tie(k.allow_isod20, k.allow_isod2, k.allow_hlc_fake_dc, k.disable_isod2_fake_dc_after_replug,
+                     k.reinit_configuration, k.phase_switch_configuration, k.mac_filter);
+        const auto& rhs_tuple =
+            std::tie(l.allow_isod20, l.allow_isod2, l.allow_hlc_fake_dc, l.disable_isod2_fake_dc_after_replug,
+                     l.reinit_configuration, l.phase_switch_configuration, l.mac_filter);
+        return lhs_tuple == rhs_tuple;
+    }
+
+    /// \brief Compares objects of type ACSessionConfigurationObj for inequality
+    friend constexpr bool operator!=(const ACSessionConfigurationObj& k, const ACSessionConfigurationObj& l) {
+        return not operator==(k, l);
+    }
+
+    /// \brief Writes the string representation of the given ACSessionConfigurationObj \p k to the given output stream
+    /// \p os \returns an output stream with the ACSessionConfigurationObj written to
+    friend std::ostream& operator<<(std::ostream& os, const ACSessionConfigurationObj& k) {
+        os << json(k).dump(4);
+        return os;
+    }
+};
+
 struct HardwareCapabilitiesObj {
     float max_current_A_export;        ///< TODO: description
     float max_current_A_import;        ///< TODO: description
@@ -1429,6 +1600,7 @@ struct EVSEStatusObj {
     bool available;                                                              ///< available
     int32_t active_connector_index;                                              ///< active_connector_index
     bool error_present;                                                          ///< error_present
+    std::optional<std::string> ev_mac;                                           ///< MAC address of the EVCC
     types::json_rpc_api::ChargeProtocolEnum charge_protocol;                     ///< charge_protocol
     types::json_rpc_api::EVSEStateEnum state;                                    ///< state
     std::optional<types::json_rpc_api::ACChargeParametersObj> ac_charge_param;   ///< ac_charge_param
@@ -1452,6 +1624,9 @@ struct EVSEStatusObj {
             {"state", types::json_rpc_api::evsestate_enum_to_string(k.state)},
         };
         // the optional parts of the type
+        if (k.ev_mac) {
+            j["ev_mac"] = k.ev_mac.value();
+        }
         if (k.ac_charge_param) {
             j["ac_charge_param"] = k.ac_charge_param.value();
         }
@@ -1483,6 +1658,9 @@ struct EVSEStatusObj {
         k.state = types::json_rpc_api::string_to_evsestate_enum(j.at("state"));
 
         // the optional parts of the type
+        if (j.contains("ev_mac")) {
+            k.ev_mac.emplace(j.at("ev_mac"));
+        }
         if (j.contains("ac_charge_param")) {
             k.ac_charge_param.emplace(j.at("ac_charge_param"));
         }
@@ -1504,11 +1682,11 @@ struct EVSEStatusObj {
     friend constexpr bool operator==(const EVSEStatusObj& k, const EVSEStatusObj& l) {
         const auto& lhs_tuple = std::tie(k.charged_energy_wh, k.discharged_energy_wh, k.charging_duration_s,
                                          k.charging_allowed, k.available, k.active_connector_index, k.error_present,
-                                         k.charge_protocol, k.state, k.ac_charge_param, k.dc_charge_param,
+                                         k.ev_mac, k.charge_protocol, k.state, k.ac_charge_param, k.dc_charge_param,
                                          k.ac_charge_status, k.dc_charge_status, k.display_parameters);
         const auto& rhs_tuple = std::tie(l.charged_energy_wh, l.discharged_energy_wh, l.charging_duration_s,
                                          l.charging_allowed, l.available, l.active_connector_index, l.error_present,
-                                         l.charge_protocol, l.state, l.ac_charge_param, l.dc_charge_param,
+                                         l.ev_mac, l.charge_protocol, l.state, l.ac_charge_param, l.dc_charge_param,
                                          l.ac_charge_status, l.dc_charge_status, l.display_parameters);
         return lhs_tuple == rhs_tuple;
     }
