@@ -181,6 +181,9 @@ types::energy::EvseState to_energy_evse_state(const Charger::EvseState charger_s
     case Charger::EvseState::Replug:
         return types::energy::EvseState::PrepareCharging;
         break;
+    case Charger::EvseState::Reinit:
+        return types::energy::EvseState::PrepareCharging;
+        break;
     }
     return types::energy::EvseState::Disabled;
 }
