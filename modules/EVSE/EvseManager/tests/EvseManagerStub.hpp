@@ -52,6 +52,9 @@ struct evse_managerImplStub : public evse_managerImplBase {
     virtual bool handle_stop_transaction(types::evse_manager::StopTransactionRequest& request) {
         return true;
     }
+    virtual bool handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
+        return true;
+    }
     virtual bool handle_force_unlock(int& connector_id) {
         return true;
     }
