@@ -67,6 +67,10 @@ struct evse_managerImplStub : public evse_managerImplBase {
     virtual bool handle_external_ready_to_start_charging() {
         return true;
     }
+    virtual bool handle_set_ac_charging_session_configuration(
+        types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+        return true;
+    }
     virtual void handle_set_plug_and_charge_configuration(
         types::evse_manager::PlugAndChargeConfiguration& plug_and_charge_configuration) {
     }
