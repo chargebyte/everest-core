@@ -691,6 +691,8 @@ void IECStateMachine::set_cp_state_X1() {
 }
 void IECStateMachine::set_cp_state_F() {
 }
+void IECStateMachine::set_cp_state_E() {
+}
 
 void IECStateMachine::enable(bool en) {
 }

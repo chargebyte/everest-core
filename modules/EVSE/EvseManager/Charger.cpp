@@ -1201,7 +1201,7 @@ void Charger::set_cp_state_E() {
     shared_context.pwm_running = false;
     internal_context.update_pwm_last_dc = 0.;
     internal_context.pwm_set_last_ampere = 0.;
-    internal_context.pwm_F_active = false;
+    internal_context.cp_state_F_active = false;
     bsp->set_cp_state_E();
 }
 
