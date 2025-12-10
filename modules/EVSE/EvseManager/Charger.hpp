@@ -41,6 +41,7 @@
 #include <sigslot/signal.hpp>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include "ErrorHandling.hpp"
 #include "EventQueue.hpp"
@@ -191,6 +192,7 @@ public:
     void request_error_sequence();
 
     void set_matching_started(bool m);
+    void set_matched(bool matched);
 
     void notify_currentdemand_started();
 
@@ -316,7 +318,8 @@ private:
         bool authorized;
         // set to true if auth is from PnC, otherwise to false (EIM)
         bool authorized_pnc;
-        bool matching_started;
+        std::atomic_bool matching_started{false};
+        std::atomic_bool slac_matched{false};
         float max_current;
         std::chrono::time_point<std::chrono::steady_clock> max_current_valid_until;
         float max_current_cable{0.};
@@ -398,7 +401,7 @@ private:
         EvseState t_step_EF_return_state;
         float t_step_EF_return_pwm;
         float t_step_EF_return_ampere;
-        int slac_reset_counter{0};
+        std::atomic_int slac_reset_counter{0};
 
         EvseState switching_phases_return_state;
 

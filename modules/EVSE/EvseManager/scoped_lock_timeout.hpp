@@ -42,7 +42,6 @@ enum class MutexDescription {
     Charger_get_max_current,
     Charger_set_current_drawn_by_vehicle,
     Charger_request_error_sequence,
-    Charger_set_matching_started,
     Charger_notify_currentdemand_started,
     Charger_inform_new_evse_max_hlc_limits,
     Charger_get_evse_max_hlc_limits,
@@ -144,8 +143,6 @@ static std::string to_string(MutexDescription d) {
         return "Charger.cpp: set_current_drawn_by_vehicle";
     case MutexDescription::Charger_request_error_sequence:
         return "Charger.cpp: request_error_sequence";
-    case MutexDescription::Charger_set_matching_started:
-        return "Charger.cpp: set_matching_started";
     case MutexDescription::Charger_notify_currentdemand_started:
         return "Charger.cpp: notify_currentdemand_started";
     case MutexDescription::Charger_inform_new_evse_max_hlc_limits:
