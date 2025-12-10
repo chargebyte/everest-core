@@ -141,9 +141,7 @@ void RpcHandler::init_rpc_api() {
                       {"evse_index", "phase_count"});
     m_rpc_server->Add(methods::METHOD_EVSE_SET_AC_SESSION_CONFIGURATION,
                       get_handle(&methods::Evse::set_ac_charging_session_configuration, m_methods_evse, m_precision),
-                      {"evse_index", "allow_isod20", "allow_isod2", "allow_din", "allow_hlc_fake_dc",
-                       "disable_isod2_fake_dc_after_replug", "reinit_configuration", "phase_switch_state_transition",
-                       "phase_switch_duration", "mac_filter"});
+                      {"evse_index", "ac_session_configuration"});
     // TODO: m_rpc_server->Add(methods::METHOD_EVSE_SET_DC_CHARGING, (get_handle(&methods::Evse::set_dc_charging,
     // m_methods_evse, m_precision)),
     //                  {"evse_index", "charging_allowed", "max_power"});

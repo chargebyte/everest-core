@@ -24,11 +24,7 @@ public:
     types::json_rpc_api::ErrorResObj set_ac_charging_current(const int32_t evse_index, float max_current) override;
     types::json_rpc_api::ErrorResObj set_ac_charging_phase_count(const int32_t evse_index, int phase_count) override;
     types::json_rpc_api::ErrorResObj set_ac_charging_session_configuration(
-        const int32_t evse_index, bool allow_isod20, bool allow_isod2, bool allow_din, bool allow_hlc_fake_dc,
-        std::optional<bool> disable_isod2_fake_dc_after_replug,
-        std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration,
-        std::optional<types::json_rpc_api::ReinitStateEnum> phase_switch_state_transition,
-        std::optional<int> phase_switch_duration, std::optional<std::vector<std::string>> mac_filter);
+        const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration);
     types::json_rpc_api::ErrorResObj set_dc_charging(const int32_t evse_index, bool charging_allowed,
                                                      float max_power) override;
     types::json_rpc_api::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power) override;
@@ -46,6 +42,8 @@ private:
     template <typename T>
     types::json_rpc_api::ErrorResObj set_external_limit(int32_t evse_index, T value,
                                                         std::function<types::energy::ExternalLimits(T)> make_limits);
+    types::evse_manager::ReinitStateEnum
+    json_rpc_api_reinit_state_enum_to_evse_manager(types::json_rpc_api::ReinitStateEnum state);
 
     const std::vector<std::unique_ptr<evse_managerIntf>>& evse_managers;
     const std::vector<std::unique_ptr<external_energy_limitsIntf>>& evse_energy_sink;

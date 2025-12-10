@@ -438,8 +438,55 @@ types:
         type: object
         $ref: /json_rpc_api#/ReinitStateEnum
       duration:
-        description: how long the state should be applied, in seconds
+        description: how long the state should be applied, in milliseconds
         type: integer
+  ACSessionConfigurationObj:
+    description: AC session configuration
+    type: object
+    additionalProperties: false
+    required:
+      - allow_isod20
+      - allow_isod2
+      - allow_hlc_fake_dc
+    properties:
+      allow_isod20:
+        description: offer ISO 15118-20 for AC charging
+        type: boolean
+      allow_isod2:
+        description: offer ISO 15118-2 for AC charging
+        type: boolean
+      allow_hlc_fake_dc:
+        description: offer HLC DC in an AC session to trick the EV into exposing its SoC
+        type: boolean
+      disable_isod2_fake_dc_after_replug:
+        description: >-
+          Not yet implemented.
+          Not all EV implementations allow re-initialization via a CP transition and expect the plug
+          to be re-plugged in order to establish a new session. This parameter allows to start a basic
+          AC PWM session to be established after retrieving the SOC value and replugging of the plug.
+          After setting the parameter to “true,” it is possible to establish a basic AC PWM session
+          for 60 seconds after receiving the SOC value. After a timeout, the fake DC sequence is
+          activated again.
+        type: boolean
+      reinit_configuration:
+        description: Reinit configuration
+        type: object
+        $ref: /json_rpc_api#/ReinitConfigurationObj
+      phase_switch_configuration:
+        description: Phase switch configuration
+        type: object
+        $ref: /json_rpc_api#/ReinitConfigurationObj
+      mac_filter:
+        description: >-
+          List of MAC addresses where the AC charging session configuration applies.
+          The MAC should have the format “XX:XX:XX:XX:XX:XX” for a full 48-bit address, or “XX:XX:XX”
+          for an Organizationally Unique Identifier (OUI, first 3 octets).
+          It is not necessary to specify a complete 48-bit address; specifying an OUI will apply the
+          configuration to all MAC addresses with that prefix.
+        type: array
+        items:
+          type: string
+          pattern: ^[A-Fa-f0-9]{2}(:[A-Fa-f0-9]{2}){2,5}$
   HardwareCapabilitiesObj:
     description: Hardware capabilities
     type: object

@@ -159,11 +159,7 @@ RPCDataTypes::ErrorResObj Evse::set_ac_charging_phase_count(const int32_t evse_i
 }
 
 RPCDataTypes::ErrorResObj Evse::set_ac_charging_session_configuration(
-    const int32_t evse_index, bool allow_isod20, bool allow_isod2, bool allow_din, bool allow_hlc_fake_dc,
-    std::optional<bool> disable_isod2_fake_dc_after_replug,
-    std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration,
-    std::optional<types::json_rpc_api::ReinitStateEnum> phase_switch_state_transition,
-    std::optional<int> phase_switch_duration, std::optional<std::vector<std::string>> mac_filter) {
+    const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) {
     RPCDataTypes::ErrorResObj res{};
 
     const auto evse = m_dataobj.get_evse_store(evse_index);
@@ -172,9 +168,7 @@ RPCDataTypes::ErrorResObj Evse::set_ac_charging_session_configuration(
         return res;
     }
     // TODO: Currently not implemented.
-    return m_request_handler_ptr->set_ac_charging_session_configuration(
-        evse_index, allow_isod20, allow_isod2, allow_din, allow_hlc_fake_dc, disable_isod2_fake_dc_after_replug,
-        reinit_configuration, phase_switch_state_transition, phase_switch_duration, mac_filter);
+    return m_request_handler_ptr->set_ac_charging_session_configuration(evse_index, ac_session_configuration);
 }
 
 RPCDataTypes::ErrorResObj Evse::set_dc_charging(const int32_t evse_index, bool charging_allowed, float max_power) {

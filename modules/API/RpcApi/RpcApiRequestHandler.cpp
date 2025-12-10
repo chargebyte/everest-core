@@ -290,11 +290,7 @@ ErrorResObj RpcApiRequestHandler::set_ac_charging_phase_count(const int32_t evse
 }
 
 ErrorResObj RpcApiRequestHandler::set_ac_charging_session_configuration(
-    const int32_t evse_index, bool allow_isod20, bool allow_isod2, bool allow_din, bool allow_hlc_fake_dc,
-    std::optional<bool> disable_isod2_fake_dc_after_replug,
-    std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration,
-    std::optional<types::json_rpc_api::ReinitStateEnum> phase_switch_state_transition,
-    std::optional<int> phase_switch_duration, std::optional<std::vector<std::string>> mac_filter) {
+    const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) {
     ErrorResObj res{};
 
     // find the EVSE manager for the given index
@@ -310,18 +306,28 @@ ErrorResObj RpcApiRequestHandler::set_ac_charging_session_configuration(
 
     auto& evse_manager = *it;
 
-    // TODO: Currently not implemented.
     types::evse_manager::ACChargingSessionConfiguration ac_charging_session_configuration;
-    ac_charging_session_configuration.allow_isod20 = allow_isod20;
-    ac_charging_session_configuration.allow_isod2 = allow_isod2;
-    // FIXME rename allow_hlc_fake_dc to allow_isod2_fake_dc or vide versa?
-    ac_charging_session_configuration.allow_isod2_fake_dc = allow_hlc_fake_dc;
-    // FIXME: drop allow_din from EVSE.SetACSessionConfiguration
-    if (disable_isod2_fake_dc_after_replug.has_value()) {
-        ac_charging_session_configuration.disable_isod2_fake_dc_after_replug =
-            disable_isod2_fake_dc_after_replug.value();
+    ac_charging_session_configuration.allow_isod20 = ac_session_configuration.allow_isod20;
+    ac_charging_session_configuration.allow_isod2 = ac_session_configuration.allow_isod2;
+    ac_charging_session_configuration.allow_isod2_fake_dc = ac_session_configuration.allow_hlc_fake_dc;
+    ac_charging_session_configuration.disable_isod2_fake_dc_after_replug =
+        ac_session_configuration.disable_isod2_fake_dc_after_replug;
+    if (ac_session_configuration.reinit_configuration.has_value()) {
+        types::evse_manager::ReinitConfiguration reinit_config;
+        reinit_config.state_transition = json_rpc_api_reinit_state_enum_to_evse_manager(
+            ac_session_configuration.reinit_configuration.value().state_transition);
+        reinit_config.duration = ac_session_configuration.reinit_configuration.value().duration;
+        ac_charging_session_configuration.reinit_configuration = reinit_config;
     }
-    // FIXME map and copy the other optional values
+    if (ac_session_configuration.phase_switch_configuration.has_value()) {
+        types::evse_manager::PhaseSwitchConfiguration phase_switch_config;
+        phase_switch_config.reinit_configuration.state_transition = json_rpc_api_reinit_state_enum_to_evse_manager(
+            ac_session_configuration.phase_switch_configuration.value().state_transition);
+        phase_switch_config.reinit_configuration.duration =
+            ac_session_configuration.phase_switch_configuration.value().duration;
+        ac_charging_session_configuration.phase_switch_configuration = phase_switch_config;
+    }
+    ac_charging_session_configuration.mac_filter = ac_session_configuration.mac_filter;
 
     const bool result = evse_manager->call_set_ac_charging_session_configuration(ac_charging_session_configuration);
     if (result) {
@@ -436,4 +442,17 @@ types::json_rpc_api::ErrorResObj RpcApiRequestHandler::check_active_phases_and_s
     }
 
     return res;
+}
+
+types::evse_manager::ReinitStateEnum
+RpcApiRequestHandler::json_rpc_api_reinit_state_enum_to_evse_manager(types::json_rpc_api::ReinitStateEnum state) {
+    switch (state) {
+    case types::json_rpc_api::ReinitStateEnum::CPStateE:
+        return types::evse_manager::ReinitStateEnum::CPStateE;
+    case types::json_rpc_api::ReinitStateEnum::CPStateF:
+        return types::evse_manager::ReinitStateEnum::CPStateF;
+    case types::json_rpc_api::ReinitStateEnum::CPStateX1:
+        return types::evse_manager::ReinitStateEnum::CPStateX1;
+    }
+    throw std::out_of_range("Could not convert unknown ReinitStateEnum");
 }
