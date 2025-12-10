@@ -701,8 +701,8 @@ void Charger::run_state_machine() {
                     } else {
                         // We have power and PWM is on, but EV did not proceed to state C yet (and/or HLC is not
                         // ready)
-                        if (not shared_context.hlc_charging_active and not shared_context.legacy_wakeup_done and
-                            time_in_current_state > LEGACY_WAKEUP_TIMEOUT) {
+                        if (not shared_context.hlc_charging_active and not hlc_use_5percent_current_session and
+                            not shared_context.legacy_wakeup_done and time_in_current_state > LEGACY_WAKEUP_TIMEOUT) {
                             session_log.evse(false, "EV did not transition to state C, trying one legacy wakeup "
                                                     "according to IEC61851-1 A.5.3");
                             shared_context.legacy_wakeup_done = true;
