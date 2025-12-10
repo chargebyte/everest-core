@@ -1441,7 +1441,7 @@ int32_t EvseManager::get_reservation_id() {
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
-    charger->setup(build_charger_setup_config(Charger::ChargeMode::DC, hlc_enabled));
+    charger->setup(build_charger_setup_config(Charger::ChargeMode::AC, hlc_enabled));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
