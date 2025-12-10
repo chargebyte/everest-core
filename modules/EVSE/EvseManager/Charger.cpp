@@ -177,8 +177,10 @@ void Charger::run_state_machine() {
             signal_state(shared_context.current_state);
             if (shared_context.current_state == EvseState::Idle or
                 shared_context.current_state == EvseState::ChargingPausedEV or
-                shared_context.current_state == EvseState::ChargingPausedEVSE) {
-                // Only apply pending setups on state transitions to Idle or PausedEV/EVSE to avoid reapplying on every loop iteration
+                shared_context.current_state == EvseState::ChargingPausedEVSE or
+                shared_context.current_state == EvseState::Reinit) {
+                // Only apply pending setups on state transitions to Idle, PausedEV/EVSE or Reinit to avoid reapplying on every
+                // loop iteration
                 apply_pending_setup();
             }
         }
