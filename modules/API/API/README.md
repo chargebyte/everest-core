@@ -278,6 +278,40 @@ in the EVerest documentation.
 ### everest_api/evse_manager/cmd/force_unlock
 Command to force unlock a connector on the EVSE. The payload should be a positive integer identifying the connector that should be unlocked. If the payload is empty or cannot be converted to an integer connector 1 is assumed.
 
+### everest_api/evse_manager/cmd/reinit_charging_session
+Reinitializes an active/paused charging session. Payload must be a JSON ReinitConfiguration:
+```json
+{
+    "state_transition": "CPStateE",
+    "duration": 4000
+}
+```
+state_transition can be CPStateE, CPStateF, or CPStateX1; duration is milliseconds.
+
+### everest_api/evse_manager/cmd/set_ac_charging_session_configuration
+Sets AC charging session configuration. Payload must be a JSON ACChargingSessionConfiguration:
+```json
+{
+    "allow_isod20": true,
+    "allow_isod2": true,
+    "allow_isod2_fake_dc": false,
+    "disable_isod2_fake_dc_after_replug": true,
+    "reinit_configuration": {
+        "state_transition": "CPStateE",
+        "duration": 4000
+    },
+    "phase_switch_configuration": {
+        "reinit_configuration": {
+            "state_transition": "CPStateE",
+            "duration": 4000
+        }
+    },
+    "mac_filter": ["AA:BB:CC"]
+}
+```
+mac_filter is optional and can contain full MACs or OUIs to scope the configuration. If omitted, the configuration (including custom reinit settings) is applied as the default for all sessions.
+mac_filter is defined as list of MAC addresses where the AC charging session configuration applies. The MAC should have the format “XX:XX:XX:XX:XX:XX” for a full 48-bit address, or “XX:XX:XX” for an Organizationally Unique Identifier (OUI, first 3 octets). It is not necessary to specify a complete 48-bit address; specifying an OUI will apply the configuration to all MAC addresses with that prefix.
+
 ### everest_api/evse_manager/cmd/uk_random_delay
 Command to control the UK Smart Charging random delay feature. The payload can be the following enum: "enable" and "disable" to enable/disable the feature entirely or "cancel" to cancel an ongoing delay.
 

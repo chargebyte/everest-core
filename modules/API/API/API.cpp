@@ -651,6 +651,29 @@ void API::init() {
             evse->call_force_unlock(connector_id);
         });
 
+        std::string cmd_reinit = cmd_base + "reinit_charging_session";
+        this->mqtt.subscribe(cmd_reinit, [this, &evse](const std::string& data) {
+            try {
+                const auto reinit_cfg = json::parse(data).get<types::evse_manager::ReinitConfiguration>();
+                this->evse_manager_check.wait_ready();
+                evse->call_reinit_charging_session(reinit_cfg);
+            } catch (const std::exception& e) {
+                EVLOG_error << "reinit_charging_session: Cannot parse argument, command ignored: " << e.what();
+            }
+        });
+
+        std::string cmd_set_ac_cfg = cmd_base + "set_ac_charging_session_configuration";
+        this->mqtt.subscribe(cmd_set_ac_cfg, [this, &evse](const std::string& data) {
+            try {
+                const auto cfg = json::parse(data).get<types::evse_manager::ACChargingSessionConfiguration>();
+                this->evse_manager_check.wait_ready();
+                evse->call_set_ac_charging_session_configuration(cfg);
+            } catch (const std::exception& e) {
+                EVLOG_error << "set_ac_charging_session_configuration: Cannot parse argument, command ignored: "
+                            << e.what();
+            }
+        });
+
         // Check if a uk_random_delay is connected that matches this evse_manager
         for (auto& random_delay : this->r_random_delay) {
             if (random_delay->module_id == evse->module_id) {
