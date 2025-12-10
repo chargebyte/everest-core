@@ -121,7 +121,7 @@ private:
     bool last_power_on_allowed{false};
     std::atomic<double> last_amps{-1};
     std::atomic_bool three_phases{true};
-    std::atomic_bool state_ef_triggered_through_reinit{false};
+    std::atomic_bool state_e_triggered_through_handle{false};
 
     bool car_plugged_in{false};
 
