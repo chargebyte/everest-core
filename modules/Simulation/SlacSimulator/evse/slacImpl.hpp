@@ -15,6 +15,7 @@
 // ev@75ac1216-19eb-4182-a85c-820f1fc2c091:v1
 // insert your custom include headers here
 #include "../util/state.hpp"
+#include <chrono>
 // ev@75ac1216-19eb-4182-a85c-820f1fc2c091:v1
 
 namespace module {
@@ -32,6 +33,7 @@ public:
     // insert your public definitions here
     util::State get_state() const;
     void set_state_matched();
+    void tick();
     // ev@8ea32d28-373f-4c90-ae5e-b4fcc74e2a61:v1
 
 protected:
@@ -58,8 +60,13 @@ private:
     // insert your private definitions here
     void set_state_to_unmatched();
     void set_state_to_matching();
+    void start_slac_init_timer();
+    void stop_slac_init_timer();
+    void check_slac_init_timer();
 
     util::State state{util::State::UNMATCHED};
+    std::chrono::steady_clock::time_point slac_init_timeout;
+    bool slac_init_timer_active{false};
     // ev@3370e4dd-95f4-47a9-aaec-ea76f34a66c9:v1
 };
 

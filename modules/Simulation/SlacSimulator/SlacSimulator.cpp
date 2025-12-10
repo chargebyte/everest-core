@@ -25,6 +25,7 @@ void SlacSimulator::run() {
     auto& ev = dynamic_cast<ev::ev_slacImpl&>(*p_ev);
     while (true) {
         cntmatching++;
+        evse.tick();
         if (ev.get_state() == State::MATCHING && evse.get_state() == State::MATCHING && cntmatching > 2 * 4) {
             ev.set_state_matched();
             evse.set_state_matched();

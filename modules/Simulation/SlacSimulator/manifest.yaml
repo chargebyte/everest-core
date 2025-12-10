@@ -1,4 +1,11 @@
 description: SIL Implementation of SLAC data link negotiation according to ISO15118-3.
+config:
+  slac_init_timeout_ms:
+    description: >-
+      Timeout in milliseconds for configuring the timeout to wait in the matching state. The timer
+      is disabled as soon as the MATCHED state is signaled.
+    type: integer
+    default: 20000
 provides:
   evse:
     interface: slac

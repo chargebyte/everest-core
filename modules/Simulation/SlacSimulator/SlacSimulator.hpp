@@ -21,7 +21,9 @@
 
 namespace module {
 
-struct Conf {};
+struct Conf {
+    int slac_init_timeout_ms;
+};
 
 class SlacSimulator : public Everest::ModuleBase {
 public:
