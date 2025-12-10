@@ -71,6 +71,7 @@ struct Conf {
     bool supported_iso_ac_bpt;
     bool ac_hlc_enabled;
     bool ac_hlc_use_5percent;
+    int ac_slac_reset_attempts;
     bool ac_enforce_hlc;
     bool ac_with_soc;
     int reinit_duration_ms;

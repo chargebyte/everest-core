@@ -79,6 +79,13 @@ config:
       almost no EV will perform SLAC/HLC on X1. Recommendation is to set this to true.
     type: boolean
     default: true
+  ac_slac_reset_attempts:
+    description: >-
+      To configure how often a reset of the SLAC matching process should be triggered when an SLAC error
+      occurs. After the maximum number of attempts, it waits in X1 state and switches to nominal duty
+      cycle after successful EIM.
+    type: integer
+    default: 2
   ac_enforce_hlc:
     description: >-
       Combine with 5percent option to really enforce HLC even with EIM. ISO15118-3 forbids the usage of 5% if Auth happens before plugin,

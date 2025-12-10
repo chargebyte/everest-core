@@ -96,6 +96,7 @@ public:
         ChargeMode charge_mode;
         bool ac_hlc_enabled;
         bool ac_hlc_use_5percent;
+        int ac_slac_reset_attempts;
         bool ac_enforce_hlc;
         float soft_over_current_tolerance_percent;
         float soft_over_current_measurement_noise_A;
@@ -349,6 +350,8 @@ private:
         bool ac_hlc_use_5percent;
         // Config option to enable HLC in AC mode
         bool ac_hlc_enabled;
+        // Number of SLAC reset attempts to perform during AC error handling
+        int ac_slac_reset_attempts{2};
         // AC or DC
         ChargeMode charge_mode{0};
         // Delay when switching from 1ph to 3ph or 3ph to 1ph
@@ -395,6 +398,7 @@ private:
         EvseState t_step_EF_return_state;
         float t_step_EF_return_pwm;
         float t_step_EF_return_ampere;
+        int slac_reset_counter{0};
 
         EvseState switching_phases_return_state;
 

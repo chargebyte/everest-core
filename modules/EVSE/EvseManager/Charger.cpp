@@ -268,6 +268,7 @@ void Charger::run_state_machine() {
                 deauthorize_internal();
                 shared_context.transaction_active = false;
                 clear_errors_on_unplug();
+                internal_context.slac_reset_counter = 0;
             }
             break;
 
@@ -1605,6 +1606,7 @@ void Charger::apply_setup_locked(const SeccConfig& cfg) {
     config_context.charge_mode = cfg.charge_mode;
     ac_hlc_enabled_current_session = config_context.ac_hlc_enabled = cfg.ac_hlc_enabled;
     config_context.ac_hlc_use_5percent = cfg.ac_hlc_use_5percent;
+    config_context.ac_slac_reset_attempts = cfg.ac_slac_reset_attempts;
     config_context.ac_enforce_hlc = cfg.ac_enforce_hlc;
     config_context.soft_over_current_timeout_ms = cfg.soft_over_current_timeout_ms;
     soft_over_current_tolerance_percent = cfg.soft_over_current_tolerance_percent;
@@ -2039,10 +2041,35 @@ void Charger::request_error_sequence() {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_request_error_sequence);
     if (shared_context.current_state == EvseState::WaitingForAuthentication or
         shared_context.current_state == EvseState::PrepareCharging) {
+        bool trigger_slac_reset = true;
+
+        /* [V2G3 M06-07] If an AC EVSE uses a 5% control pilot duty cycle and does not receive any SLAC
+           request within TT_EVSE_SLAC_init, it shall switch to state E or F for the duration of T_step_EF. After that,
+           it returns to the 5% duty cycle and resets the TT_EVSE_SLAC_init timer, making it ready again
+           to respond to a matching request. This sequence shall be repeated ac_slac_reset_attempts
+           times. If there is still no reaction, the EVSE shall finally transition to state X1. */
+        const int max_attempts = config_context.ac_slac_reset_attempts;
+        if (config_context.charge_mode == ChargeMode::AC) {
+            if (max_attempts <= 0 or internal_context.slac_reset_counter >= max_attempts) {
+                trigger_slac_reset = false;
+                if (hlc_use_5percent_current_session) {
+                    hlc_use_5percent_current_session = false;
+                    EVLOG_info << "Max SLAC reset attempts reached for AC. Disabling 5% PWM for this session.";
+                }
+            }
+        }
         internal_context.t_step_EF_return_state = shared_context.current_state;
         internal_context.t_step_EF_return_ampere = 0.;
         shared_context.current_state = EvseState::T_step_EF;
-        signal_slac_reset();
+        if (trigger_slac_reset) {
+            signal_slac_reset();
+            internal_context.slac_reset_counter++;
+
+            if (config_context.charge_mode == ChargeMode::AC) {
+                EVLOG_info << fmt::format("Triggering SLAC reset attempt {}/{} for AC HLC error sequence",
+                                          internal_context.slac_reset_counter, max_attempts);
+            }
+        }
         if (hlc_use_5percent_current_session) {
             internal_context.t_step_EF_return_pwm = PWM_5_PERCENT;
         } else {
@@ -2054,6 +2081,10 @@ void Charger::request_error_sequence() {
 void Charger::set_matching_started(bool m) {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_set_matching_started);
     shared_context.matching_started = m;
+    // Reset slac_reset_counter in case we are matched
+    if (m) {
+        internal_context.slac_reset_counter = 0;
+    }
 }
 
 void Charger::notify_currentdemand_started() {
