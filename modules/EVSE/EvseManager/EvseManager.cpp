@@ -882,9 +882,12 @@ void EvseManager::ready() {
             if (s == "UNMATCHED") {
                 charger->set_matching_started(false);
                 slac_unmatched = true;
-            } else {
+                charger->set_matched(false);
+            } else if (s == "MATCHING") {
                 charger->set_matching_started(true);
                 slac_unmatched = false;
+            } else if (s == "MATCHED") {
+                charger->set_matched(true);
             }
         });
 
@@ -1157,24 +1160,25 @@ types::evse_board_support::HardwareCapabilities EvseManager::get_hw_capabilities
 
 Charger::SeccConfig EvseManager::build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const {
     if (!current_secc_config.has_value()) {
-        current_secc_config = Charger::SeccConfig{
-            config.has_ventilation,
-            mode,
-            ac_hlc_enabled,
-            config.ac_hlc_use_5percent,
-            config.ac_enforce_hlc,
-            static_cast<float>(config.soft_over_current_tolerance_percent),
-            static_cast<float>(config.soft_over_current_measurement_noise_A),
-            config.switch_3ph1ph_delay_s,
-            config.switch_3ph1ph_cp_state,
-            config.soft_over_current_timeout_ms,
-            config.state_F_after_fault_ms,
-            config.fail_on_powermeter_errors,
-            config.raise_mrec9,
-            config.sleep_before_enabling_pwm_hlc_mode_ms,
-            utils::get_session_id_type_from_string(config.session_id_type),
-            config.reinit_duration_ms,
-            types::evse_manager::string_to_reinit_state_enum(config.reinit_method)};
+        current_secc_config =
+            Charger::SeccConfig{config.has_ventilation,
+                                mode,
+                                ac_hlc_enabled,
+                                config.ac_hlc_use_5percent,
+                                config.ac_slac_reset_attempts,
+                                config.ac_enforce_hlc,
+                                static_cast<float>(config.soft_over_current_tolerance_percent),
+                                static_cast<float>(config.soft_over_current_measurement_noise_A),
+                                config.switch_3ph1ph_delay_s,
+                                config.switch_3ph1ph_cp_state,
+                                config.soft_over_current_timeout_ms,
+                                config.state_F_after_fault_ms,
+                                config.fail_on_powermeter_errors,
+                                config.raise_mrec9,
+                                config.sleep_before_enabling_pwm_hlc_mode_ms,
+                                utils::get_session_id_type_from_string(config.session_id_type),
+                                config.reinit_duration_ms,
+                                types::evse_manager::string_to_reinit_state_enum(config.reinit_method)};
     }
 
     auto cfg = *current_secc_config;

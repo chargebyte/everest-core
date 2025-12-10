@@ -60,6 +60,7 @@ Charger::Charger(const std::unique_ptr<IECStateMachine>& bsp, const std::unique_
     internal_context.t_step_X1_return_state = EvseState::Idle;
 
     shared_context.matching_started = false;
+    shared_context.slac_matched = false;
 
     shared_context.transaction_active = false;
     shared_context.session_active = false;
@@ -2069,8 +2070,9 @@ void Charger::request_error_sequence() {
             internal_context.slac_reset_counter++;
 
             if (config_context.charge_mode == ChargeMode::AC) {
+                const auto attempt = internal_context.slac_reset_counter.load();
                 EVLOG_info << fmt::format("Triggering SLAC reset attempt {}/{} for AC HLC error sequence",
-                                          internal_context.slac_reset_counter, max_attempts);
+                                          attempt, max_attempts);
             }
         }
         if (hlc_use_5percent_current_session) {
@@ -2082,10 +2084,13 @@ void Charger::request_error_sequence() {
 }
 
 void Charger::set_matching_started(bool m) {
-    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_set_matching_started);
     shared_context.matching_started = m;
-    // Reset slac_reset_counter in case we are matched
-    if (m) {
+}
+
+void Charger::set_matched(bool matched) {
+    shared_context.slac_matched = matched;
+    shared_context.matching_started = matched or shared_context.matching_started;
+    if (matched) {
         internal_context.slac_reset_counter = 0;
     }
 }
