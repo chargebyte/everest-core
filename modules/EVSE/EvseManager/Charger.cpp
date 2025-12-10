@@ -1625,7 +1625,7 @@ void Charger::apply_setup_locked(const SeccConfig& cfg) {
 
 void Charger::apply_pending_setup() {
     // Called from run_state_machine while already holding state_machine_mutex
-    if (!pending_secc_setup.has_value() || shared_context.current_state != EvseState::Idle) {
+    if (!pending_secc_setup.has_value()) {
         return;
     }
 
