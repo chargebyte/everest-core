@@ -411,7 +411,25 @@ ErrorResObj RpcApiRequestHandler::reinit_charging_session(
 
     auto& evse_manager = *it;
 
-    // TODO: Currently not implemented.
+    types::evse_manager::ReinitConfiguration evse_reinit_configuration;
+    if (reinit_configuration.has_value()) {
+        evse_reinit_configuration.state_transition =
+            json_rpc_api_reinit_state_enum_to_evse_manager(reinit_configuration.value().state_transition);
+        evse_reinit_configuration.duration = reinit_configuration.value().duration;
+    } else {
+        // FIXME evse_reinit_configuration now has empty, but possibly non-default values
+    }
+
+    const bool result_reinit = evse_manager->call_reinit_charging_session(evse_reinit_configuration);
+
+    if (result_reinit) {
+        res.error = ResponseErrorEnum::NoError;
+        EVLOG_debug << "Reinit configuration on EVSE index: " << evse_index << " has been updated";
+    } else {
+        res.error = ResponseErrorEnum::ErrorValuesNotApplied;
+        EVLOG_warning << "Failed to update reinit configuration on EVSE index: " << evse_index;
+    }
+
     return res;
 }
 
