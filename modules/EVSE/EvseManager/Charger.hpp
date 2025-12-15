@@ -26,6 +26,7 @@
 #include "SessionLog.hpp"
 #include "ld-ev.hpp"
 #include "utils/thread.hpp"
+#include <atomic>
 #include <chrono>
 #include <date/date.h>
 #include <date/tz.h>
@@ -41,7 +42,6 @@
 #include <sigslot/signal.hpp>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #include "ErrorHandling.hpp"
 #include "EventQueue.hpp"
@@ -333,6 +333,7 @@ private:
         bool switch_3ph1ph_threephase_ongoing{false};
         bool reinit_requested{false};
         bool reinit_running{false};
+        // Optional override for a single reinit cycle; set by start_reinit() and consumed in Reinit state.
         std::optional<types::evse_manager::ReinitConfiguration> reinit_override;
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;

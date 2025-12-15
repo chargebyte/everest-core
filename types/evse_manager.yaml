@@ -543,9 +543,6 @@ types:
     description: Configuration for reinitialization of a charging session
     type: object
     additionalProperties: false
-    required:
-      - state_transition
-      - duration
     properties:
       state_transition:
         description: State transition to use for reinitialization of a charging session
