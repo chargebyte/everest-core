@@ -404,8 +404,16 @@ bool evse_managerImpl::handle_stop_transaction(types::evse_manager::StopTransact
 };
 
 bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
-    types::evse_manager::ReinitConfiguration reinit_configuration_ms = reinit_configuration;
-    reinit_configuration_ms.duration = reinit_configuration.duration;
+    types::evse_manager::ReinitConfiguration reinit_configuration_ms;
+    const auto default_duration = mod->current_secc_config.has_value() ? mod->current_secc_config->reinit_duration_ms
+                                                                       : mod->config.reinit_duration_ms;
+    const auto default_state_transition =
+        mod->current_secc_config.has_value()
+            ? mod->current_secc_config->reinit_method
+            : types::evse_manager::string_to_reinit_state_enum(mod->config.reinit_method);
+
+    reinit_configuration_ms.duration = reinit_configuration.duration.value_or(default_duration);
+    reinit_configuration_ms.state_transition = reinit_configuration.state_transition.value_or(default_state_transition);
     return mod->charger->start_reinit(reinit_configuration_ms);
 }
 
@@ -430,23 +438,25 @@ bool evse_managerImpl::handle_set_ac_charging_session_configuration(
     if (!supported.app_protocols.empty()) {
         mod->r_hlc[0]->call_update_supported_app_protocols(supported);
     }
+    auto apply_reinit_configuration = [](const types::evse_manager::ReinitConfiguration& reinit_cfg,
+                                         Charger::SeccConfig& setup_cfg) {
+        if (reinit_cfg.duration.has_value()) {
+            setup_cfg.reinit_duration_ms = reinit_cfg.duration.value();
+        }
+        if (reinit_cfg.state_transition.has_value()) {
+            setup_cfg.reinit_method = reinit_cfg.state_transition.value();
+        }
+    };
 
-    if (ac_charging_session_configuration.mac_filter.has_value()) {
-        EVLOG_warning << "Ignoring AC charging session configuration with mac_filter set (not supported yet)";
-        return false;
-    }
     auto setup_cfg = mod->build_charger_setup_config(Charger::ChargeMode::AC, mod->config.ac_hlc_enabled);
 
     if (ac_charging_session_configuration.reinit_configuration.has_value()) {
-        setup_cfg.reinit_duration_ms = ac_charging_session_configuration.reinit_configuration->duration;
-        setup_cfg.reinit_method = ac_charging_session_configuration.reinit_configuration->state_transition;
+        apply_reinit_configuration(*ac_charging_session_configuration.reinit_configuration, setup_cfg);
     }
 
     if (ac_charging_session_configuration.phase_switch_configuration.has_value()) {
-        setup_cfg.reinit_duration_ms =
-            ac_charging_session_configuration.phase_switch_configuration->reinit_configuration.duration;
-        setup_cfg.reinit_method =
-            ac_charging_session_configuration.phase_switch_configuration->reinit_configuration.state_transition;
+        apply_reinit_configuration(ac_charging_session_configuration.phase_switch_configuration->reinit_configuration,
+                                   setup_cfg);
     }
 
     mod->allow_isod2_fake_dc = ac_charging_session_configuration.allow_isod2_fake_dc;

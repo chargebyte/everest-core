@@ -25,6 +25,32 @@
 
 namespace module {
 
+namespace {
+
+struct ResolvedReinitConfiguration {
+    types::evse_manager::ReinitStateEnum state_transition;
+    int duration;
+};
+
+// Fills a potentially partial ReinitConfiguration with default values so downstream
+// state machine logic always works with concrete duration and state transition.
+ResolvedReinitConfiguration resolve_reinit_configuration(const types::evse_manager::ReinitConfiguration& cfg,
+                                                         types::evse_manager::ReinitStateEnum default_state,
+                                                         int default_duration) {
+    ResolvedReinitConfiguration resolved{default_state, default_duration};
+
+    if (cfg.state_transition.has_value()) {
+        resolved.state_transition = cfg.state_transition.value();
+    }
+    if (cfg.duration.has_value()) {
+        resolved.duration = cfg.duration.value();
+    }
+
+    return resolved;
+}
+
+} // namespace
+
 Charger::Charger(const std::unique_ptr<IECStateMachine>& bsp, const std::unique_ptr<ErrorHandling>& error_handling,
                  const std::vector<std::unique_ptr<powermeterIntf>>& r_powermeter_billing,
                  const std::unique_ptr<PersistentStore>& _store,
@@ -212,9 +238,12 @@ void Charger::run_state_machine() {
             break;
         case EvseState::Reinit:
             if (initialize_state) {
-                types::evse_manager::ReinitConfiguration config_reinit_config{config_context.reinit_method,
-                                                                              config_context.reinit_duration_ms};
-                const auto reinit_configuration = shared_context.reinit_override.value_or(config_reinit_config);
+                // Build concrete reinit parameters: prefer a one-off override (if set via start_reinit),
+                // otherwise fall back to the configured defaults. Missing fields are filled with defaults.
+                const auto reinit_configuration = resolve_reinit_configuration(
+                    shared_context.reinit_override.value_or(types::evse_manager::ReinitConfiguration{
+                        config_context.reinit_method, config_context.reinit_duration_ms}),
+                    config_context.reinit_method, config_context.reinit_duration_ms);
                 shared_context.reinit_override.reset();
 
                 session_log.evse(false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
@@ -1331,13 +1360,11 @@ bool Charger::start_reinit() {
 }
 
 bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reinit) {
-    if (reinit.duration < 0) {
-        EVLOG_warning << "Reinit requested with negative duration: " << reinit.duration << " ms";
-        return false;
-    }
+    const auto resolved_reinit =
+        resolve_reinit_configuration(reinit, config_context.reinit_method, config_context.reinit_duration_ms);
 
-    const auto& reinit_duration_ms = reinit.duration;
-    const auto& reinit_method = reinit.state_transition;
+    const auto& reinit_duration_ms = resolved_reinit.duration;
+    const auto& reinit_method = resolved_reinit.state_transition;
 
     if (reinit_method == types::evse_manager::ReinitStateEnum::CPStateE && !supports_cp_state_E) {
         EVLOG_warning << "Reinit requested with CP state E but BSP does not support CP state E.";
@@ -1347,12 +1374,11 @@ bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reini
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
 
     if (shared_context.reinit_running == false) {
-        shared_context.reinit_override = reinit;
+        shared_context.reinit_override = types::evse_manager::ReinitConfiguration{reinit_method, reinit_duration_ms};
         shared_context.reinit_requested = true;
         EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
                                   types::evse_manager::reinit_state_enum_to_string(reinit_method), reinit_duration_ms);
-    }
-    else {
+    } else {
         EVLOG_warning << "Skip reinit request. Reinit process already running";
         return false;
     }
