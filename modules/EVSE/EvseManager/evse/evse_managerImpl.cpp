@@ -7,6 +7,7 @@
 #include <date/tz.h>
 #include <utils/date.hpp>
 
+#include <algorithm>
 #include <fmt/core.h>
 
 #include "SessionLog.hpp"
@@ -70,6 +71,14 @@ void evse_managerImpl::init() {
             // Republish data on proxy powermeter public_key_ocmf
             publish_powermeter_public_key_ocmf(public_key_ocmf);
         });
+    }
+
+    if (!mod->r_hlc.empty()) {
+        mod->r_hlc[0]->subscribe_supported_app_protocols_secc(
+            [this](const types::iso15118::SupportedAppProtocols& protocols) {
+                std::scoped_lock lock(supported_app_protocols_mutex);
+                supported_app_protocols_secc = protocols;
+            });
     }
 }
 
@@ -421,6 +430,18 @@ bool evse_managerImpl::handle_set_ac_charging_session_configuration(
     types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
 
     types::iso15118::SupportedAppProtocols supported;
+    bool hlc_charging{true};
+    const auto secc_supported_protocols = [this]() {
+        std::scoped_lock lock(supported_app_protocols_mutex);
+        return supported_app_protocols_secc;
+    };
+
+    if (ac_charging_session_configuration.allow_isod2_fake_dc && !mod->config.ac_with_soc) {
+        EVLOG_warning << "Rejecting AC charging session configuration: allow_isod2_fake_dc requested but "
+                      << "ac_with_soc is disabled in EVSE config.";
+        return false;
+    }
+
     if (ac_charging_session_configuration.allow_isod2) {
         supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
     }
@@ -435,9 +456,31 @@ bool evse_managerImpl::handle_set_ac_charging_session_configuration(
             supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
         }
     }
+
+    // Ceck supported protocols by the SECC, before we update the list
+    if (auto available = secc_supported_protocols()) {
+        bool unsupported_requested = false;
+        for (const auto& requested_protocol : supported.app_protocols) {
+            const auto it =
+                std::find(available->app_protocols.begin(), available->app_protocols.end(), requested_protocol);
+            if (it == available->app_protocols.end()) {
+                EVLOG_warning << "Requested app protocol "
+                              << types::iso15118::supported_app_protocol_to_string(requested_protocol)
+                              << " not supported by SECC";
+                unsupported_requested = true;
+            }
+        }
+        if (unsupported_requested) {
+            return false;
+        }
+    }
+
     if (!supported.app_protocols.empty()) {
         mod->r_hlc[0]->call_update_supported_app_protocols(supported);
+    } else {
+        hlc_charging = false;
     }
+
     auto apply_reinit_configuration = [](const types::evse_manager::ReinitConfiguration& reinit_cfg,
                                          Charger::SeccConfig& setup_cfg) {
         if (reinit_cfg.duration.has_value()) {
