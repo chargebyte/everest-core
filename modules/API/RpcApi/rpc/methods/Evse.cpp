@@ -162,7 +162,7 @@ RPCDataTypes::ErrorResObj Evse::set_ac_charging_session_configuration(
     const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) {
     RPCDataTypes::ErrorResObj res{};
 
-    const auto evse = m_dataobj.get_evse_store(evse_index);
+    const auto* evse = m_dataobj.get_evse_store(evse_index);
     if (!evse) {
         res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidEVSEIndex;
         return res;
@@ -219,7 +219,7 @@ Evse::reinit_charging_session(const int32_t evse_index,
                               std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) {
     RPCDataTypes::ErrorResObj res{};
 
-    const auto evse = m_dataobj.get_evse_store(evse_index);
+    const auto* evse = m_dataobj.get_evse_store(evse_index);
     if (!evse) {
         res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidEVSEIndex;
         return res;
