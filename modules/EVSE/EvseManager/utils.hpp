@@ -5,6 +5,7 @@
 #define _EVSEMANAGER_UTILS_H_
 
 #include <everest/helpers/helpers.hpp>
+#include <fmt/core.h>
 #include <generated/types/evse_manager.hpp>
 #include <generated/types/powermeter.hpp>
 #include <vector>
