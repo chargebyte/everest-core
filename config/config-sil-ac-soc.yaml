@@ -134,6 +134,7 @@ active_modules:
       device: auto
       tls_security: allow
       supported_DIN70121: true # SoC AC requires DIN70121 support
+      terminate_connection_on_failed_response: true
     module: EvseV2G
     connections:
       security:
