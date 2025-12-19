@@ -612,7 +612,8 @@ static enum v2g_event handle_din_charge_parameter(struct v2g_connection* conn) {
     }
 
     /* If fake HLC DC is active, try to stop the charging session over EVSENotification and EVSEStatusCode first.
-     * If the EV is ignoring the shutdown request, stop the charging session in the next response message with a failed response code.
+     * If the EV is ignoring the shutdown request, stop the charging session in the next response message with a failed
+     * response code.
      */
     if (conn->ctx->is_fake_dc) {
         if (first_req == true) {

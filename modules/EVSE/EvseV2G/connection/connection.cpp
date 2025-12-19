@@ -435,7 +435,7 @@ static void* connection_handle_tcp(void* data) {
     /* tear down connection gracefully */
     dlog(DLOG_LEVEL_INFO, "Closing TCP connection");
 
-     /* some EV's did not like the immediate shutdown. Therefore we sleep for 2 seconds */
+    /* some EV's did not like the immediate shutdown. Therefore we sleep for 2 seconds */
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     if (shutdown(conn->conn.socket_fd, SHUT_WR) == -1) {
