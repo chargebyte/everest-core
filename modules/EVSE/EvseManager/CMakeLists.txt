@@ -21,6 +21,7 @@ target_sources(${MODULE_NAME}
         PersistentStore.cpp
         over_voltage/OverVoltageMonitor.cpp
         voltage_plausibility/VoltagePlausibilityMonitor.cpp
+        SeccConfigurationStore.cpp
 )
 
 target_link_libraries(${MODULE_NAME}
