@@ -209,8 +209,8 @@ void Charger::run_state_machine() {
                 shared_context.current_state == EvseState::ChargingPausedEV or
                 shared_context.current_state == EvseState::ChargingPausedEVSE or
                 shared_context.current_state == EvseState::Reinit) {
-                // Only apply pending setups on state transitions to Idle, PausedEV/EVSE or Reinit to avoid reapplying on every
-                // loop iteration
+                // Only apply pending setups on state transitions to Idle, PausedEV/EVSE or Reinit to avoid reapplying
+                // on every loop iteration
                 apply_pending_setup();
             }
         }
@@ -2099,8 +2099,8 @@ void Charger::request_error_sequence() {
 
             if (config_context.charge_mode == ChargeMode::AC) {
                 const auto attempt = internal_context.slac_reset_counter.load();
-                EVLOG_info << fmt::format("Triggering SLAC reset attempt {}/{} for AC HLC error sequence",
-                                          attempt, max_attempts);
+                EVLOG_info << fmt::format("Triggering SLAC reset attempt {}/{} for AC HLC error sequence", attempt,
+                                          max_attempts);
             }
         }
         if (hlc_use_5percent_current_session) {
