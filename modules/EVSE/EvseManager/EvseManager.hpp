@@ -45,6 +45,7 @@
 #include "Charger.hpp"
 #include "ErrorHandling.hpp"
 #include "PersistentStore.hpp"
+#include "SeccConfigurationStore.hpp"
 #include "SessionLog.hpp"
 #include "VarContainer.hpp"
 #include "scoped_lock_timeout.hpp"
@@ -187,9 +188,12 @@ public:
     types::powermeter::Powermeter get_latest_powermeter_data_billing();
     std::mutex hw_caps_mutex;
     types::evse_board_support::HardwareCapabilities get_hw_capabilities();
-    Charger::SeccConfig build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const;
-    mutable std::optional<Charger::SeccConfig> current_secc_config;
-
+    SeccConfigurationStore secc_config_store;
+    bool store_charging_configuration(
+        const types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration);
+    void apply_mac_based_ac_charging_configuration(const std::string& ev_mac);
+    SeccConfigurationStore::SeccConfig get_current_secc_config() const;
+    void publish_supported_app_protocols(const SeccConfigurationStore::SeccConfig& secc_conf);
     std::mutex external_local_limits_mutex;
     bool update_max_current_limit(types::energy::ExternalLimits& limits, float max_current_import,
                                   float max_current_export);
@@ -216,8 +220,6 @@ public:
     void set_pnc_enabled(const bool pnc_enabled);
     void set_central_contract_validation_allowed(const bool central_contract_validation_allowed);
     void set_contract_certificate_installation_enabled(const bool contract_certificate_installation_enabled);
-
-    bool allow_isod2_fake_dc{false};
 
     sigslot::signal<types::evse_manager::SessionEvent> signalReservationEvent;
 
@@ -370,7 +372,7 @@ private:
     double get_error_over_voltage_threshold();
 
     // EV information
-    Everest::timed_mutex_traceable ev_info_mutex;
+    mutable Everest::timed_mutex_traceable ev_info_mutex;
     types::evse_manager::EVInfo ev_info;
     types::evse_manager::CarManufacturer car_manufacturer{types::evse_manager::CarManufacturer::Unknown};
 

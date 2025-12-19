@@ -47,6 +47,7 @@
 #include "EventQueue.hpp"
 #include "IECStateMachine.hpp"
 #include "PersistentStore.hpp"
+#include "SeccConfigurationStore.hpp"
 #include "scoped_lock_timeout.hpp"
 #include "utils.hpp"
 
@@ -57,16 +58,13 @@ const std::string IEC62196Type2Socket = "IEC62196Type2Socket";
 
 class Charger {
 public:
+    using ChargeMode = SeccConfigurationStore::ChargeMode;
+
     Charger(const std::unique_ptr<IECStateMachine>& bsp, const std::unique_ptr<ErrorHandling>& error_handling,
             const std::vector<std::unique_ptr<powermeterIntf>>& r_powermeter_billing,
             const std::unique_ptr<PersistentStore>& store,
             const types::evse_board_support::Connector_type& connector_type, const std::string& evse_id);
     ~Charger();
-
-    enum class ChargeMode {
-        AC,
-        DC
-    };
 
     enum class EvseState {
         Disabled,
@@ -92,27 +90,6 @@ public:
         Pause
     };
 
-    struct SeccConfig {
-        bool has_ventilation;
-        ChargeMode charge_mode;
-        bool ac_hlc_enabled;
-        bool ac_hlc_use_5percent;
-        int ac_slac_reset_attempts;
-        bool ac_enforce_hlc;
-        float soft_over_current_tolerance_percent;
-        float soft_over_current_measurement_noise_A;
-        int switch_3ph1ph_delay_s;
-        std::string switch_3ph1ph_cp_state;
-        int soft_over_current_timeout_ms;
-        int state_F_after_fault_ms;
-        bool fail_on_powermeter_errors;
-        bool raise_mrec9;
-        int sleep_before_enabling_pwm_hlc_mode_ms;
-        utils::SessionIdType session_id_type;
-        int reinit_duration_ms;
-        types::evse_manager::ReinitStateEnum reinit_method;
-    };
-
     // Public interface to configure Charger
     //
     // Call anytime also during charging, but call setters in this block at
@@ -125,8 +102,8 @@ public:
 
     sigslot::signal<float> signal_max_current;
 
-    void setup(const SeccConfig& cfg);
-    void setup_if_idle(const SeccConfig& cfg);
+    void setup(const SeccConfigurationStore::SeccConfig& cfg);
+    void setup_if_idle(const SeccConfigurationStore::SeccConfig& cfg);
     void set_supports_cp_state_E(bool value);
 
     void enable_disable_initial_state_publish();
@@ -479,9 +456,9 @@ private:
     bool parse_enable_disable_source_table();
     void enable_disable_source_table_update(const types::evse_manager::EnableDisableSource& source);
 
-    void apply_setup_locked(const SeccConfig& cfg);
+    void apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg);
     void apply_pending_setup();
-    std::optional<SeccConfig> pending_secc_setup;
+    std::optional<SeccConfigurationStore::SeccConfig> pending_secc_setup;
 
 protected:
     // provide access for unit tests
