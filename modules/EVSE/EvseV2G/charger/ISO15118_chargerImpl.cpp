@@ -401,6 +401,10 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
         dlog(DLOG_LEVEL_WARNING, "No supported app protocols provided");
         rv = false;
     }
+
+    const bool din_allowed = (v2g_ctx->supported_protocols & (1 << V2G_PROTO_DIN70121)) != 0;
+    v2g_ctx->is_fake_dc = (din_allowed && v2g_ctx->is_dc_charger == false);
+    
     return rv;
 }
 
@@ -412,8 +416,6 @@ void ISO15118_chargerImpl::handle_update_energy_transfer_modes(
         iso2_EnergyTransferModeType* energyArray =
             v2g_ctx->evse_v2g_data.charge_service.SupportedEnergyTransferMode.EnergyTransferMode.array;
         energyArrayLen = 0;
-
-        v2g_ctx->is_dc_charger = true;
 
         for (const auto& mode : supported_energy_transfer_modes) {
 
@@ -453,9 +455,8 @@ void ISO15118_chargerImpl::handle_update_energy_transfer_modes(
             }
         }
 
-        if (mod->config.supported_DIN70121 == true and v2g_ctx->is_dc_charger == false) {
-            v2g_ctx->is_fake_dc = true;
-        }
+        const bool din_allowed = (v2g_ctx->supported_protocols & (1 << V2G_PROTO_DIN70121)) != 0;
+        v2g_ctx->is_fake_dc = (din_allowed and v2g_ctx->is_dc_charger == false);
     }
 }
 
