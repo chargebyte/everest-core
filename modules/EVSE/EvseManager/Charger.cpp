@@ -1606,7 +1606,7 @@ bool Charger::switch_three_phases_while_charging(bool n) {
     return true;
 }
 
-void Charger::setup(const SeccConfig& cfg) {
+void Charger::setup(const SeccConfigurationStore::SeccConfig& cfg) {
     // set up board support package
     bsp->setup(cfg.has_ventilation);
 
@@ -1614,7 +1614,7 @@ void Charger::setup(const SeccConfig& cfg) {
     apply_setup_locked(cfg);
 }
 
-void Charger::setup_if_idle(const SeccConfig& cfg) {
+void Charger::setup_if_idle(const SeccConfigurationStore::SeccConfig& cfg) {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
     if (shared_context.current_state != EvseState::Idle) {
         pending_secc_setup = cfg;
@@ -1625,7 +1625,7 @@ void Charger::setup_if_idle(const SeccConfig& cfg) {
     apply_setup_locked(cfg);
 }
 
-void Charger::apply_setup_locked(const SeccConfig& cfg) {
+void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) {
     // cache our config variables
     config_context.charge_mode = cfg.charge_mode;
     ac_hlc_enabled_current_session = config_context.ac_hlc_enabled = cfg.ac_hlc_enabled;

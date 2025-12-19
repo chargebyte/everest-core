@@ -83,14 +83,6 @@ void evse_managerImpl::init() {
             publish_powermeter_public_key_ocmf(public_key_ocmf);
         });
     }
-
-    if (!mod->r_hlc.empty()) {
-        mod->r_hlc[0]->subscribe_supported_app_protocols_secc(
-            [this](const types::iso15118::SupportedAppProtocols& protocols) {
-                std::scoped_lock lock(supported_app_protocols_mutex);
-                supported_app_protocols_secc = protocols;
-            });
-    }
 }
 
 void evse_managerImpl::ready() {
@@ -429,12 +421,9 @@ bool evse_managerImpl::handle_stop_transaction(types::evse_manager::StopTransact
 
 bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
     types::evse_manager::ReinitConfiguration reinit_configuration_ms;
-    const auto default_duration = mod->current_secc_config.has_value() ? mod->current_secc_config->reinit_duration_ms
-                                                                       : mod->config.reinit_duration_ms;
-    const auto default_state_transition =
-        mod->current_secc_config.has_value()
-            ? mod->current_secc_config->reinit_method
-            : types::evse_manager::string_to_reinit_state_enum(mod->config.reinit_method);
+    const auto current_cfg = mod->get_current_secc_config();
+    const auto default_duration = current_cfg.reinit_duration_ms;
+    const auto default_state_transition = current_cfg.reinit_method;
 
     reinit_configuration_ms.duration = reinit_configuration.duration.value_or(default_duration);
     reinit_configuration_ms.state_transition = reinit_configuration.state_transition.value_or(default_state_transition);
@@ -443,85 +432,7 @@ bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::Reini
 
 bool evse_managerImpl::handle_set_ac_charging_session_configuration(
     types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
-
-    types::iso15118::SupportedAppProtocols supported;
-    bool hlc_charging{true};
-    const auto secc_supported_protocols = [this]() {
-        std::scoped_lock lock(supported_app_protocols_mutex);
-        return supported_app_protocols_secc;
-    };
-
-    if (ac_charging_session_configuration.allow_isod2_fake_dc && !mod->config.ac_with_soc) {
-        EVLOG_warning << "Rejecting AC charging session configuration: allow_isod2_fake_dc requested but "
-                      << "ac_with_soc is disabled in EVSE config.";
-        return false;
-    }
-
-    if (ac_charging_session_configuration.allow_isod2) {
-        supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
-    }
-    if (ac_charging_session_configuration.allow_isod20) {
-        supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d20);
-    }
-    if (ac_charging_session_configuration.allow_isod2_fake_dc) {
-        supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::DIN70121);
-
-        // Allow DIN70121 and ISO15118-2 in the fake-dc mode
-        if (ac_charging_session_configuration.allow_isod2 == false) {
-            supported.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
-        }
-    }
-
-    // Ceck supported protocols by the SECC, before we update the list
-    if (auto available = secc_supported_protocols()) {
-        bool unsupported_requested = false;
-        for (const auto& requested_protocol : supported.app_protocols) {
-            const auto it =
-                std::find(available->app_protocols.begin(), available->app_protocols.end(), requested_protocol);
-            if (it == available->app_protocols.end()) {
-                EVLOG_warning << "Requested app protocol "
-                              << types::iso15118::supported_app_protocol_to_string(requested_protocol)
-                              << " not supported by SECC";
-                unsupported_requested = true;
-            }
-        }
-        if (unsupported_requested) {
-            return false;
-        }
-    }
-
-    if (!supported.app_protocols.empty()) {
-        mod->r_hlc[0]->call_update_supported_app_protocols(supported);
-    } else {
-        hlc_charging = false;
-    }
-
-    auto apply_reinit_configuration = [](const types::evse_manager::ReinitConfiguration& reinit_cfg,
-                                         Charger::SeccConfig& setup_cfg) {
-        if (reinit_cfg.duration.has_value()) {
-            setup_cfg.reinit_duration_ms = reinit_cfg.duration.value();
-        }
-        if (reinit_cfg.state_transition.has_value()) {
-            setup_cfg.reinit_method = reinit_cfg.state_transition.value();
-        }
-    };
-
-    auto setup_cfg = mod->build_charger_setup_config(Charger::ChargeMode::AC, mod->config.ac_hlc_enabled);
-
-    if (ac_charging_session_configuration.reinit_configuration.has_value()) {
-        apply_reinit_configuration(*ac_charging_session_configuration.reinit_configuration, setup_cfg);
-    }
-
-    if (ac_charging_session_configuration.phase_switch_configuration.has_value()) {
-        apply_reinit_configuration(ac_charging_session_configuration.phase_switch_configuration->reinit_configuration,
-                                   setup_cfg);
-    }
-
-    mod->allow_isod2_fake_dc = ac_charging_session_configuration.allow_isod2_fake_dc;
-    mod->current_secc_config = setup_cfg;
-    mod->charger->setup_if_idle(setup_cfg);
-
-    return true;
+    return mod->store_charging_configuration(ac_charging_session_configuration);
 }
 
 bool evse_managerImpl::handle_external_ready_to_start_charging() {

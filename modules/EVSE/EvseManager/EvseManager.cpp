@@ -82,16 +82,29 @@ void EvseManager::init() {
         slac_enabled = false;
     }
 
-    // Use SLAC MAC address for Autocharge if configured.
-    if (config.autocharge_use_slac_instead_of_hlc and slac_enabled and config.enable_autocharge) {
+    if (slac_enabled) {
         r_slac[0]->subscribe_ev_mac_address([this](const std::string& token) {
-            p_token_provider->publish_provided_token(create_autocharge_token(token, config.connector_id));
+            EVLOG_debug << "Received EV MAC from SLAC: " << token;
+
+            // Use SLAC MAC address for Autocharge if configured.
+            if (config.enable_autocharge and config.autocharge_use_slac_instead_of_hlc) {
+                p_token_provider->publish_provided_token(create_autocharge_token(token, config.connector_id));
+            }
 
             // publish ev_info to notify connected modules about the EV MAC address
             Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
             ev_info.mac = token;
             p_evse->publish_ev_info(ev_info);
+
+            apply_mac_based_ac_charging_configuration(token);
         });
+    }
+
+    if (!r_hlc.empty()) {
+        r_hlc[0]->subscribe_supported_app_protocols_secc(
+            [this](const types::iso15118::SupportedAppProtocols& protocols) {
+                secc_config_store.set_available_app_protocols(protocols);
+            });
     }
 
     hlc_enabled = not r_hlc.empty();
@@ -110,7 +123,7 @@ void EvseManager::init() {
     pnc_enabled = config.payment_enable_contract;
     central_contract_validation_allowed = config.central_contract_validation_allowed;
     contract_certificate_installation_enabled = config.contract_certificate_installation_enabled;
-    allow_isod2_fake_dc = config.ac_with_soc;
+    secc_config_store.set_secc_configuration(config);
 
     reserved = false;
     reservation_id = -1;
@@ -987,9 +1000,11 @@ void EvseManager::ready() {
     if (config.ac_with_soc) {
         setup_fake_DC_mode();
     } else {
-        const auto setup_cfg = build_charger_setup_config(
-            config.charge_mode == "DC" ? Charger::ChargeMode::DC : Charger::ChargeMode::AC, hlc_enabled);
-        charger->setup(setup_cfg);
+        auto charging_mode = config.charge_mode == "DC" ? SeccConfigurationStore::ChargeMode::DC
+                                                        : SeccConfigurationStore::ChargeMode::AC;
+        secc_config_store.set_secc_configuration(charging_mode, hlc_enabled);
+        auto secc_conf = secc_config_store.get_secc_configuration();
+        charger->setup_if_idle(secc_conf);
     }
 
     telemetryThreadHandle = std::thread([this]() {
@@ -1158,34 +1173,75 @@ types::evse_board_support::HardwareCapabilities EvseManager::get_hw_capabilities
     return hw_capabilities;
 }
 
-Charger::SeccConfig EvseManager::build_charger_setup_config(Charger::ChargeMode mode, bool ac_hlc_enabled) const {
-    if (!current_secc_config.has_value()) {
-        current_secc_config =
-            Charger::SeccConfig{config.has_ventilation,
-                                mode,
-                                ac_hlc_enabled,
-                                config.ac_hlc_use_5percent,
-                                config.ac_slac_reset_attempts,
-                                config.ac_enforce_hlc,
-                                static_cast<float>(config.soft_over_current_tolerance_percent),
-                                static_cast<float>(config.soft_over_current_measurement_noise_A),
-                                config.switch_3ph1ph_delay_s,
-                                config.switch_3ph1ph_cp_state,
-                                config.soft_over_current_timeout_ms,
-                                config.state_F_after_fault_ms,
-                                config.fail_on_powermeter_errors,
-                                config.raise_mrec9,
-                                config.sleep_before_enabling_pwm_hlc_mode_ms,
-                                utils::get_session_id_type_from_string(config.session_id_type),
-                                config.reinit_duration_ms,
-                                types::evse_manager::string_to_reinit_state_enum(config.reinit_method)};
+bool EvseManager::store_charging_configuration(
+    const types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+
+    const bool config_applied = secc_config_store.set_secc_configuration(ac_charging_session_configuration);
+    if (!config_applied) {
+        EVLOG_warning << "Charging session configuration rejected by SECC configuration store.";
+        return false;
     }
 
-    auto cfg = *current_secc_config;
-    cfg.charge_mode = mode;
-    cfg.ac_hlc_enabled = ac_hlc_enabled;
-    current_secc_config = cfg;
-    return cfg;
+    // Apply default SECC configuration immediately when no MAC-specific filter is provided
+    if (!ac_charging_session_configuration.mac_filter || ac_charging_session_configuration.mac_filter->empty()) {
+        const auto secc_conf = secc_config_store.get_secc_configuration();
+
+        if (!r_hlc.empty()) {
+            if (ac_charging_session_configuration.allow_isod2_fake_dc) {
+                std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
+                transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
+                transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
+                r_hlc[0]->call_update_energy_transfer_modes(transfer_modes);
+            } else {
+                update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_single_phase_core);
+                if (get_hw_capabilities().max_phase_count_import == 3) {
+                    update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_three_phase_core);
+                }
+                std::scoped_lock lock(supported_energy_transfers_mutex);
+                r_hlc[0]->call_update_energy_transfer_modes(supported_energy_transfers);
+            }
+        }
+        publish_supported_app_protocols(secc_conf);
+        charger->setup_if_idle(secc_conf);
+    }
+
+    return true;
+}
+
+void EvseManager::apply_mac_based_ac_charging_configuration(const std::string& ev_mac) {
+    auto secc_conf = secc_config_store.get_secc_configuration(ev_mac);
+    publish_supported_app_protocols(secc_conf);
+    if (!r_hlc.empty()) {
+        if (secc_conf.allow_isod2_fake_dc) {
+            std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
+            transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
+            transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
+            r_hlc[0]->call_update_energy_transfer_modes(transfer_modes);
+        } else {
+            update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_single_phase_core);
+            if (get_hw_capabilities().max_phase_count_import == 3) {
+                update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_three_phase_core);
+            }
+            std::scoped_lock lock(supported_energy_transfers_mutex);
+            r_hlc[0]->call_update_energy_transfer_modes(supported_energy_transfers);
+        }
+    }
+    charger->setup_if_idle(secc_conf);
+}
+
+SeccConfigurationStore::SeccConfig EvseManager::get_current_secc_config() const {
+    return secc_config_store.get_secc_configuration();
+}
+
+void EvseManager::publish_supported_app_protocols(const SeccConfigurationStore::SeccConfig& secc_conf) {
+    if (r_hlc.empty()) {
+        return;
+    }
+
+    const auto ok = r_hlc[0]->call_update_supported_app_protocols(secc_conf.supported_app_protocols);
+    if (!ok) {
+        EVLOG_debug << "No supported app protocols configured for HLC update";
+    }
 }
 
 int32_t EvseManager::get_reservation_id() {
@@ -1196,7 +1252,9 @@ int32_t EvseManager::get_reservation_id() {
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
-    charger->setup(build_charger_setup_config(Charger::ChargeMode::AC, hlc_enabled));
+    secc_config_store.set_secc_configuration(SeccConfigurationStore::ChargeMode::AC, hlc_enabled);
+    auto secc_conf = secc_config_store.get_secc_configuration();
+    charger->setup_if_idle(secc_conf);
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
@@ -1231,7 +1289,8 @@ void EvseManager::setup_fake_DC_mode() {
 
 void EvseManager::setup_ac_with_soc_handling() {
     bsp->signal_event.connect([this](const CPEvent event) {
-        if (allow_isod2_fake_dc && event == CPEvent::CarPluggedIn) {
+        const auto secc_conf = secc_config_store.get_secc_configuration();
+        if (secc_conf.allow_isod2_fake_dc && event == CPEvent::CarPluggedIn) {
             // configure for DC again for next session. Will reset to AC when SoC is received
             setup_fake_DC_mode();
         }
@@ -1239,7 +1298,12 @@ void EvseManager::setup_ac_with_soc_handling() {
 
     // subscribe to SoC updates: As soon as we get the SoC, we can switch to basic AC mode
     r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus status) {
-        if (allow_isod2_fake_dc) {
+        auto secc_conf = secc_config_store.get_last_secc_configuration();
+        if (!secc_conf.has_value()) {
+            secc_conf = secc_config_store.get_secc_configuration();
+        }
+
+        if (secc_conf->allow_isod2_fake_dc) {
             EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
             charger->start_reinit();
             setup_AC_mode();
@@ -1248,7 +1312,9 @@ void EvseManager::setup_ac_with_soc_handling() {
 }
 
 void EvseManager::setup_AC_mode(const bool hlc_enabled) {
-    charger->setup(build_charger_setup_config(Charger::ChargeMode::AC, hlc_enabled));
+    secc_config_store.set_secc_configuration(SeccConfigurationStore::ChargeMode::AC, hlc_enabled);
+    auto secc_conf = secc_config_store.get_secc_configuration();
+    charger->setup_if_idle(secc_conf);
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
