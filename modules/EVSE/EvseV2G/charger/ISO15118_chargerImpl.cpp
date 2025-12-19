@@ -297,6 +297,11 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     bool rv{true};
     v2g_ctx->supported_protocols = 0;
 
+    if (supported_app_protocols.app_protocols.empty()) {
+        dlog(DLOG_LEVEL_WARNING, "No supported app protocols configured");
+        return true;
+    }
+
     for (const auto& protocol : supported_app_protocols.app_protocols) {
         // Check if the supported app protocol is in the SECC list
         const bool allowed = std::find(this->supp_app_protocols_secc.app_protocols.begin(),
