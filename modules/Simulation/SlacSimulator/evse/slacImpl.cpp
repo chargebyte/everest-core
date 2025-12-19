@@ -56,6 +56,7 @@ void slacImpl::set_state_to_matching() {
     state = State::MATCHING;
     mod->cntmatching = 0;
     publish_state(state_to_string(state));
+    publish_ev_mac_address(mod->config.ev_mac_address);
     start_slac_init_timer();
 }
 

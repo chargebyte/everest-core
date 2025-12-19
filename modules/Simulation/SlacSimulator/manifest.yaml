@@ -6,6 +6,10 @@ config:
       is disabled as soon as the MATCHED state is signaled.
     type: integer
     default: 20000
+  ev_mac_address:
+    description: EV MAC address published during matching
+    type: string
+    default: "DE:AD:BE:EF:00:01"
 provides:
   evse:
     interface: slac
