@@ -34,7 +34,6 @@ void ISO15118_chargerImpl::init() {
         v2g_ctx->supported_protocols |= (1 << V2G_PROTO_ISO15118_2013);
         supp_app_protocols_secc.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118d2);
     }
-    publish_supported_app_protocols_secc(supp_app_protocols_secc);
 
     /* Configure tls_security */
     if (mod->config.tls_security == "force") {
@@ -67,6 +66,7 @@ void ISO15118_chargerImpl::init() {
 }
 
 void ISO15118_chargerImpl::ready() {
+    publish_supported_app_protocols_secc(supp_app_protocols_secc);
 }
 
 void ISO15118_chargerImpl::handle_setup(types::iso15118::EVSEID& evse_id,
