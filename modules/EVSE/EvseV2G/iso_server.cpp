@@ -1315,9 +1315,6 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
     // TODO: For DC charging wait for CP state B , before transmitting of the response ([V2G2-921], [V2G2-922]). CP
     // state is checked by other module
 
-    /* reset our internal reminder that renegotiation was requested */
-    conn->ctx->session.renegotiation_required = false; // Reset renegotiation flag
-
     if (conn->ctx->is_dc_charger == false) {
         /* Configure AC stucture elements */
         res->AC_EVSEChargeParameter_isUsed = 1;
@@ -1453,7 +1450,17 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
 
     /* Set next expected req msg */
     if (conn->ctx->is_dc_charger == true) {
-        if (conn->ctx->evse_v2g_data.no_energy_pause == NoEnergyPauseStatus::BeforeCableCheck) {
+        if (conn->ctx->session.renegotiation_required) {
+            // during DC re-negotiation the cable is still connected and the contactors stay closed,
+            // so there is usually no need to perform cable check and pre-charge step again and
+            // according to the standard, the charge loop is continued usually directly with
+            // a fresh PowerDeliveryReq(start)
+            // however, some EV seem want to step through cable check again, so let the EV decide
+            // and accept either flow
+            conn->ctx->state = (res->EVSEProcessing == iso2_EVSEProcessingType_Finished)
+                                   ? (int)iso_dc_state_id::WAIT_FOR_CABLECHECK_POWERDELIVERY
+                                   : (int)iso_dc_state_id::WAIT_FOR_CHARGEPARAMETERDISCOVERY;
+        } else if (conn->ctx->evse_v2g_data.no_energy_pause == NoEnergyPauseStatus::BeforeCableCheck) {
             conn->ctx->state = (int)iso_dc_state_id::WAIT_FOR_PRECHARGE_POWERDELIVERY; // IEC6185-1:2023 CC.3.5.2
         } else {
             conn->ctx->state = (iso2_EVSEProcessingType_Finished == res->EVSEProcessing)
@@ -1465,6 +1472,9 @@ static enum v2g_event handle_iso_charge_parameter_discovery(struct v2g_connectio
                                ? (int)iso_ac_state_id::WAIT_FOR_POWERDELIVERY
                                : (int)iso_ac_state_id::WAIT_FOR_CHARGEPARAMETERDISCOVERY;
     }
+
+    /* reset our internal reminder that renegotiation was requested */
+    conn->ctx->session.renegotiation_required = false;
 
     if (res->ResponseCode >= iso2_responseCodeType_FAILED) {
         res->DC_EVSEChargeParameter.EVSECurrentRegulationTolerance_isUsed = 0;

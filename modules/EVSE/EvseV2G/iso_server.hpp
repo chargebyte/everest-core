@@ -43,7 +43,8 @@ enum class iso_dc_state_id {
     WAIT_FOR_CURRENTDEMAND,
     WAIT_FOR_METERINGRECEIPT,
     WAIT_FOR_WELDINGDETECTION_SESSIONSTOP,
-    WAIT_FOR_TERMINATED_SESSION
+    WAIT_FOR_TERMINATED_SESSION,
+    WAIT_FOR_CABLECHECK_POWERDELIVERY,
 };
 
 static const char* isoResponse[] = {
@@ -133,7 +134,9 @@ static const struct iso_state iso_dc_states[] = {
     {"Waiting for MeteringReceiptReq", 1 << V2G_METERING_RECEIPT_MSG},
     /* [V2G-597], [V2G-601] Expected req msg after PowerDeliveryRes or WeldingDetectionRes*/
     {"Waiting for WeldingDetectionReq, SessionStopReq", 1 << V2G_WELDING_DETECTION_MSG | 1 << V2G_SESSION_STOP_MSG},
-    {"Closing session", 0}};
+    {"Closing session", 0},
+    /* Expect CableCheckReq or PowerDeliveryReq after re-negotiate */
+    {"Waiting for CableCheckReq, PowerDeliveryReq", 1 << V2G_CABLE_CHECK_MSG | 1 << V2G_POWER_DELIVERY_MSG}};
 
 /*!
  * \brief iso_handle_request This is the main protocol handler. This function analyzes the received
