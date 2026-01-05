@@ -142,13 +142,15 @@ void EvseManager::init() {
                 if (not config.mcs_enabled) {
                     dc_was_updated = update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC);
                     dc_bpt_was_updated =
-                        caps.bidirectional ? update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC_BPT)
-                                        : false;
+                        caps.bidirectional
+                            ? update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC_BPT)
+                            : false;
                 } else {
                     dc_was_updated = update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS);
                     dc_bpt_was_updated =
-                        caps.bidirectional ? update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS_BPT)
-                                        : false;
+                        caps.bidirectional
+                            ? update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS_BPT)
+                            : false;
                 }
 
                 if (dc_was_updated || dc_bpt_was_updated) {
@@ -277,7 +279,6 @@ void EvseManager::ready() {
             // tell charger (it will disable PWM)
             session_log.evse(true, "D-LINK_PAUSE.req");
             charger->dlink_pause();
-
             if (slac_enabled) {
                 r_slac[0]->call_dlink_pause();
             }
