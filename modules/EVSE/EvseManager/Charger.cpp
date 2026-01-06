@@ -2165,50 +2165,23 @@ void Charger::dlink_terminate() {
 }
 
 void Charger::dlink_error() {
-    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_dlink_error);
+    {
+        Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_dlink_error);
+        shared_context.hlc_allow_close_contactor = false;
+    }
 
-    shared_context.hlc_allow_close_contactor = false;
-
-    // Is PWM on at the moment?
-    if (not shared_context.pwm_running) {
-        // [V2G3-M07-04]: With receiving a D-LINK_ERROR.request from HLE in X1 state, the EVSE's
-        // communication node shall perform a state X1 to state E/F to state X1 or X2 transition.
-    } else {
-        // [V2G3-M07-05]: With receiving a D-LINK_ERROR.request in X2 state from HLE, the EVSE's
-        // communication node shall perform a state X2 to X1 to state E/F to state X1 or X2 transition.
-
-        // Are we in 5% mode or not?
-        if (hlc_use_5percent_current_session) {
-            // [V2G3-M07-06] Within the control pilot state X1, the communication node shall leave the
-            // logical network and change the matching state to "Unmatched". [V2G3-M07-07] With reaching the
-            // state "Unmatched", the EVSE shall switch to state E/F.
-
-            // FIXME: We don't wait for SLAC to go to UNMATCHED in X1 for now but just do a normal 3 seconds
-            // t_step_X1 instead. This should be more then sufficient for the SLAC module to reset.
-
-            // Do t_step_X1 with a t_step_EF afterwards
-            // [V2G3-M07-08] The state E/F shall be applied at least T_step_EF: This is already handled in
-            // the t_step_EF state.
-            internal_context.t_step_X1_return_state = EvseState::T_step_EF;
-            internal_context.t_step_X1_return_pwm = 0.;
-            internal_context.t_step_EF_return_ampere = 0.;
-            shared_context.current_state = EvseState::T_step_X1;
-
-            // After returning from T_step_EF, go to Waiting for Auth (We are restarting the session)
-            internal_context.t_step_EF_return_state = EvseState::WaitingForAuthentication;
-            // [V2G3-M07-09] After applying state E/F, the EVSE shall switch to contol pilot state X1 or X2
-            // as soon as the EVSE is ready control for pilot incoming duty matching cycle requests: This is
-            // already handled in the Auth step.
-
-            // [V2G3-M07-05] says we need to go through X1 at the end of the sequence
-            internal_context.t_step_EF_return_pwm = 0.;
-            internal_context.t_step_EF_return_ampere = 0.;
-        }
-        // else {
-        // [V2G3-M07-10] Gives us two options for nominal PWM mode and HLC in case of error: We choose
-        // [V2G3-M07-12] (Don't interrupt basic AC charging just because an error in HLC happend) So we
-        // don't do anything here, SLAC will be notified anyway to reset
-        //}
+    // [V2G3-M07-10] Gives us two options for nominal PWM mode and HLC in case of error: We choose [V2G3-M07-12]
+    // [V2G3-M07-12] (Don't interrupt basic AC charging just because an error in HLC happend) So we
+    // don't do anything here, SLAC will be notified anyway to reset
+    // [V2G3-M07-04]: With receiving a D-LINK_ERROR.request from HLE in X1 state, the EVSE's
+    // communication node shall perform a state X1 to state E/F to state X1 or X2 transition.
+    // [V2G3-M07-05]: With receiving a D-LINK_ERROR.request in X2 state from HLE, the EVSE's
+    // communication node shall perform a state X2 to X1 to state E/F to state X1 or X2 transition.
+    // [V2G3-M07-06] Within the control pilot state X1, the communication node shall leave the
+    // logical network and change the matching state to "Unmatched". [V2G3-M07-07] With reaching the
+    // state "Unmatched", the EVSE shall switch to state E/F.
+    if (hlc_use_5percent_current_session == true) {
+        start_reinit();
     }
 }
 
