@@ -404,7 +404,7 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
 
     const bool din_allowed = (v2g_ctx->supported_protocols & (1 << V2G_PROTO_DIN70121)) != 0;
     v2g_ctx->is_fake_dc = (din_allowed && v2g_ctx->is_dc_charger == false);
-    
+
     return rv;
 }
 
