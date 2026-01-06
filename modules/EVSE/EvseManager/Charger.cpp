@@ -1373,6 +1373,11 @@ bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reini
 
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
 
+    if (shared_context.current_state == EvseState::Idle || shared_context.current_state == EvseState::Disabled) {
+        EVLOG_warning << "Rejecting reinit request: no EV plugged in or connector disabled";
+        return false;
+    }
+
     if (shared_context.reinit_running == false) {
         shared_context.reinit_override = types::evse_manager::ReinitConfiguration{reinit_method, reinit_duration_ms};
         shared_context.reinit_requested = true;
