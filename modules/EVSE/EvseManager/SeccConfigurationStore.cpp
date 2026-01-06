@@ -83,8 +83,10 @@ bool SeccConfigurationStore::set_secc_configuration(const types::evse_manager::A
         return false;
     }
 
-    const bool hlc_enabled_for_session =
-        module_config->ac_hlc_enabled && (config.allow_isod2 || config.allow_isod20 || config.allow_isod2_fake_dc);
+    const bool mac_filter_configured = config.mac_filter && !config.mac_filter->empty();
+    const bool hlc_protocols_configured = ((config.allow_isod2 || config.allow_isod20 || config.allow_isod2_fake_dc));
+    const bool hlc_enabled_for_session = (module_config->ac_hlc_enabled && mac_filter_configured ||
+                                         (module_config->ac_hlc_enabled && !mac_filter_configured && hlc_protocols_configured));
     const auto reinit_method = config.reinit_configuration && config.reinit_configuration->state_transition
                                    ? *config.reinit_configuration->state_transition
                                    : types::evse_manager::string_to_reinit_state_enum(module_config->reinit_method);
