@@ -193,6 +193,7 @@ public:
     void nodered_set_current_limit(float max_current);
     void nodered_set_watt_limit(float max_watt);
     types::energy::ExternalLimits get_local_energy_limits();
+    bool reinit_charging_session(const types::evse_manager::ReinitConfiguration& reinit_configuration);
 
     void cancel_reservation(bool signal_event);
     bool is_reserved();
