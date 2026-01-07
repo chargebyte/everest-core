@@ -1560,6 +1560,9 @@ void EvseManager::setup_ac_with_soc_handling() {
             EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
             charger->start_reinit();
             setup_AC_mode();
+
+            ev_info.soc = status.dc_ev_ress_soc;
+            p_evse->publish_ev_info(ev_info);
         }
     });
 }
