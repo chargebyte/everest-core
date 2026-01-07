@@ -1486,6 +1486,15 @@ SeccConfigurationStore::SeccConfig EvseManager::get_current_secc_config() const 
     return secc_config_store.get_secc_configuration();
 }
 
+bool EvseManager::reinit_charging_session(const types::evse_manager::ReinitConfiguration& reinit_configuration) {
+    const auto secc_conf = get_current_secc_config();
+    if (secc_conf.allow_isod2_fake_dc) {
+        setup_fake_DC_mode();
+    }
+
+    return charger->start_reinit(reinit_configuration);
+}
+
 void EvseManager::publish_supported_app_protocols(const SeccConfigurationStore::SeccConfig& secc_conf) {
     if (r_hlc.empty()) {
         return;

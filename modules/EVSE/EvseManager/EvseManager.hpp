@@ -202,6 +202,7 @@ public:
     void update_to_zero_discharge_limit(types::energy::ExternalLimits& limits);
     bool update_local_energy_limit(types::energy::ExternalLimits l);
     types::energy::ExternalLimits get_local_energy_limits();
+    bool reinit_charging_session(const types::evse_manager::ReinitConfiguration& reinit_configuration);
 
     void cancel_reservation(bool signal_event);
     bool is_reserved();

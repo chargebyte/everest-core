@@ -413,7 +413,8 @@ bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::Reini
 
     reinit_configuration_ms.duration = reinit_configuration.duration.value_or(default_duration);
     reinit_configuration_ms.state_transition = reinit_configuration.state_transition.value_or(default_state_transition);
-    return mod->charger->start_reinit(reinit_configuration_ms);
+
+    return mod->reinit_charging_session(reinit_configuration_ms);
 }
 
 bool evse_managerImpl::handle_set_ac_charging_session_configuration(
