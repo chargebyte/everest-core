@@ -767,7 +767,7 @@ void EvseManager::ready() {
                 [this](types::iso15118::V2gMessages v2g_messages) { log_v2g_message(v2g_messages); });
 
             r_hlc[0]->subscribe_selected_protocol(
-                [this](std::string selected_protocol) { this->selected_protocol = selected_protocol; });
+                [this](std::string selected_protocol) { set_selected_protocol(selected_protocol); });
         }
         // switch to DC mode for first session for AC with SoC
         if (config.ac_with_soc) {
@@ -1163,6 +1163,14 @@ void EvseManager::ready_to_start_charging() {
     }
 }
 
+void EvseManager::set_selected_protocol(const std::string& protocol) {
+    if (selected_protocol == protocol) {
+        return;
+    }
+    selected_protocol = protocol;
+    signal_selected_protocol(protocol);
+}
+
 types::powermeter::Powermeter EvseManager::get_latest_powermeter_data_billing() {
     Everest::scoped_lock_timeout lock(power_mutex, Everest::MutexDescription::EVSE_get_latest_powermeter_data_billing);
     return latest_powermeter_data_billing;
@@ -1334,6 +1342,8 @@ void EvseManager::setup_AC_mode(const bool hlc_enabled) {
     if (hlc_enabled) {
         r_hlc[0]->call_setup(evseid, sae_mode, config.session_logging);
         r_hlc[0]->call_update_energy_transfer_modes(transfer_modes);
+    } else {
+        set_selected_protocol("IEC61851-1");
     }
 }
 
