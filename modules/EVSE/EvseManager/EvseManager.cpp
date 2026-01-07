@@ -1129,7 +1129,7 @@ void EvseManager::ready() {
                 [this](types::iso15118::V2gMessages v2g_messages) { log_v2g_message(v2g_messages); });
 
             r_hlc[0]->subscribe_selected_protocol(
-                [this](std::string selected_protocol) { this->selected_protocol = selected_protocol; });
+                [this](std::string selected_protocol) { set_selected_protocol(selected_protocol); });
         }
         // switch to DC mode for first session for AC with SoC
         if (config.ac_with_soc) {
@@ -1583,6 +1583,14 @@ void EvseManager::ready_to_start_charging() {
     }
 }
 
+void EvseManager::set_selected_protocol(const std::string& protocol) {
+    if (selected_protocol == protocol) {
+        return;
+    }
+    selected_protocol = protocol;
+    signal_selected_protocol(protocol);
+}
+
 types::powermeter::Powermeter EvseManager::get_latest_powermeter_data_billing() {
     Everest::scoped_lock_timeout lock(power_mutex, Everest::MutexDescription::EVSE_get_latest_powermeter_data_billing);
     return latest_powermeter_data_billing;
@@ -1610,14 +1618,16 @@ bool EvseManager::store_charging_configuration(
                 std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
                 transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
                 transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
-                r_hlc[0]->call_update_energy_transfer_modes(transfer_modes);
+                this->update_supported_energy_transfers(transfer_modes);
+                this->publish_and_update_supported_energy_transfers();
             } else {
                 update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_single_phase_core);
                 if (get_hw_capabilities().max_phase_count_import == 3) {
                     update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_three_phase_core);
                 }
                 std::scoped_lock lock(supported_energy_transfers_mutex);
-                r_hlc[0]->call_update_energy_transfer_modes(supported_energy_transfers);
+                this->update_supported_energy_transfers(supported_energy_transfers);
+                this->publish_and_update_supported_energy_transfers();
             }
         }
         publish_supported_app_protocols(secc_conf);
@@ -1635,7 +1645,8 @@ void EvseManager::apply_mac_based_ac_charging_configuration(const std::string& e
             std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
             transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
             transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
-            r_hlc[0]->call_update_energy_transfer_modes(transfer_modes);
+            this->update_supported_energy_transfers(transfer_modes);
+            this->publish_and_update_supported_energy_transfers();
         } else {
             std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
             transfer_modes.push_back(types::iso15118::EnergyTransferMode::AC_single_phase_core);
@@ -1756,6 +1767,8 @@ void EvseManager::setup_AC_mode(const bool hlc_enabled) {
         r_hlc[0]->call_setup(evseid, sae_mode, config.session_logging);
         this->update_supported_energy_transfers(transfer_modes);
         this->publish_and_update_supported_energy_transfers();
+    } else {
+        set_selected_protocol("IEC61851-1");
     }
 }
 

@@ -93,12 +93,15 @@ void evse_managerImpl::ready() {
         publish_session_event(j);
     });
 
+    mod->signal_selected_protocol.connect(
+        [this](const std::string& selected_protocol) { publish_selected_protocol(selected_protocol); });
+
     mod->charger->signal_session_started_event.connect(
         [this](const types::evse_manager::StartSessionReason& start_reason,
                const std::optional<types::authorization::ProvidedIdToken>& provided_id_token) {
             types::evse_manager::SessionEvent se;
             se.event = types::evse_manager::SessionEventEnum::SessionStarted;
-            this->mod->selected_protocol = "IEC61851-1";
+            this->mod->set_selected_protocol("IEC61851-1");
             types::evse_manager::SessionStarted session_started;
 
             se.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
@@ -197,7 +200,7 @@ void evse_managerImpl::ready() {
             types::evse_manager::SessionEvent se;
 
             se.event = types::evse_manager::SessionEventEnum::TransactionFinished;
-            this->mod->selected_protocol = "Unknown";
+            this->mod->set_selected_protocol("Unknown");
             types::evse_manager::TransactionFinished transaction_finished;
 
             se.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
@@ -279,15 +282,13 @@ void evse_managerImpl::ready() {
         publish_session_event(se);
 
         if (e == types::evse_manager::SessionEventEnum::SessionFinished) {
-            this->mod->selected_protocol = "Unknown";
+            this->mod->set_selected_protocol("Unknown");
         }
 
         // Cancel reservations if charger is disabled
         if (mod->is_reserved() and e == types::evse_manager::SessionEventEnum::Disabled) {
             mod->cancel_reservation(true);
         }
-
-        publish_selected_protocol(this->mod->selected_protocol);
     });
 
     mod->charger->signal_session_resumed_event.connect([this](const std::string& session_id) {
