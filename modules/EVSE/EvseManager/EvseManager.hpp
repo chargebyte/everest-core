@@ -222,6 +222,7 @@ public:
     void set_contract_certificate_installation_enabled(const bool contract_certificate_installation_enabled);
 
     sigslot::signal<types::evse_manager::SessionEvent> signalReservationEvent;
+    sigslot::signal<std::string> signal_selected_protocol;
 
     void charger_was_authorized();
 
@@ -236,6 +237,7 @@ public:
     void apply_new_target_voltage_current();
 
     std::string selected_protocol = "Unknown";
+    void set_selected_protocol(const std::string& protocol);
 
     std::atomic_bool sae_bidi_active{false};
 
