@@ -356,6 +356,8 @@ private:
     std::atomic_bool hlc_use_5percent_current_session;
     // HLC enabled in current AC session. This can change during the session if e.g. HLC fails.
     std::atomic_bool ac_hlc_enabled_current_session;
+    // Is set to true if HLC has failed before; otherwise false
+    std::atomic_bool hlc_failed{false};
     // Indicates whether CP state E is supported by the hardware
     std::atomic_bool supports_cp_state_E{true};
 
