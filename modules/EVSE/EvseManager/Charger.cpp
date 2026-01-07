@@ -1639,7 +1639,7 @@ void Charger::setup_if_idle(const SeccConfigurationStore::SeccConfig& cfg) {
 void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) {
     // cache our config variables
     config_context.charge_mode = cfg.charge_mode;
-    ac_hlc_enabled_current_session = config_context.ac_hlc_enabled = cfg.ac_hlc_enabled;
+    config_context.ac_hlc_enabled = cfg.ac_hlc_enabled;
     config_context.ac_hlc_use_5percent = cfg.ac_hlc_use_5percent;
     config_context.ac_slac_reset_attempts = cfg.ac_slac_reset_attempts;
     config_context.ac_enforce_hlc = cfg.ac_enforce_hlc;
