@@ -337,7 +337,7 @@ void Charger::run_state_machine() {
 
                 // switch on HLC if configured. May be switched off later on after retries for this session only.
                 if (config_context.charge_mode == ChargeMode::AC) {
-                    ac_hlc_enabled_current_session = config_context.ac_hlc_enabled;
+                    ac_hlc_enabled_current_session = config_context.ac_hlc_enabled && !hlc_failed;
                     if (ac_hlc_enabled_current_session) {
                         hlc_use_5percent_current_session = config_context.ac_hlc_use_5percent;
                     }
@@ -435,6 +435,7 @@ void Charger::run_state_machine() {
 
                 const EvseState target_state(EvseState::PrepareCharging);
 
+                hlc_failed = false;
                 // EIM done and matching process not started -> we need to go through t_step_EF and fall back to nominal
                 // PWM. This is a complete waste of 4 precious seconds.
                 if (config_context.charge_mode == ChargeMode::AC) {
@@ -1668,7 +1669,7 @@ void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) 
     config_context.reinit_duration_ms = cfg.reinit_duration_ms;
     config_context.reinit_method = cfg.reinit_method;
 
-    if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled)
+    if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled and !hlc_failed)
         EVLOG_info << "AC HLC mode enabled.";
 }
 
@@ -2195,6 +2196,7 @@ void Charger::dlink_error() {
             shared_context.hlc_mode_active = false;
         }
     }
+    hlc_failed = true;
 
     // [V2G3-M07-10] Gives us two options for nominal PWM mode and HLC in case of error: We choose [V2G3-M07-12]
     // [V2G3-M07-12] (Don't interrupt basic AC charging just because an error in HLC happend) So we
