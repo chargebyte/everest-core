@@ -37,8 +37,8 @@ public:
         types::iso15118::SupportedAppProtocols supported_app_protocols;
         float soft_over_current_tolerance_percent;
         float soft_over_current_measurement_noise_A;
-        int switch_3ph1ph_delay_s;
-        std::string switch_3ph1ph_cp_state;
+        int switch_3ph1ph_delay_ms;
+        types::evse_manager::ReinitStateEnum phase_switch_method;
         int soft_over_current_timeout_ms;
         int state_F_after_fault_ms;
         bool fail_on_powermeter_errors;

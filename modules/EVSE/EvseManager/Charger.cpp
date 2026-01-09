@@ -623,13 +623,19 @@ void Charger::run_state_machine() {
             if (initialize_state) {
                 session_log.evse(false, "Start switching phases");
                 signal_simple_event(types::evse_manager::SessionEventEnum::SwitchingPhases);
-                if (config_context.switch_3ph1ph_cp_state_F) {
+                switch (config_context.phase_switch_method) {
+                case types::evse_manager::ReinitStateEnum::CPStateE:
+                    set_cp_state_E();
+                    break;
+                case types::evse_manager::ReinitStateEnum::CPStateF:
                     pwm_F();
-                } else {
+                    break;
+                case types::evse_manager::ReinitStateEnum::CPStateX1:
                     pwm_off();
+                    break;
                 }
             }
-            if (time_in_current_state >= config_context.switch_3ph1ph_delay_s * 1000) {
+            if (time_in_current_state >= config_context.switch_3ph1ph_delay_ms) {
                 session_log.evse(false, "Exit switching phases");
                 bsp->switch_three_phases_while_charging(shared_context.switch_3ph1ph_threephase);
                 shared_context.switch_3ph1ph_threephase_ongoing = false;
@@ -1642,8 +1648,8 @@ void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) 
     soft_over_current_tolerance_percent = cfg.soft_over_current_tolerance_percent;
     soft_over_current_measurement_noise_A = cfg.soft_over_current_measurement_noise_A;
 
-    config_context.switch_3ph1ph_delay_s = cfg.switch_3ph1ph_delay_s;
-    config_context.switch_3ph1ph_cp_state_F = cfg.switch_3ph1ph_cp_state == "F";
+    config_context.switch_3ph1ph_delay_ms = cfg.switch_3ph1ph_delay_ms;
+    config_context.phase_switch_method = cfg.phase_switch_method;
 
     config_context.state_F_after_fault_ms = cfg.state_F_after_fault_ms;
     config_context.fail_on_powermeter_errors = cfg.fail_on_powermeter_errors;
