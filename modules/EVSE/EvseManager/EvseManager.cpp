@@ -1194,7 +1194,9 @@ bool EvseManager::store_charging_configuration(
     if (!ac_charging_session_configuration.mac_filter || ac_charging_session_configuration.mac_filter->empty()) {
         const auto secc_conf = secc_config_store.get_secc_configuration();
 
-        if (!r_hlc.empty()) {
+        // Dynamic switching of the energy transfer mode is only necessary for AC charging,
+        // depending on whether fake DC is configured and how many phases are available.
+        if ((config.charge_mode == "AC") && !r_hlc.empty()) {
             if (ac_charging_session_configuration.allow_isod2_fake_dc) {
                 std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
                 transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
