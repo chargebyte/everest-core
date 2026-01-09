@@ -1620,26 +1620,19 @@ bool Charger::switch_three_phases_while_charging(bool n) {
 }
 
 void Charger::setup(const SeccConfigurationStore::SeccConfig& cfg) {
-    // set up board support package
-    bsp->setup(cfg.has_ventilation);
-
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
     apply_setup_locked(cfg);
 }
 
 void Charger::setup_if_idle(const SeccConfigurationStore::SeccConfig& cfg) {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
-    if (shared_context.current_state != EvseState::Idle) {
-        pending_secc_setup = cfg;
-        return;
-    }
-
-    bsp->setup(cfg.has_ventilation);
-    apply_setup_locked(cfg);
+    pending_secc_setup = cfg;
 }
 
 void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) {
     // cache our config variables
+    bsp->setup(cfg.has_ventilation);
+
     config_context.charge_mode = cfg.charge_mode;
     config_context.ac_hlc_enabled = cfg.ac_hlc_enabled;
     config_context.ac_hlc_use_5percent = cfg.ac_hlc_use_5percent;
@@ -1673,7 +1666,6 @@ void Charger::apply_pending_setup() {
     auto cfg = *pending_secc_setup;
     pending_secc_setup.reset();
 
-    bsp->setup(cfg.has_ventilation);
     apply_setup_locked(cfg);
 }
 
