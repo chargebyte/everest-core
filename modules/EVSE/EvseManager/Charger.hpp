@@ -335,9 +335,9 @@ private:
         // AC or DC
         ChargeMode charge_mode{0};
         // Delay when switching from 1ph to 3ph or 3ph to 1ph
-        int switch_3ph1ph_delay_s{10};
-        // Use state F if true, otherwise use X1
-        bool switch_3ph1ph_cp_state_F{false};
+        int switch_3ph1ph_delay_ms{10000};
+        // CP behaviour during phase switch
+        types::evse_manager::ReinitStateEnum phase_switch_method{types::evse_manager::ReinitStateEnum::CPStateX1};
         // Tolerate soft over current for given time
         int soft_over_current_timeout_ms{7000};
         // Switch to F for configured ms after a fatal error

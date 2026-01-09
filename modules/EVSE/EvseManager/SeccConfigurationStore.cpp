@@ -88,7 +88,17 @@ bool SeccConfigurationStore::set_secc_configuration(const types::evse_manager::A
     const bool hlc_enabled_for_session =
         ((module_config->ac_hlc_enabled && mac_filter_configured) ||
          (module_config->ac_hlc_enabled && !mac_filter_configured && hlc_protocols_configured));
-    const auto reinit_method = config.reinit_configuration && config.reinit_configuration->state_transition
+         const auto phase_switch_method =
+        config.phase_switch_configuration &&
+                config.phase_switch_configuration->reinit_configuration.state_transition.has_value()
+            ? *config.phase_switch_configuration->reinit_configuration.state_transition
+            : types::evse_manager::string_to_reinit_state_enum("CPState" + module_config->switch_3ph1ph_cp_state);
+    const int phase_switch_duration =
+        config.phase_switch_configuration &&
+                config.phase_switch_configuration->reinit_configuration.duration.has_value()
+            ? *config.phase_switch_configuration->reinit_configuration.duration
+            : module_config->switch_3ph1ph_delay_s * 1000;
+    const auto reinit_method = config.reinit_configuration && config.reinit_configuration->state_transition.has_value()
                                    ? *config.reinit_configuration->state_transition
                                    : types::evse_manager::string_to_reinit_state_enum(module_config->reinit_method);
     const int reinit_duration = config.reinit_configuration && config.reinit_configuration->duration.has_value()
@@ -107,8 +117,8 @@ bool SeccConfigurationStore::set_secc_configuration(const types::evse_manager::A
                                     requested,
                                     static_cast<float>(module_config->soft_over_current_tolerance_percent),
                                     static_cast<float>(module_config->soft_over_current_measurement_noise_A),
-                                    module_config->switch_3ph1ph_delay_s,
-                                    module_config->switch_3ph1ph_cp_state,
+                                    phase_switch_duration,
+                                    phase_switch_method,
                                     module_config->soft_over_current_timeout_ms,
                                     module_config->state_F_after_fault_ms,
                                     module_config->fail_on_powermeter_errors,
@@ -211,8 +221,8 @@ void SeccConfigurationStore::set_secc_configuration(const Conf& config) {
                          {},
                          static_cast<float>(config.soft_over_current_tolerance_percent),
                          static_cast<float>(config.soft_over_current_measurement_noise_A),
-                         config.switch_3ph1ph_delay_s,
-                         config.switch_3ph1ph_cp_state,
+                         config.switch_3ph1ph_delay_s * 1000,
+                         types::evse_manager::string_to_reinit_state_enum("CPState" + config.switch_3ph1ph_cp_state),
                          config.soft_over_current_timeout_ms,
                          config.state_F_after_fault_ms,
                          config.fail_on_powermeter_errors,
