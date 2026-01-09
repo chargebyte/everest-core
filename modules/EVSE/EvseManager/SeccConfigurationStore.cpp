@@ -148,6 +148,9 @@ void SeccConfigurationStore::set_available_app_protocols(const types::iso15118::
 }
 
 SeccConfigurationStore::SeccConfig SeccConfigurationStore::get_secc_configuration(const std::string& ev_mac) const {
+    if (ev_mac.empty()) {
+        return get_secc_configuration();
+    }
     const auto normalized_mac = normalize_mac(ev_mac);
 
     std::scoped_lock lock(mutex);
