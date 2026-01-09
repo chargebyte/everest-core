@@ -1602,6 +1602,7 @@ types::evse_board_support::HardwareCapabilities EvseManager::get_hw_capabilities
 
 bool EvseManager::store_charging_configuration(
     const types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+    std::string ev_mac;
 
     const bool config_applied = secc_config_store.set_secc_configuration(ac_charging_session_configuration);
     if (!config_applied) {
@@ -1609,32 +1610,11 @@ bool EvseManager::store_charging_configuration(
         return false;
     }
 
-    // Apply default SECC configuration immediately when no MAC-specific filter is provided
-    if (!ac_charging_session_configuration.mac_filter || ac_charging_session_configuration.mac_filter->empty()) {
-        const auto secc_conf = secc_config_store.get_secc_configuration();
-
-        // Dynamic switching of the energy transfer mode is only necessary for AC charging,
-        // depending on whether fake DC is configured and how many phases are available.
-        if ((config.charge_mode == "AC") && !r_hlc.empty()) {
-            if (ac_charging_session_configuration.allow_isod2_fake_dc) {
-                std::vector<types::iso15118::EnergyTransferMode> transfer_modes;
-                transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
-                transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_core);
-                this->update_supported_energy_transfers(transfer_modes);
-                this->publish_and_update_supported_energy_transfers();
-            } else {
-                update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_single_phase_core);
-                if (get_hw_capabilities().max_phase_count_import == 3) {
-                    update_supported_energy_transfers(types::iso15118::EnergyTransferMode::AC_three_phase_core);
-                }
-                std::scoped_lock lock(supported_energy_transfers_mutex);
-                this->update_supported_energy_transfers(supported_energy_transfers);
-                this->publish_and_update_supported_energy_transfers();
-            }
-        }
-        publish_supported_app_protocols(secc_conf);
-        charger->setup_if_idle(secc_conf);
+    if (ac_charging_session_configuration.mac_filter && !ac_charging_session_configuration.mac_filter->empty()) {
+        Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_get_ev_info);
+        ev_mac = ev_info.mac.value_or(std::string{});
     }
+    apply_mac_based_ac_charging_configuration(ev_mac);
 
     return true;
 }
@@ -1642,7 +1622,7 @@ bool EvseManager::store_charging_configuration(
 void EvseManager::apply_mac_based_ac_charging_configuration(const std::string& ev_mac) {
     auto secc_conf = secc_config_store.get_secc_configuration(ev_mac);
     publish_supported_app_protocols(secc_conf);
-    
+
     // Dynamic switching of the energy transfer mode is only necessary for AC charging,
     // depending on whether fake DC is configured and how many phases are available.
     if ((config.charge_mode == "AC") && !r_hlc.empty()) {
