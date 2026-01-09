@@ -183,6 +183,10 @@ public:
     SeccConfigurationStore secc_config_store;
     bool store_charging_configuration(
         const types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration);
+    ///
+    /// \brief Applies a MAC-based AC charging configuration.
+    /// \param ev_mac Vehicle MAC address; empty input uses the default configuration.
+    ///
     void apply_mac_based_ac_charging_configuration(const std::string& ev_mac);
     SeccConfigurationStore::SeccConfig get_current_secc_config() const;
     void publish_supported_app_protocols(const SeccConfigurationStore::SeccConfig& secc_conf);
