@@ -67,6 +67,9 @@ void SessionInfoStore::update_state(const types::evse_manager::SessionEvent even
     case Event::TransactionStarted:
         this->state = State::Preparing;
         break;
+    case Event::Reinit:
+        this->state = State::Reinit;
+        break;
     case Event::ChargingResumed:
         [[fallthrough]];
     case Event::ChargingStarted:

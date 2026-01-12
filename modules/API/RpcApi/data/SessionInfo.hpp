@@ -74,6 +74,7 @@ private:
         Unplugged,
         Disabled,
         Preparing,
+        Reinit,
         Reserved,
         AuthRequired,
         WaitingForEnergy,

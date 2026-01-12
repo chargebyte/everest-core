@@ -130,6 +130,9 @@ void SessionInfo::update_state(const types::evse_manager::SessionEvent event) {
     case Event::TransactionStarted:
         this->state = State::Preparing;
         break;
+    case Event::Reinit:
+        this->state = State::Reinit;
+        break;
     case Event::ChargingResumed:
     case Event::ChargingStarted:
         this->state = State::Charging;
@@ -184,6 +187,8 @@ std::string SessionInfo::state_to_string(SessionInfo::State s) {
         return "Disabled";
     case SessionInfo::State::Preparing:
         return "Preparing";
+    case SessionInfo::State::Reinit:
+        return "Reinit";
     case SessionInfo::State::Reserved:
         return "Reserved";
     case SessionInfo::State::AuthRequired:
