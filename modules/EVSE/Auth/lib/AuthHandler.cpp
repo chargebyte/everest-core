@@ -852,6 +852,8 @@ void AuthHandler::handle_session_event(const int evse_id, const SessionEvent& ev
         [[fallthrough]];
     case SessionEventEnum::ChargingFinished:
         [[fallthrough]];
+    case SessionEventEnum::Reinit:
+        [[fallthrough]];
     case SessionEventEnum::ReplugStarted:
         [[fallthrough]];
     case SessionEventEnum::ReplugFinished:

@@ -1210,6 +1210,7 @@ void OCPP201::process_session_event(const int32_t evse_id, const types::evse_man
     case types::evse_manager::SessionEventEnum::WaitingForEnergy:
     case types::evse_manager::SessionEventEnum::StoppingCharging:
     case types::evse_manager::SessionEventEnum::ChargingFinished:
+    case types::evse_manager::SessionEventEnum::Reinit:
     case types::evse_manager::SessionEventEnum::ReplugStarted:
     case types::evse_manager::SessionEventEnum::ReplugFinished:
     case types::evse_manager::SessionEventEnum::PluginTimeout:
