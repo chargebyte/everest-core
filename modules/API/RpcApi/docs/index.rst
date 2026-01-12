@@ -331,6 +331,34 @@ or to initiate a charging pause on EVSE's side.
      "error": "$ResponseErrorEnum"
    }
 
+EVSE.ReinitChargingSession
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+This method performs a re-initialization sequence on the EVSE. A running HLC session is terminated and
+the CP side is switched to a 100% duty cycle. If the charging session has been paused, e.g., via the
+"EVSE.SetChargingAllowed" method, the state transition is executed directly as defined in the
+"reinit_state_transition" and "reinit_duration" parameters. The state transition serves to reinitialize
+the vehicle-side implementation so that a new session is requested by the EV side.
+
+The parameters "reinit_state_transition" and "reinit_duration" are optional but should always be
+specified together. If they are not specified, the default configuration is used.
+
+**Request:**
+
+.. code-block:: json
+
+   {
+     "evse_index": "int",
+     "reinit_configuration": "$ReinitConfigurationObj" // optional
+   }
+
+**Response:**
+
+.. code-block:: json
+
+   {
+     "error": "$ResponseErrorEnum"
+   }
+
 EVSE.GetMeterData
 ^^^^^^^^^^^^^^^^^
 **Request:**
@@ -387,6 +415,71 @@ This method is used to configure the AC phase count of an EVSE.
 
 **Response:**
 Returns an error parameter to show if the configuration of the charging current was successful.
+
+.. code-block:: json
+
+   {
+     "error": "$ResponseErrorEnum"
+   }
+
+EVSE.SetACSessionConfiguration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This method is intended to enable an EMS to dynamically configure an AC session for a specific group of EV
+implementations.
+
+"mac_filter":
+MAC filters can be used to configure which EV implementations this configuration is intended for. The MAC should
+have the following format: "XX:XX:XX:XX". It is not necessary to specify a complete 48-bit address. It is also
+possible to specify Organizationally Unique Identifiers (OUIs - first 3 octets of the MAC address) to distinguish
+between MAC address groups. If no MAC address has been configured, the AC configuration applies to all EV
+implementations that are not covered by a MAC filter.
+
+"allow_isod20", "allow_isod2":
+The parameters "allow_isod20" and "allow_isod2" specify which protocols are offered for AC charging. The EV
+determines which protocol is selected based on the transmitted protocol priority.
+
+Note: DIN 70121 is automatically offered in a Fake DC session.
+
+"allow_hlc_fake_dc":
+To read the SOC during an ISO15118-2/DIN70121 session, the "fake DC" mode can be activated to trick the vehicle into
+thinking that it is a DC charging station, retrieving EV's SOC value, and then switch to basic AC PWM charging after
+receiving the SoC value. Therefore, it is recommended to use the MAC filter when activating the "fake DC" mode.
+
+Note: The SOC of the EV can be retrieved using the "start_soc" or "present_soc" in "display_parameters" via the
+"EVSE.GetStatus" method or received as a "EVSE.StatusChanged" notification. The ReinitChargingSession method can be
+used to update the SOC value; the newly read value is written to "present_soc".
+
+"disable_isod2_fake_dc_after_replug" (implementation not yet planned):
+Not all EV implementations allow re-initialization via a CP transition and expect the plug to be re-plugged in order
+to establish a new session. This parameter allows to start a basic AC PWM session to be established after retrieving
+the SOC value and replugging of the plug. After setting the parameter to "true", it is possible to establish a basic
+AC PWM session for 60 seconds after receiving the SOC value. After a timeout, the fake DC sequence is activated again.
+
+Re-plugging should not take longer than 10 seconds, otherwise any authorization that has already been performed via
+RFID or MAC address, for example, would expire.
+
+Warning: When authorization is activated, it can no longer be guaranteed that the same EV has been plugged in
+when re-plugging.
+
+"reinit_state_transition", "reinit_duration":
+"reinit_state_transition" specifies which state should be applied to initiate a re-init. "reinit_duration" specifies
+how long the state should be applied. Both parameters are optional, but should always be specified together.
+
+"phase_switch_state_transition", "phase_switch_duration":
+"phase_switch_state_transition" specifies which state should be applied to initiate a re-init after a phase switch.
+"phase_switch_duration" specifies how long the state should be applied. Both parameters are optional, but should
+always be specified together.
+
+**Request:**
+
+.. code-block:: json
+
+   {
+     "evse_index": "int",
+     "ac_session_configuration": "$ACSessionConfigurationObj"
+   }
+
+**Response:**
 
 .. code-block:: json
 
@@ -554,6 +647,16 @@ EVSEStateEnum
   "Finished",
   "SwitchingPhases"
 
+ReinitStateEnum
+~~~~~~~~~~~~~~~
+State to use for reinitialization or AC phase switching
+
+::
+
+  "CPStateE", // CP State E (0V). This state appears as an unplug event on the Control Pilot line for the EV.
+  "CPStateF", // CP State F (-12V), 0% duty cycle
+  "CPStateX1" // CP powered on with 100% duty cycle
+
 ConnectorTypeEnum
 ~~~~~~~~~~~~~~~~~
 
@@ -662,6 +765,7 @@ information can also be used by GUI applications to display the active connector
      "available": "bool",
      "active_connector_index": "int",
      "error_present": "bool",
+     "ev_mac": "MAC Address String", // optional, only set in a HLC session. Format "XX:XX:XX:XX:XX:XX"
      "charge_protocol": "$ChargeProtocolEnum",
      "ac_charge_param": "$ACChargeParametersObj", // optional, only if AC supported
      "dc_charge_param": "$DCChargeParametersObj", // optional, only if DC supported
@@ -702,6 +806,35 @@ This object contains all hardware related limits of a charge point EVSE.
      "min_phase_count_export": "int",
      "min_phase_count_import": "int",
      "phase_switch_during_charging": "bool"
+   }
+
+ReinitConfigurationObj
+~~~~~~~~~~~~~~~~~~~~~~
+This object contains the configuration for a re-init state transition.
+
+.. code-block:: json
+
+   {
+     "state_transition": "$ReinitStateEnum",
+     "duration": "int" // milliseconds
+   }
+
+ACSessionConfigurationObj
+~~~~~~~~~~~~~~~~~~~~~~~~~
+This object contains the configuration for an AC charging session. It can be scoped to specific EV
+implementations via MAC filters. MAC entries can be full 48-bit addresses ("XX:XX:XX:XX:XX:XX") or OUIs
+("XX:XX:XX") to match all devices with that prefix.
+
+.. code-block:: json
+
+   {
+     "allow_isod20": "bool",
+     "allow_isod2": "bool",
+     "allow_hlc_fake_dc": "bool",
+     "disable_isod2_fake_dc_after_replug": "bool", // optional
+     "reinit_configuration": "$ReinitConfigurationObj", // optional
+     "phase_switch_configuration": "$ReinitConfigurationObj", // optional
+     "mac_filter": "[MAC Address String]" // optional
    }
 
 MeterDataObj
