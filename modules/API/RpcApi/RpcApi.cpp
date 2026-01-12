@@ -242,6 +242,12 @@ void RpcApi::subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evs
             result = display_parameters;
         }
         evse_data.evsestatus.set_display_parameters(result);
+
+        std::optional<std::string> ev_mac_result{};
+        if (ev_info.mac.has_value()) {
+            ev_mac_result = ev_info.mac.value();
+        }
+        evse_data.evsestatus.set_ev_mac(ev_mac_result);
     });
 }
 
