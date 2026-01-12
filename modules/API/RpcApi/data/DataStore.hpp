@@ -101,6 +101,8 @@ public:
     void set_ac_charge_status(const std::optional<RPCDataTypes::ACChargeStatusObj>& ac_charge_status);
     // set the DC charge status
     void set_dc_charge_status(const std::optional<RPCDataTypes::DCChargeStatusObj>& dc_charge_status);
+    // set the EV MAC address
+    void set_ev_mac(const std::optional<std::string>& ev_mac);
     // set the display parameters
     void set_display_parameters(const std::optional<RPCDataTypes::DisplayParametersObj>& display_parameters);
     // set the AC max phase count in the AC charge parameters
