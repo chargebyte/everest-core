@@ -239,6 +239,7 @@ void Charger::run_state_machine() {
             break;
         case EvseState::Reinit:
             if (initialize_state) {
+                signal_simple_event(types::evse_manager::SessionEventEnum::Reinit);
                 // Build concrete reinit parameters: prefer a one-off override (if set via start_reinit),
                 // otherwise fall back to the configured defaults. Missing fields are filled with defaults.
                 const auto reinit_configuration = resolve_reinit_configuration(
