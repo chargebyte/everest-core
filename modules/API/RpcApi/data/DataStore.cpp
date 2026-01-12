@@ -368,6 +368,16 @@ void EVSEStatusStore::set_dc_charge_status(const std::optional<RPCDataTypes::DCC
         this->notify_data_changed();
     }
 }
+// set the EV MAC address
+void EVSEStatusStore::set_ev_mac(const std::optional<std::string>& ev_mac) {
+    std::unique_lock<std::mutex> data_lock(this->data_mutex);
+    // check if data has changed
+    if (this->dataobj.ev_mac != ev_mac) {
+        this->dataobj.ev_mac = ev_mac;
+        data_lock.unlock();
+        this->notify_data_changed();
+    }
+}
 // set the display parameters
 void EVSEStatusStore::set_display_parameters(
     const std::optional<RPCDataTypes::DisplayParametersObj>& display_parameters) {
