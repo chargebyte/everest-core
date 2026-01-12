@@ -219,7 +219,11 @@ void RpcApi::subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evs
             // for some reason, soc in types::evse_manager::EVInfo is declared as float;
             // all integers from 0 to 100 can be exactly represented in float, but let's
             // (l)round them just in case:
-            display_parameters.present_soc = std::lround(ev_info.soc.value());
+            const auto ev_soc = std::lround(ev_info.soc.value());
+            if (not display_parameters.start_soc.has_value()) {
+                display_parameters.start_soc = ev_soc;
+            }
+            display_parameters.present_soc = ev_soc;
         }
 
         if (ev_info.battery_capacity.has_value()) {
