@@ -287,6 +287,10 @@ SessionEventEnum_External to_external_api(SessionEventEnum_Internal const& val) 
         return TarT::ReplugStarted;
     case SrcT::ReplugFinished:
         return TarT::ReplugFinished;
+    case SrcT::Reinit: // FIXME!
+        //return TarT::Reinit;
+#warning "FIXME: Reinit is not yet properly implemented in the external API!"
+        throw std::out_of_range("Conversion of SessionEventEnum_Internal Reinit is not implemented");
     case SrcT::PluginTimeout:
         return TarT::PluginTimeout;
     case SrcT::SwitchingPhases:
