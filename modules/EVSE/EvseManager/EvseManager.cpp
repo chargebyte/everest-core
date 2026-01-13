@@ -1412,6 +1412,7 @@ void EvseManager::set_selected_protocol(const std::string& protocol) {
     if (selected_protocol == protocol) {
         return;
     }
+    EVLOG_info << "Selected protocol set to " << protocol;
     selected_protocol = protocol;
     signal_selected_protocol(protocol);
 }
