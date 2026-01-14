@@ -67,6 +67,7 @@ struct Conf {
     bool has_ventilation;
     double max_current_import_A;
     double max_current_export_A;
+    bool apply_max_current_A;
     std::string charge_mode;
     bool supported_iso_ac_bpt;
     bool ac_hlc_enabled;

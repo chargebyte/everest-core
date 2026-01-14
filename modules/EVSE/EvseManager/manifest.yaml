@@ -58,6 +58,15 @@ config:
     description: User configurable current limit for this EVSE in Ampere
     type: number
     default: 32
+  apply_max_current_A:
+    description: >-
+      This switch enables/disables the usage of the settings max_current_import_A
+      and max_current_export_A. If true, both numbers are applied to the
+      capabilities as reported by the BSP module when the numbers given here
+      are smaller than the values reported by the BSP. If this setting is set
+      to false, the BSP reported values are left untouched and used as-is.
+    type: boolean
+    default: false
   charge_mode:
     description: Select charging mode
     type: string
