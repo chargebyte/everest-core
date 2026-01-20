@@ -288,7 +288,7 @@ void EvseManager::ready() {
             r_slac[0]->call_dlink_terminate();
         });
 
-        r_hlc[0]->subscribe_v2g_setup_finished([this] { charger->set_hlc_charging_active(); });
+        r_hlc[0]->subscribe_v2g_setup_finished([this] { charger->set_hlc_mode_active(); });
 
         r_hlc[0]->subscribe_ac_close_contactor([this] {
             session_log.car(true, "AC HLC Close contactor");

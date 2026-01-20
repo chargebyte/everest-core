@@ -188,7 +188,7 @@ public:
     void dlink_error();
     void dlink_terminate();
 
-    void set_hlc_charging_active();
+    void set_hlc_mode_active(bool active = true);
     void set_hlc_allow_close_contactor(bool on);
 
     bool stop_charging_on_fatal_error();
@@ -282,7 +282,7 @@ private:
         bool hlc_allow_close_contactor{false};
         bool iec_allow_close_contactor{false};
         bool contactor_open{true};
-        bool hlc_charging_active{false};
+        bool hlc_mode_active{false};
         HlcTerminatePause hlc_charging_terminate_pause;
         types::iso15118::DcEvseMaximumLimits current_evse_max_limits;
         types::iso15118::DcEvseMinimumLimits current_evse_min_limits;
