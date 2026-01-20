@@ -2171,6 +2171,8 @@ void Charger::dlink_error() {
         Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_dlink_error);
         shared_context.hlc_allow_close_contactor = false;
         pwm_off();
+        // if the data link dropped unexpectedly, apply pending setup before reinit.
+        apply_pending_setup();
 
         if (config_context.charge_mode == ChargeMode::AC) {
             shared_context.hlc_mode_active = false;
