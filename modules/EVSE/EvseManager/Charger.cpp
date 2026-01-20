@@ -2179,6 +2179,7 @@ void Charger::dlink_error() {
     {
         Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_dlink_error);
         shared_context.hlc_allow_close_contactor = false;
+        pwm_off();
     }
     hlc_failed = true;
 
