@@ -1362,6 +1362,7 @@ bool Charger::start_reinit() {
 }
 
 bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reinit) {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
     const auto resolved_reinit =
         resolve_reinit_configuration(reinit, config_context.reinit_method, config_context.reinit_duration_ms);
 
@@ -1372,8 +1373,6 @@ bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reini
         EVLOG_warning << "Reinit requested with CP state E but BSP does not support CP state E.";
         return false;
     }
-
-    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
 
     if (shared_context.current_state == EvseState::Idle || shared_context.current_state == EvseState::Disabled) {
         EVLOG_warning << "Rejecting reinit request: no EV plugged in or connector disabled";
