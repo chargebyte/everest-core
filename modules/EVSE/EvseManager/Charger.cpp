@@ -1408,17 +1408,13 @@ void Charger::process_pending_reinit_request() {
         return;
     }
 
-    if (shared_context.slac_matched) {
-        if (shared_context.current_state not_eq EvseState::StoppingCharging) {
-            signal_hlc_stop_charging();
-            shared_context.current_state = EvseState::StoppingCharging;
-            return;
-        }
-        return;
-    }
-    /* in case of AC basic charging, directly stop charging */
-    if (config_context.charge_mode == ChargeMode::AC and not ac_hlc_enabled_current_session) {
+    if (shared_context.current_state == EvseState::Charging) {
         shared_context.current_state = EvseState::StoppingCharging;
+    }
+
+    if (shared_context.slac_matched) {
+        signal_hlc_stop_charging();
+        return;
     }
 
     shared_context.reinit_requested = false;
