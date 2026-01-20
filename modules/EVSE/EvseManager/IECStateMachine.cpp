@@ -11,9 +11,7 @@
 namespace module {
 
 // helper type for visitor
-template <class... Ts> struct overloaded : Ts... {
-    using Ts::operator()...;
-};
+template <class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 enum class TimerControl : std::uint8_t {
@@ -288,7 +286,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
                 timer_state_C1 = TimerControl::stop;
                 call_allow_power_on_bsp(false);
                 pwm_running = false;
-                r_bsp->call_pwm_off();
+                if (!state_e_triggered_through_handle) {
+                    r_bsp->call_pwm_off();
+                }
                 if (last_cp_state == RawCPState::B || last_cp_state == RawCPState::C ||
                     last_cp_state == RawCPState::D) {
                     events.push(CPEvent::BCDtoEF);
