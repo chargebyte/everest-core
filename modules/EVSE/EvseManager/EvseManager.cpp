@@ -1565,9 +1565,9 @@ void EvseManager::setup_ac_with_soc_handling() {
     });
 }
 
-void EvseManager::setup_AC_mode(const bool hlc_enabled) {
-    secc_config_store.set_secc_configuration(SeccConfigurationStore::ChargeMode::AC, hlc_enabled);
-    auto secc_conf = secc_config_store.get_secc_configuration();
+void EvseManager::setup_AC_mode(SeccConfigurationStore::SeccConfig secc_conf, const bool hlc_enabled) {
+    secc_conf.charge_mode = SeccConfigurationStore::ChargeMode::AC;
+    secc_conf.ac_hlc_enabled = hlc_enabled;
     charger->setup_if_idle(secc_conf);
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
