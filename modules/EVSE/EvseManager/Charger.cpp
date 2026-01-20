@@ -27,17 +27,12 @@ namespace module {
 
 namespace {
 
-struct ResolvedReinitConfiguration {
-    types::evse_manager::ReinitStateEnum state_transition;
-    int duration;
-};
-
 // Fills a potentially partial ReinitConfiguration with default values so downstream
 // state machine logic always works with concrete duration and state transition.
-ResolvedReinitConfiguration resolve_reinit_configuration(const types::evse_manager::ReinitConfiguration& cfg,
-                                                         types::evse_manager::ReinitStateEnum default_state,
-                                                         int default_duration) {
-    ResolvedReinitConfiguration resolved{default_state, default_duration};
+Charger::ReinitConfiguration resolve_reinit_configuration(const types::evse_manager::ReinitConfiguration& cfg,
+                                                          types::evse_manager::ReinitStateEnum default_state,
+                                                          int default_duration) {
+    Charger::ReinitConfiguration resolved{default_state, default_duration};
 
     if (cfg.state_transition.has_value()) {
         resolved.state_transition = cfg.state_transition.value();
@@ -241,20 +236,12 @@ void Charger::run_state_machine() {
         case EvseState::Reinit:
             if (initialize_state) {
                 signal_simple_event(types::evse_manager::SessionEventEnum::Reinit);
-                // Build concrete reinit parameters: prefer a one-off override (if set via start_reinit),
-                // otherwise fall back to the configured defaults. Missing fields are filled with defaults.
-                const auto reinit_configuration = resolve_reinit_configuration(
-                    shared_context.reinit_override.value_or(types::evse_manager::ReinitConfiguration{
-                        config_context.reinit_method, config_context.reinit_duration_ms}),
-                    config_context.reinit_method, config_context.reinit_duration_ms);
-                shared_context.reinit_override.reset();
-
                 session_log.evse(false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
                                                     types::evse_manager::reinit_state_enum_to_string(
-                                                        reinit_configuration.state_transition),
-                                                    reinit_configuration.duration));
+                                                        shared_context.reinit_config.state_transition),
+                                                    shared_context.reinit_config.duration));
                 shared_context.reinit_running = true;
-                switch (reinit_configuration.state_transition) {
+                switch (shared_context.reinit_config.state_transition) {
                 case types::evse_manager::ReinitStateEnum::CPStateE:
                     set_cp_state_E();
                     break;
@@ -265,10 +252,10 @@ void Charger::run_state_machine() {
                     pwm_off();
                     break;
                 }
-                if (reinit_configuration.duration > 0) {
+                if (shared_context.reinit_config.duration > 0) {
                     internal_context.reinit_timer_active = true;
-                    internal_context.reinit_deadline =
-                        std::chrono::steady_clock::now() + std::chrono::milliseconds(reinit_configuration.duration);
+                    internal_context.reinit_deadline = std::chrono::steady_clock::now() +
+                                                       std::chrono::milliseconds(shared_context.reinit_config.duration);
                 } else {
                     internal_context.reinit_timer_active = false;
                 }
@@ -1394,7 +1381,7 @@ bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& reini
     }
 
     if (shared_context.reinit_running == false) {
-        shared_context.reinit_override = types::evse_manager::ReinitConfiguration{reinit_method, reinit_duration_ms};
+        shared_context.reinit_config = ReinitConfiguration{reinit_method, reinit_duration_ms};
         shared_context.reinit_requested = true;
         EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
                                   types::evse_manager::reinit_state_enum_to_string(reinit_method), reinit_duration_ms);

@@ -90,6 +90,11 @@ public:
         Pause
     };
 
+    struct ReinitConfiguration {
+        types::evse_manager::ReinitStateEnum state_transition;
+        int duration;
+    };
+
     // Public interface to configure Charger
     //
     // Call anytime also during charging, but call setters in this block at
@@ -316,8 +321,8 @@ private:
         bool switch_3ph1ph_threephase_ongoing{false};
         bool reinit_requested{false};
         bool reinit_running{false};
-        // Optional override for a single reinit cycle; set by start_reinit() and consumed in Reinit state.
-        std::optional<types::evse_manager::ReinitConfiguration> reinit_override;
+        // configuration to be applied during the reinit process
+        ReinitConfiguration reinit_config;
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;
