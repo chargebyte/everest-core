@@ -370,7 +370,7 @@ private:
     // Voltage plausibility monitor
     std::unique_ptr<VoltagePlausibilityMonitor> voltage_plausibility_monitor;
 
-    void setup_AC_mode(const bool hlc_enabled = false);
+    void setup_AC_mode(SeccConfigurationStore::SeccConfig secc_conf, const bool hlc_enabled = false);
     void setup_fake_DC_mode();
     void setup_ac_with_soc_handling();
 
