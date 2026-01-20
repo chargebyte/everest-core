@@ -1556,8 +1556,11 @@ void EvseManager::setup_ac_with_soc_handling() {
 
         if (secc_conf->allow_isod2_fake_dc) {
             EVLOG_info << fmt::format("SoC received: {} %", status.dc_ev_ress_soc);
-            charger->start_reinit();
-            setup_AC_mode();
+            setup_AC_mode(*secc_conf);
+            types::evse_manager::ReinitConfiguration reinit_configuration;
+            reinit_configuration.state_transition = secc_conf->reinit_method;
+            reinit_configuration.duration = secc_conf->reinit_duration_ms;
+            charger->start_reinit(reinit_configuration);
 
             ev_info.soc = status.dc_ev_ress_soc;
             p_evse->publish_ev_info(ev_info);

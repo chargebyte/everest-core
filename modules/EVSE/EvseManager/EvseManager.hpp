@@ -359,7 +359,7 @@ private:
     int32_t reservation_id;
     Everest::timed_mutex_traceable reservation_mutex;
 
-    void setup_AC_mode(const bool hlc_enabled = false);
+    void setup_AC_mode(SeccConfigurationStore::SeccConfig secc_conf, const bool hlc_enabled = false);
     void setup_fake_DC_mode();
     void setup_ac_with_soc_handling();
 
