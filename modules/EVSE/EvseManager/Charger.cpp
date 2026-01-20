@@ -714,7 +714,9 @@ void Charger::run_state_machine() {
             // make sure we are enabling PWM
             if (not hlc_use_5percent_current_session) {
                 update_pwm_now_if_changed_ampere(get_max_current_internal());
-            } else {
+            }
+            // prevent 5% PWM application after HLC error
+            else if (hlc_failed == false) {
                 update_pwm_now_if_changed(PWM_5_PERCENT);
             }
 
