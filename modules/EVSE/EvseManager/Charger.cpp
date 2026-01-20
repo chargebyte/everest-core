@@ -299,6 +299,9 @@ void Charger::run_state_machine() {
                 shared_context.max_current_cable = 0;
                 shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Unknown;
                 shared_context.legacy_wakeup_done = false;
+                shared_context.reinit_running = false;
+                shared_context.reinit_requested = false;
+                hlc_failed = false;
                 pwm_off();
                 deauthorize_internal();
                 shared_context.transaction_active = false;
