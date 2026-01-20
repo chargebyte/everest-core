@@ -2184,6 +2184,10 @@ void Charger::dlink_terminate() {
     shared_context.hlc_allow_close_contactor = false;
     cp_state_X1();
     shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Terminate;
+
+    if (config_context.charge_mode == ChargeMode::AC) {
+        shared_context.hlc_charging_active = false;
+    }
 }
 
 void Charger::dlink_error() {
