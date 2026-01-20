@@ -2173,6 +2173,10 @@ void Charger::dlink_terminate() {
     shared_context.hlc_allow_close_contactor = false;
     pwm_off();
     shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Terminate;
+
+    if (config_context.charge_mode == ChargeMode::AC) {
+        shared_context.hlc_charging_active = false;
+    }
 }
 
 void Charger::dlink_error() {
@@ -2180,6 +2184,10 @@ void Charger::dlink_error() {
         Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_dlink_error);
         shared_context.hlc_allow_close_contactor = false;
         pwm_off();
+
+        if (config_context.charge_mode == ChargeMode::AC) {
+            shared_context.hlc_charging_active = false;
+        }
     }
     hlc_failed = true;
 
