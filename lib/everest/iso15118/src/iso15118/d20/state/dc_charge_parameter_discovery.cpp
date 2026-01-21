@@ -67,61 +67,51 @@ bool handle_compatibility_check(const d20::DcTransferLimits& evse_dc_limits, con
         return false;
     }
 
-    const float evse_max_voltage = dt::from_RationalNumber(evse_dc_limits.voltage.max);
+    float evse_max_voltage = dt::from_RationalNumber(evse_dc_limits.voltage.max);
+    float evse_max_current = dt::from_RationalNumber(evse_dc_limits.charge_limits.current.max);
+    float evse_max_power = dt::from_RationalNumber(evse_dc_limits.charge_limits.power.max);
+
     const float evse_min_voltage = dt::from_RationalNumber(evse_dc_limits.voltage.min);
-    const float evse_max_current = dt::from_RationalNumber(evse_dc_limits.charge_limits.current.max);
     const float evse_min_current = dt::from_RationalNumber(evse_dc_limits.charge_limits.current.min);
-    const float evse_max_power = dt::from_RationalNumber(evse_dc_limits.charge_limits.power.max);
     const float evse_min_power = dt::from_RationalNumber(evse_dc_limits.charge_limits.power.min);
 
     // CC.5.6 2.a
     if (ev_max_voltage <= MAX_VOLTAGE_THREASHOLD) {
-        if (evse_max_voltage >
-            std::min({ev_max_voltage + MAX_VOLTAGE_OFFSET, evse_max_voltage, MAX_VOLTAGE_THREASHOLD})) {
-            if (evse_max_voltage > MAX_VOLTAGE_THREASHOLD) {
-                logf_error("EVSE max voltage %.1f V > EV max voltage 500V", evse_max_voltage);
-            } else {
-                logf_error("EVSE max voltage %.1f V > EV max voltage + 50V: %.1f V", evse_max_voltage,
-                           ev_max_voltage + MAX_VOLTAGE_OFFSET);
-            }
-            compatiblity_flag = false;
-        }
+        evse_max_voltage = std::min({ev_max_voltage + MAX_VOLTAGE_OFFSET, evse_max_voltage, MAX_VOLTAGE_THREASHOLD});
     }
     if (ev_max_voltage > MAX_VOLTAGE_THREASHOLD) {
-        if (evse_max_voltage > std::min(ev_max_voltage * MAX_VOLTAGE_FACTOR, evse_max_voltage)) {
-            logf_error("EVSE max voltage %.1f V > EV max voltage (> 500 V) multiplied by 1,1: %.1f V", evse_max_voltage,
-                       ev_max_voltage * MAX_VOLTAGE_FACTOR);
-            compatiblity_flag = false;
-        }
+        evse_max_voltage = std::min(ev_max_voltage * MAX_VOLTAGE_FACTOR, evse_max_voltage);
     }
+
+    //TODO how to publish the new voltage?
+    //evse_dc_limits.voltage.max  = dt::from_float(evse_max_voltage);
 
     // CC.5.6 2.b
-    if (evse_max_current > std::min(ev_max_current, evse_max_current)) {
-        logf_error("EVSE max current %.1f A > EV max current %.1f A", evse_max_current, ev_max_current);
-        compatiblity_flag = false;
-    }
+    evse_max_current = std::min(ev_max_current, evse_max_current);
+    // TODO how to publish the new current?
+    //evse_dc_limits.charge_limits.current.max = dt::from_float(evse_max_current);
 
     // CC.5.6 2.c
-    float ev_power_max = ev_max_power;
-    if (ev_power_max == 0) {
-        ev_power_max = std::max(ev_max_voltage * ev_max_current, MAX_POWER_LIMIT);
+    if (ev_max_power == 0) {
+        ev_max_power = std::max(ev_max_voltage * ev_max_current, MAX_POWER_LIMIT);
     }
-    if (evse_max_power > std::min(ev_power_max, evse_max_power)) {
-        logf_error("EVSE max power %.1f W > EV max power %.1f W", evse_max_power, ev_power_max);
-        compatiblity_flag = false;
-    }
+
+    evse_max_power = std::min(ev_max_power, evse_max_power);
+    // TODO how to publish the new power?
+    //evse_dc_limits.charge_limits.power.max = dt::from_float(evse_max_power);
+
     // CC.5.6 2.d-f here not implemented because we make no difference between CPD and RATED
     // CC.5.6 2.g
-    if (evse_min_power >= ev_power_max) {
+    if (evse_min_power >= ev_max_power) {
         logf_error("EVSE min power %.1f W >= EV max power %.1f W!", evse_min_power, ev_max_power);
         compatiblity_flag = false;
     }
-    if (evse_min_voltage >= ev_max_voltage) {
+    if (evse_min_voltage >= ev_max_power) {
         logf_error("EVSE min voltage %.1f V >= EV max voltage %.1f V!", evse_min_voltage, ev_max_voltage);
         compatiblity_flag = false;
     }
-    if (evse_min_current >= ev_max_current) {
-        logf_error("EVSE min current %.1f A >= EV max current %.1f A!", evse_min_current, ev_max_current);
+    if (evse_min_current >= ev_max_power) {
+        logf_error("EVSE min current %.1f A >= EV max current %.1f A!", evse_min_current, ev_max_power);
         compatiblity_flag = false;
     }
     return compatiblity_flag;
