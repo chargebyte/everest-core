@@ -266,6 +266,11 @@ void Charger::run_state_machine() {
                 shared_context.current_state = EvseState::WaitingForAuthentication;
                 shared_context.reinit_running = false;
                 internal_context.reinit_timer_active = false;
+                if (config_context.charge_mode == ChargeMode::DC ||
+                    (config_context.charge_mode == ChargeMode::AC && config_context.ac_hlc_enabled &&
+                     hlc_failed == false)) {
+                    signal_slac_reset();
+                }
             }
             break;
 
