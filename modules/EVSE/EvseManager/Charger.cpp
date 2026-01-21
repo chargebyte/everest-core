@@ -1624,6 +1624,7 @@ void Charger::setup_if_idle(const SeccConfigurationStore::SeccConfig& cfg) {
 }
 
 void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) {
+    const bool was_ac_hlc_enabled = (config_context.charge_mode == ChargeMode::AC) && config_context.ac_hlc_enabled;
     // cache our config variables
     bsp->setup(cfg.has_ventilation);
 
@@ -1647,8 +1648,12 @@ void Charger::apply_setup_locked(const SeccConfigurationStore::SeccConfig& cfg) 
     config_context.reinit_duration_ms = cfg.reinit_duration_ms;
     config_context.reinit_method = cfg.reinit_method;
 
-    if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled and !hlc_failed)
+    const bool is_ac_hlc_enabled = (config_context.charge_mode == ChargeMode::AC) && config_context.ac_hlc_enabled;
+    if (!was_ac_hlc_enabled && is_ac_hlc_enabled) {
         EVLOG_info << "AC HLC mode enabled.";
+    } else if (was_ac_hlc_enabled && !is_ac_hlc_enabled) {
+        EVLOG_info << "AC HLC mode disabled.";
+    }
 }
 
 void Charger::apply_pending_setup() {
