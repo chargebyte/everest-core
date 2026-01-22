@@ -205,6 +205,10 @@ void EvseManager::init() {
 
             update_hlc_ac_parameters();
         }
+
+        if (config.charge_mode == "AC" and config.ac_with_soc and (not hlc_enabled or not slac_enabled)) {
+            throw std::runtime_error("AC SoC mode requires HLC and SLAC to be enabled");
+        }
     });
 
     // do not allow to update hardware capabilties until we are ready for it
@@ -1503,6 +1507,10 @@ int32_t EvseManager::get_reservation_id() {
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
+    if (r_hlc.empty()) {
+        EVLOG_error << "Skip fake DC mode. r_hlc is empty";
+        return;
+    }
     secc_config_store.set_secc_configuration(SeccConfigurationStore::ChargeMode::AC, hlc_enabled);
     auto secc_conf = secc_config_store.get_secc_configuration();
     charger->setup_if_idle(secc_conf);
