@@ -237,6 +237,9 @@ void EvseManager::ready() {
     charger = std::make_unique<Charger>(bsp, error_handling, r_powermeter_billing(), store,
                                         hw_capabilities.connector_type, config.evse_id);
 
+    // publish initial state
+    signal_selected_protocol(selected_protocol);
+
     // Now incoming hardware capabilties can be processed
     hw_caps_mutex.unlock();
 
