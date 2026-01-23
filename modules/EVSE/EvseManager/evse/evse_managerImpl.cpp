@@ -72,6 +72,9 @@ void evse_managerImpl::init() {
             publish_powermeter_public_key_ocmf(public_key_ocmf);
         });
     }
+
+    mod->signal_selected_protocol.connect(
+        [this](const std::string& selected_protocol) { publish_selected_protocol(selected_protocol); });
 }
 
 void evse_managerImpl::ready() {
@@ -92,9 +95,6 @@ void evse_managerImpl::ready() {
         j.uuid.clear(); // Reservation is not part of a session
         publish_session_event(j);
     });
-
-    mod->signal_selected_protocol.connect(
-        [this](const std::string& selected_protocol) { publish_selected_protocol(selected_protocol); });
 
     mod->charger->signal_session_started_event.connect(
         [this](const types::evse_manager::StartSessionReason& start_reason,
