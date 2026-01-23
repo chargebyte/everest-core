@@ -85,6 +85,10 @@ Feature Overview
 +---------------------------------------+-----------+
 | Control of phase count (AC)           | ✅        |
 +---------------------------------------+-----------+
+| AC session parameter configuration    | ✅        |
++---------------------------------------+-----------+
+| EVSE reinitialization                 | ✅        |
++---------------------------------------+-----------+
 | Connector enable/disable              | ✅        |
 +---------------------------------------+-----------+
 | Error monitoring (active errors)      | ✅        |
@@ -339,6 +343,8 @@ the CP side is switched to a 100% duty cycle. If the charging session has been p
 "reinit_state_transition" and "reinit_duration" parameters. The state transition serves to reinitialize
 the vehicle-side implementation so that a new session is requested by the EV side.
 
+Note: The re-initialization sequence cannot be executed if a re-initialization is already being executed.
+
 The parameters "reinit_state_transition" and "reinit_duration" are optional but should always be
 specified together. If they are not specified, the default configuration is used.
 
@@ -485,6 +491,97 @@ always be specified together.
 
    {
      "error": "$ResponseErrorEnum"
+   }
+
+**Examples:**
+
+AC ISO 15118-20 and AC ISO 15118-2 enabled, fake DC disabled, with MAC OUI filter:
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "ac_session_configuration": {
+       "allow_isod20": true,
+       "allow_isod2": true,
+       "allow_hlc_fake_dc": false,
+       "reinit_configuration": {
+         "state_transition": "CPStateE",
+         "duration": 4000
+       },
+       "mac_filter": ["AA:BB:CC"]
+     }
+   }
+
+Fake DC enabled with DIN 70121 only:
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "ac_session_configuration": {
+       "allow_isod20": false,
+       "allow_isod2": false,
+       "allow_hlc_fake_dc": true,
+       "reinit_configuration": {
+         "state_transition": "CPStateF",
+         "duration": 4000
+       },
+       "mac_filter": ["AA:BB:CC"]
+     }
+   }
+
+Fake DC enabled with DIN 70121 and ISO 15118-2:
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "ac_session_configuration": {
+       "allow_isod20": false,
+       "allow_isod2": true,
+       "allow_hlc_fake_dc": true,
+       "reinit_configuration": {
+         "state_transition": "CPStateX1",
+         "duration": 4000
+       },
+       "mac_filter": ["AA:BB:CC"]
+     }
+   }
+
+Fake DC disabled, retrieving EV MAC and stopping HLC session after protocol negotiation:
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "ac_session_configuration": {
+       "allow_isod20": false,
+       "allow_isod2": false,
+       "allow_hlc_fake_dc": false,
+       "mac_filter": ["AA:BB:CC"]
+     }
+   }
+
+Default configuration override (no MAC filter), with re-init and phase switch configuration:
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "ac_session_configuration": {
+       "allow_isod20": false,
+       "allow_isod2": true,
+       "allow_hlc_fake_dc": true,
+       "reinit_configuration": {
+         "state_transition": "CPStateX1",
+         "duration": 4000
+       },
+       "phase_switch_configuration": {
+         "state_transition": "CPStateF",
+         "duration": 3000
+       }
+     }
    }
 
 EVSE.SetDCChargingPower
