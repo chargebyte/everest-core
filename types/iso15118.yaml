@@ -710,10 +710,10 @@ types:
       - AC_BPT
       - DC_BPT
       - DC_ACDP_BPT
-      - Internet
-      - ParkingStatus
       - MCS
       - MCS_BPT
+      - Internet
+      - ParkingStatus
   Connector:
     description: Different AC and DC connector
     type: string
