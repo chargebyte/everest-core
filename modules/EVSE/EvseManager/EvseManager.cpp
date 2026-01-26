@@ -56,6 +56,14 @@ bool almost_eq(double a, double b) {
 
 void EvseManager::init() {
 
+    if (!config.connector_type.empty()) {
+        try {
+            connector_type = types::evse_manager::string_to_connector_type_enum(config.connector_type);
+        } catch (const std::out_of_range& e) {
+            EVLOG_warning << "Unknown/invalid connector type: " << config.connector_type;
+        }
+    }
+
     store = std::unique_ptr<PersistentStore>(new PersistentStore(r_store, info.id));
 
     random_delay_enabled = config.uk_smartcharging_random_delay_enable;
@@ -136,22 +144,19 @@ void EvseManager::init() {
             // subscribe to run time updates for real initial values (and changes e.g. due to de-rating)
             r_powersupply_DC[0]->subscribe_capabilities([this](const auto& caps) {
                 update_powersupply_capabilities(caps);
-                bool dc_was_updated = false;
-                bool dc_bpt_was_updated = false;
 
-                if (not config.mcs_enabled) {
-                    dc_was_updated = update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC);
-                    dc_bpt_was_updated =
-                        caps.bidirectional
-                            ? update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC_BPT)
-                            : false;
-                } else {
-                    dc_was_updated = update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS);
-                    dc_bpt_was_updated =
-                        caps.bidirectional
-                            ? update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS_BPT)
-                            : false;
+                auto mode = types::iso15118::EnergyTransferMode::DC;
+                auto bpt_mode = types::iso15118::EnergyTransferMode::DC_BPT;
+
+                if (connector_type.has_value() and
+                    connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
+                    mode = types::iso15118::EnergyTransferMode::MCS;
+                    bpt_mode = types::iso15118::EnergyTransferMode::MCS_BPT;
                 }
+
+                const bool dc_was_updated = update_supported_energy_transfers(mode);
+                const bool dc_bpt_was_updated =
+                    caps.bidirectional ? update_supported_energy_transfers(bpt_mode) : false;
 
                 if (dc_was_updated || dc_bpt_was_updated) {
                     this->p_evse->publish_supported_energy_transfer_modes(supported_energy_transfers);
@@ -167,13 +172,6 @@ void EvseManager::init() {
         {
             std::scoped_lock lock(hw_caps_mutex);
             hw_capabilities = c;
-            // Maybe override with user setting for this EVSE
-            if (config.max_current_import_A < hw_capabilities.max_current_A_import) {
-                hw_capabilities.max_current_A_import = config.max_current_import_A;
-            }
-            if (config.max_current_export_A < hw_capabilities.max_current_A_export) {
-                hw_capabilities.max_current_A_export = config.max_current_export_A;
-            }
         }
 
         if (ac_nr_phases_active == 0) {
@@ -223,6 +221,17 @@ void EvseManager::ready() {
         new ErrorHandling(r_bsp, r_hlc, r_connector_lock, r_ac_rcd, p_evse, r_imd, r_powersupply_DC,
                           config.fail_on_powermeter_errors ? r_powermeter_billing() : EMPTY_POWERMETER_VECTOR,
                           r_over_voltage_monitor, config.inoperative_error_use_vendor_id));
+
+    internal_over_voltage_monitor = std::make_unique<OverVoltageMonitor>(
+        [this](OverVoltageMonitor::FaultType type, const std::string& description) {
+            if (this->error_handling) {
+                const auto severity = type == OverVoltageMonitor::FaultType::Emergency
+                                          ? Everest::error::Severity::High
+                                          : Everest::error::Severity::Medium;
+                this->error_handling->raise_over_voltage_error(severity, description);
+            }
+        },
+        std::chrono::milliseconds(config.internal_over_voltage_duration_ms));
 
     if (not config.lock_connector_in_state_b) {
         EVLOG_warning << "Unlock connector in CP state B. This violates IEC61851-1:2019 D.6.5 Table D.9 line 4 and "
@@ -447,24 +456,25 @@ void EvseManager::ready() {
             });
 
         } else if (config.charge_mode == "DC") {
-            if (not config.mcs_enabled) {
-                transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
-                update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC);
-            } else {
+            if (connector_type.has_value() and connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
                 transfer_modes.push_back(types::iso15118::EnergyTransferMode::MCS);
                 update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS);
+            } else {
+                transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_extended);
+                update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC);
             }
 
             const auto caps = get_powersupply_capabilities();
             update_powersupply_capabilities(caps);
 
             if (caps.bidirectional) {
-                if (not config.mcs_enabled) {
-                    transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_BPT);
-                    update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC_BPT);
-                } else {
+                if (connector_type.has_value() and
+                    connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
                     transfer_modes.push_back(types::iso15118::EnergyTransferMode::MCS_BPT);
                     update_supported_energy_transfers(types::iso15118::EnergyTransferMode::MCS_BPT);
+                } else {
+                    transfer_modes.push_back(types::iso15118::EnergyTransferMode::DC_BPT);
+                    update_supported_energy_transfers(types::iso15118::EnergyTransferMode::DC_BPT);
                 }
             }
 
@@ -493,6 +503,10 @@ void EvseManager::ready() {
                 if (not r_over_voltage_monitor.empty()) {
                     r_over_voltage_monitor[0]->call_start();
                 }
+                if (internal_over_voltage_monitor) {
+                    internal_over_voltage_monitor->reset();
+                    internal_over_voltage_monitor->start_monitor();
+                }
             });
 
             r_hlc[0]->subscribe_current_demand_finished([this] {
@@ -501,7 +515,20 @@ void EvseManager::ready() {
                 if (not r_over_voltage_monitor.empty()) {
                     r_over_voltage_monitor[0]->call_stop();
                 }
+                if (internal_over_voltage_monitor) {
+                    internal_over_voltage_monitor->stop_monitor();
+                }
             });
+
+            // Subscribe to voltage measurements from over_voltage_monitor interface
+            // The internal monitor acts as a software watchdog following the hardware OVM values
+            if (not r_over_voltage_monitor.empty()) {
+                r_over_voltage_monitor[0]->subscribe_voltage_measurement_V([this](float voltage_V) {
+                    if (internal_over_voltage_monitor) {
+                        internal_over_voltage_monitor->update_voltage(voltage_V);
+                    }
+                });
+            }
 
             // Isolation monitoring for DC charging handler
             if (not r_imd.empty()) {
@@ -804,6 +831,10 @@ void EvseManager::ready() {
                     r_over_voltage_monitor[0]->call_set_limits(get_emergency_over_voltage_threshold(),
                                                                get_error_over_voltage_threshold());
                 }
+                if (internal_over_voltage_monitor) {
+                    internal_over_voltage_monitor->set_limits(get_emergency_over_voltage_threshold(),
+                                                              get_error_over_voltage_threshold());
+                }
             });
 
             r_hlc[0]->subscribe_departure_time([this](const std::string& t) {
@@ -1036,6 +1067,10 @@ void EvseManager::ready() {
 
         if (not r_over_voltage_monitor.empty() and event == CPEvent::CarUnplugged) {
             r_over_voltage_monitor[0]->call_reset_over_voltage_error();
+        }
+        if (internal_over_voltage_monitor and event == CPEvent::CarUnplugged) {
+            internal_over_voltage_monitor->stop_monitor();
+            internal_over_voltage_monitor->reset();
         }
 
         charger->bsp_event_queue.push(event);

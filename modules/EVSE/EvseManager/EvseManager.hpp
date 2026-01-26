@@ -47,6 +47,7 @@
 #include "PersistentStore.hpp"
 #include "SessionLog.hpp"
 #include "VarContainer.hpp"
+#include "over_voltage/OverVoltageMonitor.hpp"
 #include "scoped_lock_timeout.hpp"
 // ev@4bf81b14-a215-475c-a1d3-0a484ae48918:v1
 
@@ -65,8 +66,6 @@ struct Conf {
     std::string session_logging_path;
     bool session_logging_xml;
     bool has_ventilation;
-    double max_current_import_A;
-    double max_current_export_A;
     std::string charge_mode;
     bool supported_iso_ac_bpt;
     bool ac_hlc_enabled;
@@ -74,6 +73,7 @@ struct Conf {
     bool ac_enforce_hlc;
     bool ac_with_soc;
     int dc_isolation_voltage_V;
+    int internal_over_voltage_duration_ms;
     bool dbg_hlc_auth_after_tstep;
     int hack_sleep_in_cable_check;
     int hack_sleep_in_cable_check_volkswagen;
@@ -197,6 +197,8 @@ public:
 
     void cancel_reservation(bool signal_event);
     bool is_reserved();
+
+    std::optional<types::evse_manager::ConnectorTypeEnum> connector_type;
 
     ///
     /// \brief Reserve this evse.
@@ -325,6 +327,7 @@ private:
     VarContainer<types::isolation_monitor::IsolationMeasurement> isolation_measurement;
     VarContainer<types::power_supply_DC::VoltageCurrent> powersupply_measurement;
     VarContainer<bool> selftest_result;
+    std::unique_ptr<OverVoltageMonitor> internal_over_voltage_monitor;
 
     // Track voltage to earth failures for debouncing
     int voltage_to_earth_failure_count{0};
