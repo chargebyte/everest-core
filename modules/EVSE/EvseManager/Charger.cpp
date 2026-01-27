@@ -2073,6 +2073,7 @@ bool Charger::power_available() {
 void Charger::request_error_sequence() {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_request_error_sequence);
     if (shared_context.current_state == EvseState::WaitingForAuthentication or
+        shared_context.current_state == EvseState::WaitingForEnergy or
         shared_context.current_state == EvseState::PrepareCharging) {
         bool trigger_slac_reset = true;
 
