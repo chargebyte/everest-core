@@ -241,6 +241,8 @@ Result DC_ChargeParameterDiscovery::feed(Event ev) {
         send_sequence_error(req_type, m_ctx);
         m_ctx.feedback.response_code(dt::ResponseCode::FAILED_SequenceError);
 
+        m_ctx.feedback.response_code(dt::ResponseCode::FAILED_SequenceError);
+
         return {};
     }
 }

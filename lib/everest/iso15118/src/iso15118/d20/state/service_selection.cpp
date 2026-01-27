@@ -170,6 +170,7 @@ Result ServiceSelection::feed(Event ev) {
         const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config, custom_vas_parameters);
 
         m_ctx.respond(res);
+        m_ctx.feedback.response_code(res.response_code);
 
         if (res.response_code >= dt::ResponseCode::FAILED) {
             m_ctx.session_stopped = true;
