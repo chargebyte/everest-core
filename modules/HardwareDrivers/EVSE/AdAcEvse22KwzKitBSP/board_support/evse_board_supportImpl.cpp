@@ -75,6 +75,7 @@ void evse_board_supportImpl::init() {
         caps.min_phase_count_import = 1;
         caps.max_phase_count_import = 3;
         caps.supports_changing_phases_during_charging = false;
+        caps.supports_cp_state_E = false;
         caps.connector_type = types::evse_board_support::Connector_type::IEC62196Type2Cable;
 
         caps.min_current_A_export = 6;
