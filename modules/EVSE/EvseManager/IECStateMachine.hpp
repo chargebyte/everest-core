@@ -84,7 +84,7 @@ public:
 
     void set_pwm(double value);
     void set_pwm_off();
-    void set_pwm_F();
+    void set_cp_state_F();
 
     void set_three_phases(bool t) {
         three_phases = t;

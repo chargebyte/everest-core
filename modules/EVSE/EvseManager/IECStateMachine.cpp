@@ -384,12 +384,12 @@ void IECStateMachine::set_pwm_off() {
 }
 
 // High level state machine sets state F
-void IECStateMachine::set_pwm_F() {
+void IECStateMachine::set_cp_state_F() {
     {
-        Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::IEC_set_pwm_F);
+        Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::IEC_set_cp_state_F);
         pwm_running = false;
     }
-    r_bsp->call_pwm_F();
+    r_bsp->call_cp_state_F();
     // Don't run the state machine in the callers context
     feed_state_machine(last_cp_state);
 }

@@ -80,7 +80,7 @@ Charger::Charger(const std::unique_ptr<IECStateMachine>& bsp, const std::unique_
 }
 
 Charger::~Charger() {
-    pwm_F();
+    cp_state_F();
     // need to send an event to wake up processing
     error_handling_event_queue.push(ErrorHandlingEvents::ForceEmergencyShutdown);
     error_thread_handle.stop();
@@ -197,7 +197,7 @@ void Charger::run_state_machine() {
         case EvseState::Disabled:
             if (initialize_state) {
                 signal_simple_event(types::evse_manager::SessionEventEnum::Disabled);
-                pwm_F();
+                cp_state_F();
             }
             break;
 
@@ -470,7 +470,7 @@ void Charger::run_state_machine() {
                 session_log.evse(false, "Start switching phases");
                 signal_simple_event(types::evse_manager::SessionEventEnum::SwitchingPhases);
                 if (config_context.switch_3ph1ph_cp_state_F) {
-                    pwm_F();
+                    cp_state_F();
                 } else {
                     pwm_off();
                 }
@@ -487,7 +487,7 @@ void Charger::run_state_machine() {
             if (initialize_state) {
                 session_log.evse(false, "Enter T_step_EF");
                 internal_context.t_step_ef_x1_pause = false;
-                pwm_F();
+                cp_state_F();
             }
             if (time_in_current_state >= T_STEP_EF + STAY_IN_X1_AFTER_TSTEP_EF_MS) {
                 session_log.evse(false, "Exit T_step_EF");
@@ -626,10 +626,10 @@ void Charger::run_state_machine() {
                 // First time we see that a fatal error became active, signal F for a short time.
                 // Only use in basic charging mode.
                 if (entered_fatal_error_state()) {
-                    pwm_F();
+                    cp_state_F();
                 }
 
-                if (internal_context.pwm_F_active and
+                if (internal_context.cp_state_F_active and
                     time_in_fatal_error_state_ms() > config_context.state_F_after_fault_ms and
                     shared_context.shutdown_type == ShutdownType::EmergencyShutdown) {
                     pwm_off();
@@ -1027,7 +1027,7 @@ void Charger::update_pwm_now(float duty_cycle) {
             "Set PWM On ({:.1f}%) took {} ms", duty_cycle * 100.,
             (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start)).count()));
     internal_context.last_pwm_update = std::chrono::steady_clock::now();
-    internal_context.pwm_F_active = false;
+    internal_context.cp_state_F_active = false;
     bsp->set_pwm(duty_cycle);
 }
 
@@ -1050,17 +1050,17 @@ void Charger::pwm_off() {
     shared_context.pwm_running = false;
     internal_context.update_pwm_last_duty_cycle = 1.;
     internal_context.pwm_set_last_ampere = 0.;
-    internal_context.pwm_F_active = false;
+    internal_context.cp_state_F_active = false;
     bsp->set_pwm_off();
 }
 
-void Charger::pwm_F() {
+void Charger::cp_state_F() {
     session_log.evse(false, "Set PWM F");
     shared_context.pwm_running = false;
     internal_context.update_pwm_last_duty_cycle = 0.;
     internal_context.pwm_set_last_ampere = 0.;
-    internal_context.pwm_F_active = true;
-    bsp->set_pwm_F();
+    internal_context.cp_state_F_active = true;
+    bsp->set_cp_state_F();
 }
 
 void Charger::run() {

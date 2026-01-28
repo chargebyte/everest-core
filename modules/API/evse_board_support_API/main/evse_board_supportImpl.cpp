@@ -44,8 +44,8 @@ void evse_board_supportImpl::handle_pwm_off() {
     mod->mqtt.publish(topic, "");
 }
 
-void evse_board_supportImpl::handle_pwm_F() {
-    auto topic = mod->get_topics().everest_to_extern("pwm_F");
+void evse_board_supportImpl::handle_cp_state_F() {
+    auto topic = mod->get_topics().everest_to_extern("cp_state_F");
     mod->mqtt.publish(topic, "");
 }
 

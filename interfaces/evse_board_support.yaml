@@ -21,8 +21,10 @@ cmds:
         maximum: 100
   pwm_off:
     description: Turns PWM off (constant high voltage)
-  pwm_F:
-    description: Turns PWM off with Error F (constant negative voltage)
+  cp_state_F:
+    description: >-
+      Turns PWM off with error state F: continuous -12 V on Control Pilot, indicating
+      EV supply equipment not available.
   cp_state_E:
     description: >-
       Sets the Control Pilot line to 0 V (state E) by disabling the power output or shorting to ground.

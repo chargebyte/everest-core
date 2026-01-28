@@ -205,11 +205,11 @@ void BUEvseBoardSupport::ready() {
         },
         ButtonOption::Animated(Color::Green, Color::White, Color::GreenLight, Color::White));
 
-    Component pwm_F_button = Button(
-        "PWM F",
+    Component cp_state_F_button = Button(
+        "CP State F",
         [&] {
-            last_command = "PWM F";
-            r_bsp->call_pwm_F();
+            last_command = "CP State F";
+            r_bsp->call_cp_state_F();
         },
         ButtonOption::Animated(Color::Red, Color::White, Color::RedLight, Color::White));
 
@@ -232,7 +232,7 @@ void BUEvseBoardSupport::ready() {
     auto pwm_component = Container::Horizontal({
         Container::Vertical({
             pwm_F_button,
-            cp_state_E_button
+            cp_state_E_button,
             pwm_off_button,
             pwm_on_button,
             pwm_dc,
