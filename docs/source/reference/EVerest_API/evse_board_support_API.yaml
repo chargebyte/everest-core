@@ -44,11 +44,11 @@ channels:
     messages:
       receive_pwm_off:
         $ref: '#/components/messages/receive_pwm_off'
-  receive_pwm_F:
-    address: 'e2m/pwm_F'
+  receive_cp_state_F:
+    address: 'e2m/cp_state_F'
     messages:
-      receive_pwm_F:
-        $ref: '#/components/messages/receive_pwm_F'
+      receive_cp_state_F:
+        $ref: '#/components/messages/receive_cp_state_F'
   receive_allow_power_on:
     address: 'e2m/allow_power_on'
     messages:
@@ -176,11 +176,11 @@ operations:
     channel:
       $ref: '#/channels/receive_pwm_off'
     description: 'Direction: EVerest to Module'
-  receive_pwm_F:
-    title: 'Receive PWM F'
+  receive_cp_state_F:
+    title: 'Receive CP state F'
     action: receive
     channel:
-      $ref: '#/channels/receive_pwm_F'
+      $ref: '#/channels/receive_cp_state_F'
     description: 'Direction: EVerest to Module'
   receive_allow_power_on:
     title: 'Receive permission to switch relays'
@@ -337,8 +337,8 @@ components:
       name: receive_pwm_off
       title: 'Receive PWM switch off'
       summary: Turn PWM off (constant high voltage)
-    receive_pwm_F:
-      name: receive_pwm_F
+    receive_cp_state_F:
+      name: receive_cp_state_F
       title: 'Receive PWM switch off'
       summary: Turn PWM off with error F (constant negative voltage)
     receive_allow_power_on:

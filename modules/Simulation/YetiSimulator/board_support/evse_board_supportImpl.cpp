@@ -53,8 +53,8 @@ void evse_board_supportImpl::handle_pwm_off() {
     mod->pwm_off();
 }
 
-void evse_board_supportImpl::handle_pwm_F() {
-    mod->pwm_f();
+void evse_board_supportImpl::handle_cp_state_F() {
+    mod->cp_state_f();
 }
 
 void evse_board_supportImpl::handle_cp_state_E() {

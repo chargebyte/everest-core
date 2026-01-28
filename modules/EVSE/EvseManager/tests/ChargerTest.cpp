@@ -689,7 +689,7 @@ void IECStateMachine::set_pwm(double value) {
 }
 void IECStateMachine::set_pwm_off() {
 }
-void IECStateMachine::set_pwm_F() {
+void IECStateMachine::set_cp_state_F() {
 }
 
 void IECStateMachine::enable(bool en) {

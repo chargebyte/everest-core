@@ -715,7 +715,7 @@ void YetiSimulator::pwm_off() {
     module_state->pwm_running = false;
     module_state->pwm_error_f = false;
 }
-void YetiSimulator::pwm_f() {
+void YetiSimulator::cp_state_f() {
     module_state->pwm_duty_cycle = 1.0;
     module_state->pwm_running = false;
     module_state->pwm_error_f = true;
