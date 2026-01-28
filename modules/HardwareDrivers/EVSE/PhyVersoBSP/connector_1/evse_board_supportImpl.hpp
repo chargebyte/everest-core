@@ -37,7 +37,7 @@ protected:
     // command handler functions (virtual)
     virtual void handle_enable(bool& value) override;
     virtual void handle_pwm_on(double& value) override;
-    virtual void handle_pwm_off() override;
+    virtual void handle_cp_state_X1() override;
     virtual void handle_cp_state_F() override;
     virtual void handle_cp_state_E() override;
     virtual void handle_allow_power_on(types::evse_board_support::PowerOnOff& value) override;

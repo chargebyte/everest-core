@@ -166,7 +166,7 @@ void evse_board_supportImpl::handle_pwm_on(double& value) {
     mod->serial.setPWM(value * 100);
 }
 
-void evse_board_supportImpl::handle_pwm_off() {
+void evse_board_supportImpl::handle_cp_state_X1() {
     mod->serial.setPWM(10001);
 }
 

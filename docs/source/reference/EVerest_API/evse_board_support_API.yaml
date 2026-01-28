@@ -39,11 +39,11 @@ channels:
     messages:
       receive_pwm_on:
         $ref: '#/components/messages/receive_pwm_on'
-  receive_pwm_off:
-    address: 'e2m/pwm_off'
+  receive_cp_state_X1:
+    address: 'e2m/cp_state_X1'
     messages:
-      receive_pwm_off:
-        $ref: '#/components/messages/receive_pwm_off'
+      receive_cp_state_X1:
+        $ref: '#/components/messages/receive_cp_state_X1'
   receive_cp_state_F:
     address: 'e2m/cp_state_F'
     messages:
@@ -175,11 +175,11 @@ operations:
     channel:
       $ref: '#/channels/receive_pwm_on'
     description: 'Direction: EVerest to Module'
-  receive_pwm_off:
-    title: 'Receive PWM off'
+  receive_cp_state_X1:
+    title: 'Receive CP state X1'
     action: receive
     channel:
-      $ref: '#/channels/receive_pwm_off'
+      $ref: '#/channels/receive_cp_state_X1'
     description: 'Direction: EVerest to Module'
   receive_cp_state_F:
     title: 'Receive CP state F'
@@ -344,10 +344,10 @@ components:
         - summary: ""
           payload:
             100
-    receive_pwm_off:
-      name: receive_pwm_off
-      title: 'Receive PWM switch off'
-      summary: Turn PWM off (constant high voltage)
+    receive_cp_state_X1:
+      name: receive_cp_state_X1
+      title: 'Receive CP state X1'
+      summary: Turn PWM off and set CP to constant high voltage (state X1)
     receive_cp_state_F:
       name: receive_cp_state_F
       title: 'Receive CP state F'

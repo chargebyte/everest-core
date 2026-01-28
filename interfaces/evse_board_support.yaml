@@ -19,7 +19,7 @@ cmds:
         type: number
         minimum: 0
         maximum: 100
-  pwm_off:
+  cp_state_X1:
     description: Turns PWM off (constant high voltage)
   cp_state_F:
     description: >-

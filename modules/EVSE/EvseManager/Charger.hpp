@@ -250,7 +250,7 @@ private:
     void update_pwm_now_if_changed(float duty_cycle);
     void update_pwm_now_if_changed_ampere(float duty_cycle);
     void update_pwm_max_every_5seconds_ampere(float duty_cycle);
-    void pwm_off();
+    void cp_state_X1();
     void cp_state_F();
 
     void process_cp_events_independent(CPEvent cp_event);

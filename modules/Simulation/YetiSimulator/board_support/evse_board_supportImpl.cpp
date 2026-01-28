@@ -49,8 +49,8 @@ void evse_board_supportImpl::handle_pwm_on(double& value) {
     mod->pwm_on(dutycycle);
 }
 
-void evse_board_supportImpl::handle_pwm_off() {
-    mod->pwm_off();
+void evse_board_supportImpl::handle_cp_state_X1() {
+    mod->cp_state_x1();
 }
 
 void evse_board_supportImpl::handle_cp_state_F() {
