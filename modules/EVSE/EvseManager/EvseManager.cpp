@@ -110,9 +110,22 @@ void EvseManager::init() {
     if (not (slac_enabled or config.mcs_enabled))
         hlc_enabled = false;
 
-    if (config.charge_mode == "DC" and not config.mcs_enabled and
-        (not hlc_enabled or not slac_enabled or r_powersupply_DC.empty())) {
-        throw std::runtime_error("DC mode requires slac, HLC and powersupply DCDC to be connected");
+    // in case of MCS we fake that SLAC is present for the next check...
+    // (it might be easier to maintain this patch this way)
+    if (connector_type.has_value() and connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
+        slac_enabled = true;
+        hlc_enabled = true;
+    }
+
+    if (config.charge_mode == "DC" and (not hlc_enabled or not slac_enabled or r_powersupply_DC.empty())) {
+        EVLOG_error << "DC mode requires slac, HLC and powersupply DCDC to be connected";
+        exit(255);
+    }
+
+    // ...in case of MCS we now reset the SLAC is present fake
+    // (it might be easier to maintain this patch this way)
+    if (connector_type.has_value() and connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
+        slac_enabled = false;
     }
 
     if (config.charge_mode == "DC" and r_imd.empty()) {
@@ -278,6 +291,7 @@ void EvseManager::ready() {
             session_log.evse(true, "D-LINK_ERROR.req");
             // Inform charger
             charger->dlink_error();
+
             if (slac_enabled) {
                 // Inform SLAC layer, it will leave the logical network
                 r_slac[0]->call_dlink_error();
@@ -288,6 +302,7 @@ void EvseManager::ready() {
             // tell charger (it will disable PWM)
             session_log.evse(true, "D-LINK_PAUSE.req");
             charger->dlink_pause();
+
             if (slac_enabled) {
                 r_slac[0]->call_dlink_pause();
             }
@@ -320,6 +335,7 @@ void EvseManager::ready() {
             // Trigger SLAC reset
             charger->signal_slac_reset.connect([this] { r_slac[0]->call_reset(false); });
         }
+
         // Ask HLC to stop charging session
         charger->signal_hlc_stop_charging.connect([this] { r_hlc[0]->call_stop_charging(true); });
         charger->signal_hlc_pause_charging.connect([this] { r_hlc[0]->call_pause_charging(true); });
