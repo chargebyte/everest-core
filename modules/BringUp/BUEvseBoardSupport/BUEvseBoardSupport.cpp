@@ -187,11 +187,11 @@ void BUEvseBoardSupport::ready() {
 
     std::string pwm_duty_cycle_str{"5.0"};
 
-    Component pwm_off_button = Button(
+    Component cp_state_X1_button = Button(
         "PWM Off",
         [&] {
             last_command = "PWM Off";
-            r_bsp->call_pwm_off();
+            r_bsp->call_cp_state_X1();
         },
         ButtonOption::Animated(Color::Blue, Color::White, Color::BlueLight, Color::White));
 
@@ -224,7 +224,7 @@ void BUEvseBoardSupport::ready() {
     auto pwm_component = Container::Horizontal({
         Container::Vertical({
             cp_state_F_button,
-            pwm_off_button,
+            cp_state_X1_button,
             pwm_on_button,
             pwm_dc,
         }),
