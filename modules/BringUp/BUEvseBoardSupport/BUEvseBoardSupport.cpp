@@ -213,6 +213,14 @@ void BUEvseBoardSupport::ready() {
         },
         ButtonOption::Animated(Color::Red, Color::White, Color::RedLight, Color::White));
 
+    Component cp_state_E_button = Button(
+        "CP State E",
+        [&] {
+            last_command = "CP State E";
+            r_bsp->call_cp_state_E();
+        },
+        ButtonOption::Animated(Color::Yellow, Color::White, Color::YellowLight, Color::White));
+
     InputOption o;
     o.multiline = false;
     o.cursor_position = 0;
@@ -224,6 +232,7 @@ void BUEvseBoardSupport::ready() {
     auto pwm_component = Container::Horizontal({
         Container::Vertical({
             pwm_F_button,
+            cp_state_E_button
             pwm_off_button,
             pwm_on_button,
             pwm_dc,

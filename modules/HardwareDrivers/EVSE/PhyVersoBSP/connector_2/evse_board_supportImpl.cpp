@@ -141,6 +141,10 @@ void evse_board_supportImpl::handle_pwm_F() {
     mod->serial.set_pwm(2, 0);
 }
 
+void evse_board_supportImpl::handle_cp_state_E() {
+    EVLOG_warning << "Command cp_state_E is not supported. Ignoring command.";
+}
+
 void evse_board_supportImpl::handle_allow_power_on(types::evse_board_support::PowerOnOff& value) {
     if (mod->config.conn2_disable_port) {
         EVLOG_error << "[2] Port disabled; Cannot set power_on!";
