@@ -75,6 +75,7 @@ void evse_board_supportImpl::init() {
         caps.min_phase_count_import = mod->config.min_phase_count_import;
         caps.max_phase_count_import = mod->config.max_phase_count_import;
         caps.supports_changing_phases_during_charging = false;
+        caps.supports_cp_state_E = false;
 
         caps.min_current_A_export = mod->config.min_current_A_export;
         caps.max_current_A_export = mod->config.max_current_A_export;
