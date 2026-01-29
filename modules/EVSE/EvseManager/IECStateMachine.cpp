@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <math.h>
+#include <optional>
 #include <string.h>
 
 namespace module {
@@ -133,6 +134,8 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
     std::queue<CPEvent> events;
     auto timer_state_C1 = TimerControl::do_nothing;
     auto timer_unlock_state_F = TimerControl::do_nothing;
+    auto allow_power_on_bsp_value = std::optional<bool>{};
+    auto call_pwm_off = false;
 
     {
         // mutex protected section
@@ -147,10 +150,12 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
         case RawCPState::Disabled:
             if (last_cp_state != RawCPState::Disabled) {
                 pwm_running = false;
-                r_bsp->call_pwm_off();
+                call_pwm_off = true;
                 ev_simplified_mode = false;
                 timer_state_C1 = TimerControl::stop;
-                call_allow_power_on_bsp(false);
+                power_on_allowed = false;
+                power_on_reason = types::evse_board_support::Reason::PowerOff;
+                allow_power_on_bsp_value = false;
                 connector_unlock();
             }
             break;
@@ -158,10 +163,12 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
         case RawCPState::A:
             if (last_cp_state != RawCPState::A) {
                 pwm_running = false;
-                r_bsp->call_pwm_off();
+                call_pwm_off = true;
                 ev_simplified_mode = false;
                 car_plugged_in = false;
-                call_allow_power_on_bsp(false);
+                power_on_allowed = false;
+                power_on_reason = types::evse_board_support::Reason::PowerOff;
+                allow_power_on_bsp_value = false;
                 timer_state_C1 = TimerControl::stop;
                 connector_unlock();
             }
@@ -189,7 +196,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
                 events.push(CPEvent::CarRequestedStopPower);
                 // Need to switch off according to Table A.6 Sequence 8.1
                 // within 100ms
-                call_allow_power_on_bsp(false);
+                power_on_allowed = false;
+                power_on_reason = types::evse_board_support::Reason::PowerOff;
+                allow_power_on_bsp_value = false;
                 timer_state_C1 = TimerControl::stop;
             }
 
@@ -211,7 +220,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
             connector_lock();
             // If state D is not supported switch off.
             if (not has_ventilation) {
-                call_allow_power_on_bsp(false);
+                power_on_allowed = false;
+                power_on_reason = types::evse_board_support::Reason::PowerOff;
+                allow_power_on_bsp_value = false;
                 timer_state_C1 = TimerControl::stop;
                 break;
             }
@@ -245,7 +256,7 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
                 // If we resume charging and the EV never left state C during pause we allow non-compliant EVs to switch
                 // on again.
                 if (power_on_allowed) {
-                    call_allow_power_on_bsp(true);
+                    allow_power_on_bsp_value = true;
                 }
             }
 
@@ -254,7 +265,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
                     << "Timeout of 6 seconds reached, EV did not go back to state B after PWM was switched off. "
                        "Powering off under load.";
                 // We are still in state C, but the 6 seconds timeout has been reached. Now force power off under load.
-                call_allow_power_on_bsp(false);
+                power_on_allowed = false;
+                power_on_reason = types::evse_board_support::Reason::PowerOff;
+                allow_power_on_bsp_value = false;
             }
 
             if (pwm_running) { // C2
@@ -264,7 +277,7 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
                 if (power_on_allowed && (!last_power_on_allowed || last_cp_state == RawCPState::B)) {
                     // Table A.6: Sequence 4 EV ready to charge.
                     // Must enable power within 3 seconds.
-                    call_allow_power_on_bsp(true);
+                    allow_power_on_bsp_value = true;
                 }
 
                 // Simulate Request power Event here for simplified mode
@@ -284,10 +297,12 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
             }
             if (last_cp_state != RawCPState::E) {
                 timer_state_C1 = TimerControl::stop;
-                call_allow_power_on_bsp(false);
+                power_on_allowed = false;
+                power_on_reason = types::evse_board_support::Reason::PowerOff;
+                allow_power_on_bsp_value = false;
                 pwm_running = false;
                 if (!state_e_triggered_through_handle) {
-                    r_bsp->call_pwm_off();
+                    call_pwm_off = true;
                 }
                 if (last_cp_state == RawCPState::B || last_cp_state == RawCPState::C ||
                     last_cp_state == RawCPState::D) {
@@ -298,7 +313,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
 
         case RawCPState::F:
             timer_state_C1 = TimerControl::stop;
-            call_allow_power_on_bsp(false);
+            power_on_allowed = false;
+            power_on_reason = types::evse_board_support::Reason::PowerOff;
+            allow_power_on_bsp_value = false;
             if (last_cp_state not_eq RawCPState::F) {
                 timer_unlock_state_F = TimerControl::start;
                 pwm_running = false;
@@ -345,6 +362,13 @@ std::queue<CPEvent> IECStateMachine::state_machine(RawCPState cp_state) {
     case TimerControl::do_nothing:
     default:
         break;
+    }
+
+    if (allow_power_on_bsp_value.has_value()) {
+        r_bsp->call_allow_power_on({*allow_power_on_bsp_value, power_on_reason});
+    }
+    if (call_pwm_off) {
+        r_bsp->call_pwm_off();
     }
 
     return events;
