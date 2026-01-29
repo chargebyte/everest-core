@@ -1417,12 +1417,14 @@ void EvseManager::ready_to_start_charging() {
 }
 
 void EvseManager::set_selected_protocol(const std::string& protocol) {
-    if (selected_protocol == protocol) {
+    static bool protocol_signaled = false; // signal at least once, even if "unchanged"
+    if (protocol_signaled && selected_protocol == protocol) {
         return;
     }
     EVLOG_info << "Selected protocol set to " << protocol;
     selected_protocol = protocol;
     signal_selected_protocol(protocol);
+    protocol_signaled = true;
 }
 
 types::powermeter::Powermeter EvseManager::get_latest_powermeter_data_billing() {
