@@ -3,8 +3,6 @@
 
 #include "Evse.hpp"
 
-namespace RPCDataTypes = types::json_rpc_api;
-
 namespace methods {
 
 RPCDataTypes::EVSEGetInfoResObj Evse::get_info(const int32_t evse_index) {
@@ -158,8 +156,9 @@ RPCDataTypes::ErrorResObj Evse::set_ac_charging_phase_count(const int32_t evse_i
     return m_request_handler_ptr->set_ac_charging_phase_count(evse_index, phase_count);
 }
 
-RPCDataTypes::ErrorResObj Evse::set_ac_charging_session_configuration(
-    const int32_t evse_index, const types::json_rpc_api::ACSessionConfigurationObj& ac_session_configuration) {
+RPCDataTypes::ErrorResObj
+Evse::set_ac_charging_session_configuration(const int32_t evse_index,
+                                            const RPCDataTypes::ACSessionConfigurationObj& ac_session_configuration) {
     RPCDataTypes::ErrorResObj res{};
 
     const auto* evse = m_dataobj.get_evse_store(evse_index);
@@ -216,7 +215,7 @@ RPCDataTypes::ErrorResObj Evse::enable_connector(const int32_t evse_index, int c
 
 RPCDataTypes::ErrorResObj
 Evse::reinit_charging_session(const int32_t evse_index,
-                              std::optional<types::json_rpc_api::ReinitConfigurationObj> reinit_configuration) {
+                              std::optional<RPCDataTypes::ReinitConfigurationObj> reinit_configuration) {
     RPCDataTypes::ErrorResObj res{};
 
     const auto* evse = m_dataobj.get_evse_store(evse_index);
