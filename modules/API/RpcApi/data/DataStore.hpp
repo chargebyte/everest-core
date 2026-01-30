@@ -14,6 +14,8 @@
 
 namespace RPCDataTypes = types::json_rpc_api;
 
+namespace RPCDataTypes = types::json_rpc_api;
+
 namespace data {
 
 enum class EVSEStatusField {
