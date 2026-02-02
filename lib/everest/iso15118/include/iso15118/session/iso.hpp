@@ -72,6 +72,8 @@ private:
 
     d20::Timeouts timeouts;
 
+    std::optional<TimePoint> last_response_tx_time; // timestamp of the last response message sent
+
     void handle_connection_event(io::ConnectionEvent event);
 };
 
