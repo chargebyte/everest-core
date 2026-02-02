@@ -16,6 +16,7 @@
 namespace iso15118 {
 
 static constexpr auto SESSION_IDLE_TIMEOUT_MS = 5000;
+static constexpr auto MIN_RESPONSE_INTERVAL_MS = 100; // minimum time between two response messages
 
 static void log_sdp_packet(const iso15118::io::SdpPacket& sdp) {
     static constexpr auto ESCAPED_BYTE_CHAR_COUNT = 4;
@@ -226,8 +227,21 @@ TimePoint const& Session::poll() {
     const auto [got_response, payload_size, payload_type, response_type] = message_exchange.check_and_clear_response();
 
     if (got_response) {
+        // Before we send back the response message, we check the time between two response messages
+        // sent out. If this is less than MIN_RESPONSE_INTERVAL_MS, we delay the response message to
+        // avoid potential performance issues.
+        if (last_response_tx_time.has_value()) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(get_current_time_point() -
+                                                                                       last_response_tx_time.value());
+            const auto min_delay = std::chrono::milliseconds(MIN_RESPONSE_INTERVAL_MS);
+            if (elapsed < min_delay) {
+                std::this_thread::sleep_for(min_delay - elapsed);
+            }
+        }
+
         const auto response_size = setup_response_header(response_buffer, payload_type, payload_size);
         connection->write(response_buffer, response_size);
+        last_response_tx_time = get_current_time_point();
 
         timeouts.start_timeout(d20::TimeoutType::SEQUENCE, d20::TIMEOUT_SEQUENCE);
 
