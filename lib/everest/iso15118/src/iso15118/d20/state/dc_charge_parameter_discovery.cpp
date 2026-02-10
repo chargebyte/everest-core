@@ -133,6 +133,8 @@ bool handle_compatibility_check(const d20::DcTransferLimits& evse_dc_limits, con
         compatibility_flag = false;
     }
 
+    // CC.5.6 3-5) Are EV checks and not relevant here
+
     return compatibility_flag;
 }
 
@@ -216,8 +218,21 @@ Result DC_ChargeParameterDiscovery::feed(Event ev) {
             m_ctx.session_ev_info.ev_transfer_limits.emplace<BPT_DC_ModeReq>(*mode);
         }
 
-        const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.powersupply_limits);
-
+        // Compatibility check and use of new limits
+        d20::DcTransferLimits checked_limits;
+        bool compatible = handle_compatibility_check(m_ctx.session_config.powersupply_limits, req->transfer_mode, checked_limits);
+        message_20::DC_ChargeParameterDiscoveryResponse res;
+        if (!compatible) {
+            res = handle_request(*req, m_ctx.session, m_ctx.session_config.powersupply_limits);
+            res.response_code = dt::ResponseCode::FAILED_WrongChargeParameter;
+            m_ctx.respond(res);
+            m_ctx.feedback.dc_max_limits(dc_max_limits);
+            m_ctx.session_stopped = true;
+            return {};
+        }
+        // Save adapted limits for later states (e.g. charge loop)
+        m_ctx.session_config.dc_limits = checked_limits;
+        res = handle_request(*req, m_ctx.session, checked_limits);
         m_ctx.respond(res);
 
         m_ctx.feedback.dc_max_limits(dc_max_limits);
