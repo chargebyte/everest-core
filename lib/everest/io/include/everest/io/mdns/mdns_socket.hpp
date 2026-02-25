@@ -39,10 +39,6 @@ public:
     bool query(std::string const& what);
 
 private:
-    std::string m_remote;
-    uint16_t m_port{0};
-    int m_timeout_ms{0};
-
     std::array<uint8_t, udp::udp_payload::max_size> rx_buffer;
     udp::udp_info target;
 };
