@@ -2171,7 +2171,16 @@ static enum v2g_event handle_iso_session_stop(struct v2g_connection* conn) {
     res->ResponseCode = iso2_responseCodeType_OK;
 
     /* Check the current response code and check if no external error has occurred */
-    iso_validate_response_code(&res->ResponseCode, conn);
+    auto event = iso_validate_response_code(&res->ResponseCode, conn);
+
+    /* In case of an error, ignore payload of the request message and trigger a d-link error */
+    if (event != V2G_EVENT_NO_EVENT) {
+        conn->d_link_action = dLinkAction::D_LINK_ACTION_ERROR;
+        conn->ctx->hlc_pause_active = false;
+        /* Set next expected req msg */
+        conn->ctx->state = static_cast<int>(iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION);
+        return event;
+    }
 
     /* Set the next charging state */
     switch (req->ChargingSession) {
@@ -2179,7 +2188,7 @@ static enum v2g_event handle_iso_session_stop(struct v2g_connection* conn) {
         conn->d_link_action = dLinkAction::D_LINK_ACTION_TERMINATE;
         conn->ctx->hlc_pause_active = false;
         /* Set next expected req msg */
-        conn->ctx->state = (int)iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION;
+        conn->ctx->state = static_cast<int>(iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION);
         break;
 
     case iso2_chargingSessionType_Pause:
@@ -2190,7 +2199,7 @@ static enum v2g_event handle_iso_session_stop(struct v2g_connection* conn) {
             conn->d_link_action = dLinkAction::D_LINK_ACTION_TERMINATE;
             res->ResponseCode = iso2_responseCodeType_FAILED;
             conn->ctx->hlc_pause_active = false;
-            conn->ctx->state = (int)iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION;
+            conn->ctx->state = static_cast<int>(iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION);
         } else {
             /* Init sleep mode for the EV */
             conn->d_link_action = dLinkAction::D_LINK_ACTION_PAUSE;
@@ -2202,7 +2211,7 @@ static enum v2g_event handle_iso_session_stop(struct v2g_connection* conn) {
     default:
         /* Set next expected req msg */
         conn->d_link_action = dLinkAction::D_LINK_ACTION_TERMINATE;
-        conn->ctx->state = (int)iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION;
+        conn->ctx->state = static_cast<int>(iso_dc_state_id::WAIT_FOR_TERMINATED_SESSION);
     }
 
     return V2G_EVENT_SEND_AND_TERMINATE; // Charging must be terminated after sending the response message [V2G2-571]
