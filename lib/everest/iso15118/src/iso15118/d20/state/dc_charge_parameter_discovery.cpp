@@ -136,8 +136,8 @@ bool handle_compatibility_check(const d20::DcTransferLimits& evse_dc_limits,
     // CC.5.6 g) Relation between EVSE min power and EV max power
     auto& out_min_power = out_limits.charge_limits.power.min;
     float evse_min_power = dt::from_RationalNumber(out_min_power);
-    if (evse_min_power >= ev_max_power) {
-        logf_error("EVSE min power %.1f W >= EV max power %.1f W", evse_min_power, ev_max_power);
+    if (evse_min_power >= ev_power_max) {
+        logf_error("EVSE min power %.1f W >= EV max power %.1f W", evse_min_power, ev_power_max);
         compatibility_flag = false;
     }
 
