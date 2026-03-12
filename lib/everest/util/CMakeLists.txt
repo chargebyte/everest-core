@@ -15,6 +15,7 @@ target_include_directories(everest_util
 set_target_properties(everest_util
     PROPERTIES
         BUILD_INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        EXPORT_NAME util
 )
 
 install(TARGETS everest_util
@@ -29,6 +30,14 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/everest
     DESTINATION include
     FILES_MATCHING PATTERN "*.hpp"
 )
+
+if(DISABLE_EDM)
+    evc_setup_package(
+        NAME everest-util
+        EXPORT everest-core-targets
+        NAMESPACE everest
+    )
+endif()
 
 if (BUILD_TESTING)
     add_subdirectory(tests)

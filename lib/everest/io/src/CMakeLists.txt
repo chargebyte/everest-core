@@ -38,7 +38,8 @@ target_include_directories(everest_io
 
 target_link_libraries(everest_io
     PUBLIC
-        everest::util
+        $<BUILD_INTERFACE:everest::util>
+        $<INSTALL_INTERFACE:everest::util>
 )
 
 target_compile_features(everest_io PUBLIC cxx_std_17)
