@@ -2,6 +2,9 @@ add_library(everest_util INTERFACE)
 add_library(everest::util ALIAS everest_util)
 ev_register_library_target(everest_helpers)
 
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
+
 set_target_properties(everest_util PROPERTIES
   VERSION 0.0.1
 )
@@ -32,10 +35,26 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/everest
 )
 
 if(DISABLE_EDM)
-    evc_setup_package(
-        NAME everest-util
-        EXPORT everest-core-targets
-        NAMESPACE everest
+    set(EVEREST_UTIL_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/everest-util")
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/everest-util-config.cmake
+        INSTALL_DESTINATION ${EVEREST_UTIL_CMAKE_INSTALL_DIR}
+        PATH_VARS CMAKE_INSTALL_INCLUDEDIR
+    )
+
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/everest-util-config-version.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY ExactVersion
+    )
+
+    install(
+        FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/everest-util-config.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/everest-util-config-version.cmake
+        DESTINATION ${EVEREST_UTIL_CMAKE_INSTALL_DIR}
     )
 endif()
 
