@@ -320,8 +320,6 @@ void Charger::run_state_machine() {
             // Wait for Energy Manager to supply some power, otherwise wait here.
             // If we have zero power, some cars will not like the ChargingParameter message.
             if (config_context.charge_mode == ChargeMode::DC) {
-                // Create a copy of the atomic struct
-                types::iso15118::DcEvseMaximumLimits evse_limit = shared_context.current_evse_max_limits;
                 if (not power_available()) {
 
                     // Wait some time here in this state to see if we get energy from the EnergyManager...
@@ -621,8 +619,6 @@ void Charger::run_state_machine() {
                 internal_context.hlc_charge_loop_no_energy_timeout_running = false;
 
                 if (config_context.charge_mode == ChargeMode::DC) {
-                    // Create a copy of the atomic struct
-                    types::iso15118::DcEvseMaximumLimits evse_limit = shared_context.current_evse_max_limits;
                     if (not power_available()) {
                         signal_hlc_no_energy_available();
                     }

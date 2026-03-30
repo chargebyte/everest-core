@@ -779,13 +779,6 @@ void EvseManager::ready() {
             });
 
             r_hlc[0]->subscribe_d20_dc_dynamic_charge_mode([this](types::iso15118::DcChargeDynamicModeValues values) {
-                static bool last_is_actually_exporting_to_grid{false};
-
-                const auto energy_flow_changed = is_actually_exporting_to_grid != last_is_actually_exporting_to_grid;
-                last_is_actually_exporting_to_grid = is_actually_exporting_to_grid;
-
-                bool target_changed{false};
-
                 double min_charge_power{0.0};
                 double max_charge_power{0.0};
                 double max_charge_current{0.0};
