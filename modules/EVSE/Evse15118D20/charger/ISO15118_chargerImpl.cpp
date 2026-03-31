@@ -384,28 +384,41 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
 
                 publish_dc_ev_target_voltage_current({target_voltage, target_current});
 
-                if (scheduled_mode->max_charge_current and scheduled_mode->max_voltage and
-                    scheduled_mode->max_charge_power) {
-                    const auto max_current = dt::from_RationalNumber(scheduled_mode->max_charge_current.value());
-                    const auto max_voltage = dt::from_RationalNumber(scheduled_mode->max_voltage.value());
-                    const auto max_power = dt::from_RationalNumber(scheduled_mode->max_charge_power.value());
-                    publish_dc_ev_maximum_limits({max_current, max_power, max_voltage});
+                types::iso15118::DcEvMaximumLimits limits{
+                    scheduled_mode->max_charge_current
+                        ? std::make_optional(dt::from_RationalNumber(scheduled_mode->max_charge_current.value()))
+                        : std::nullopt,
+                    scheduled_mode->max_voltage
+                        ? std::make_optional(dt::from_RationalNumber(scheduled_mode->max_voltage.value()))
+                        : std::nullopt,
+                    scheduled_mode->max_charge_power
+                        ? std::make_optional(dt::from_RationalNumber(scheduled_mode->max_charge_power.value()))
+                        : std::nullopt,
+                };
+                if (limits.dc_ev_maximum_current_limit or limits.dc_ev_maximum_power_limit or
+                    limits.dc_ev_maximum_voltage_limit) {
+                    publish_dc_ev_maximum_limits(limits);
                 }
-
             } else if (const auto* bpt_scheduled_mode = std::get_if<BPT_ScheduleReqControlModeDC>(dc_control_mode)) {
                 const auto target_voltage = dt::from_RationalNumber(bpt_scheduled_mode->target_voltage);
                 const auto target_current = dt::from_RationalNumber(bpt_scheduled_mode->target_current);
                 publish_dc_ev_target_voltage_current({target_voltage, target_current});
 
-                if (bpt_scheduled_mode->max_charge_current and bpt_scheduled_mode->max_voltage and
-                    bpt_scheduled_mode->max_charge_power) {
-                    const auto max_current = dt::from_RationalNumber(bpt_scheduled_mode->max_charge_current.value());
-                    const auto max_voltage = dt::from_RationalNumber(bpt_scheduled_mode->max_voltage.value());
-                    const auto max_power = dt::from_RationalNumber(bpt_scheduled_mode->max_charge_power.value());
-                    publish_dc_ev_maximum_limits({max_current, max_power, max_voltage});
+                types::iso15118::DcEvMaximumLimits limits{
+                    bpt_scheduled_mode->max_charge_current
+                        ? std::make_optional(dt::from_RationalNumber(bpt_scheduled_mode->max_charge_current.value()))
+                        : std::nullopt,
+                    bpt_scheduled_mode->max_voltage
+                        ? std::make_optional(dt::from_RationalNumber(bpt_scheduled_mode->max_voltage.value()))
+                        : std::nullopt,
+                    bpt_scheduled_mode->max_charge_power
+                        ? std::make_optional(dt::from_RationalNumber(bpt_scheduled_mode->max_charge_power.value()))
+                        : std::nullopt,
+                };
+                if (limits.dc_ev_maximum_current_limit or limits.dc_ev_maximum_power_limit or
+                    limits.dc_ev_maximum_voltage_limit) {
+                    publish_dc_ev_maximum_limits(limits);
                 }
-
-                // publish_dc_ev_maximum_limits({max_limits.current, max_limits.power, max_limits.voltage});
             } else if (const auto* dynamic_mode = std::get_if<DynamicReqControlModeDC>(dc_control_mode)) {
                 publish_d20_dc_dynamic_charge_mode(convert_dynamic_values(*dynamic_mode));
             } else if (const auto* bpt_dynamic_mode = std::get_if<BPT_DynamicReqControlModeDC>(dc_control_mode)) {
