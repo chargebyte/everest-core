@@ -15,6 +15,15 @@
 
 namespace iso15118 {
 
+namespace {
+
+std::unique_ptr<io::IConnection> create_connection_for_session(io::PollManager& poll_manager,
+                                                               const std::string& interface_name) {
+    return std::make_unique<io::ConnectionPlain>(poll_manager, interface_name);
+}
+
+} // namespace
+
 TbdController::TbdController(TbdConfig config_, session::feedback::Callbacks callbacks_, d20::EvseSetupConfig setup_) :
     config(std::move(config_)),
     callbacks(std::move(callbacks_)),
@@ -38,7 +47,7 @@ void TbdController::loop() {
     static constexpr auto POLL_MANAGER_TIMEOUT_MS = 50;
 
     if (not config.enable_sdp_server) {
-        auto connection = std::make_unique<io::ConnectionPlain>(poll_manager, interface_name);
+        auto connection = create_connection_for_session(poll_manager, interface_name);
         session =
             std::make_unique<Session>(std::move(connection), d20::SessionConfig(evse_setup), callbacks, pause_ctx);
     }
@@ -57,6 +66,23 @@ void TbdController::loop() {
 
         next_event = offset_time_point_by_ms(get_current_time_point(), POLL_MANAGER_TIMEOUT_MS);
 
+        if (this->reset_session_requested.exchange(false)) {
+            this->pause_ctx.reset();
+
+            if (this->session) {
+                // EvseManager calls reset_error() on a fresh plug-in. Drop any stale ISO session from
+                // the previous run immediately so it cannot keep blocking new SDP requests.
+                this->session->close();
+                this->session.reset();
+            }
+
+            if (not this->config.enable_sdp_server) {
+                auto connection = create_connection_for_session(this->poll_manager, this->interface_name);
+                this->session = std::make_unique<Session>(std::move(connection), d20::SessionConfig(this->evse_setup),
+                                                          this->callbacks, this->pause_ctx);
+            }
+        }
+
         if (session) {
             try {
                 const auto next_session_event = session->poll();
@@ -71,7 +97,7 @@ void TbdController::loop() {
                 session.reset();
 
                 if (not config.enable_sdp_server) {
-                    auto connection = std::make_unique<io::ConnectionPlain>(poll_manager, interface_name);
+                    auto connection = create_connection_for_session(poll_manager, interface_name);
                     session = std::make_unique<Session>(std::move(connection), d20::SessionConfig(evse_setup),
                                                         callbacks, pause_ctx);
                 }
@@ -84,6 +110,10 @@ void TbdController::send_control_event(const d20::ControlEvent& event) {
     if (session) {
         session->push_control_event(event);
     }
+}
+
+void TbdController::reset_error() {
+    this->reset_session_requested = true;
 }
 
 void TbdController::update_authorization_services(const std::vector<message_20::datatypes::Authorization>& services,

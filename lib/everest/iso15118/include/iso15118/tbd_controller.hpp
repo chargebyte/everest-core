@@ -2,6 +2,7 @@
 // Copyright 2023 Pionix GmbH and Contributors to EVerest
 #pragma once
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <optional>
@@ -34,6 +35,7 @@ public:
     void loop();
 
     void send_control_event(const d20::ControlEvent&);
+    void reset_error();
 
     void update_authorization_services(const std::vector<message_20::datatypes::Authorization>& services,
                                        bool cert_install_service);
@@ -61,6 +63,7 @@ private:
     std::string interface_name;
 
     std::optional<d20::PauseContext> pause_ctx{std::nullopt};
+    std::atomic_bool reset_session_requested{false};
 };
 
 } // namespace iso15118

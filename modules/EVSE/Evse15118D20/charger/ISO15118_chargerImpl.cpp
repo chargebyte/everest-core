@@ -1097,7 +1097,11 @@ void ISO15118_chargerImpl::handle_send_error(types::iso15118::EvseError& error) 
 }
 
 void ISO15118_chargerImpl::handle_reset_error() {
-    // your code for cmd reset_error goes here
+    std::scoped_lock lock(GEL);
+
+    if (controller) {
+        controller->reset_error();
+    }
 }
 
 } // namespace charger
