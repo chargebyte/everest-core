@@ -726,8 +726,10 @@ void EvseManager::ready() {
 
                     if (config.hack_pause_imd_during_precharge and m.voltage_V * std::fabs(m.current_A) > 1000) {
                         // Start IMD again as it was stopped after CableCheck
-                        imd_start();
-                        EVLOG_info << "Hack: Restarting Isolation Measurement at " << m.voltage_V << " " << m.current_A;
+                        if (imd_start()) {
+                            EVLOG_info << "Hack: Restarting Isolation Measurement at " << m.voltage_V << " "
+                                       << m.current_A;
+                        }
                     }
 
                     r_hlc[0]->call_update_dc_present_values(present_values);
@@ -2477,16 +2479,22 @@ const std::vector<std::unique_ptr<powermeterIntf>>& EvseManager::r_powermeter_bi
     }
 }
 
-void EvseManager::imd_stop() {
-    if (not r_imd.empty()) {
-        r_imd[0]->call_stop();
+bool EvseManager::imd_stop() {
+    if (r_imd.empty() or not imd_running.exchange(false)) {
+        return false;
     }
+
+    r_imd[0]->call_stop();
+    return true;
 }
 
-void EvseManager::imd_start() {
-    if (not r_imd.empty()) {
-        r_imd[0]->call_start();
+bool EvseManager::imd_start() {
+    if (r_imd.empty() or imd_running.exchange(true)) {
+        return false;
     }
+
+    r_imd[0]->call_start();
+    return true;
 }
 
 // This returns our active local limits, which is either externally set limits

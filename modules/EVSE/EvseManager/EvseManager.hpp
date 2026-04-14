@@ -348,6 +348,7 @@ private:
     std::atomic<double> latest_target_current{0.};
     std::atomic<double> last_power_supply_voltage{0.};
     std::atomic<double> last_power_supply_current{0.};
+    std::atomic_bool imd_running{false};
 
     // Raw EV target values as received from ISO15118 stack
     std::atomic<double> raw_ev_target_voltage{0.};
@@ -392,8 +393,8 @@ private:
     types::evse_manager::EVInfo ev_info;
     types::evse_manager::CarManufacturer car_manufacturer{types::evse_manager::CarManufacturer::Unknown};
 
-    void imd_stop();
-    void imd_start();
+    bool imd_stop();
+    bool imd_start();
     Everest::Thread telemetryThreadHandle;
 
     void fail_cable_check(const std::string& reason);
