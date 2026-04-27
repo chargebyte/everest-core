@@ -75,7 +75,12 @@ void EnergyManagerImpl::start() {
     // start thread to update energy optimization
     std::thread([this] {
         while (true) {
-            auto optimized_values = this->run_optimizer(energy_flow_request, date::utc_clock::now());
+            types::energy::EnergyFlowRequest request;
+            {
+                std::scoped_lock lock(this->energy_mutex);
+                request = this->energy_flow_request;
+            }
+            auto optimized_values = this->run_optimizer(request, date::utc_clock::now());
             everest::lib::util::perf::dump_if_requested();
             enforced_limits_callback(optimized_values);
             {
