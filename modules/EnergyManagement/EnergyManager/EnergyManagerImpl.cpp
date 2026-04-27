@@ -185,7 +185,7 @@ EnergyManagerImpl::run_optimizer(const types::energy::EnergyFlowRequest& request
 
     for (auto& broker : brokers) {
         auto& local_market = broker->get_local_market();
-        const auto sold_energy = local_market.get_sold_energy();
+        const auto& sold_energy = local_market.get_sold_energy();
 
         if (sold_energy.size() > 0) {
             types::energy::EnforcedLimits l;
@@ -208,11 +208,11 @@ EnergyManagerImpl::run_optimizer(const types::energy::EnergyFlowRequest& request
                 }
             }
 
-            optimized_values.push_back(l);
-
             if (globals.debug) {
                 EVLOG_info << "Sending enforced limits (import) to :" << l.uuid << " " << l.limits_root_side;
             }
+
+            optimized_values.push_back(std::move(l));
         }
     }
 
