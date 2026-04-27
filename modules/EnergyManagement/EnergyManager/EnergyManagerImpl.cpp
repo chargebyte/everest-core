@@ -13,6 +13,10 @@
 
 namespace module {
 
+// The optimizer uses process-global state in Market/Broker code. Serialize optimizer runs without blocking updates to
+// the latest energy request.
+static std::mutex optimizer_mutex;
+
 static BrokerFastCharging::Switch1ph3phMode to_switch_1ph3ph_mode(const std::string& m) {
     if (m == "Both") {
         return BrokerFastCharging::Switch1ph3phMode::Both;
@@ -108,7 +112,7 @@ EnergyManagerImpl::run_optimizer(const types::energy::EnergyFlowRequest& request
     everest::lib::util::perf::dump_if_requested();
     EVEREST_UTIL_PERF_SCOPE("EnergyManagerImpl::run_optimizer");
 
-    std::scoped_lock lock(energy_mutex);
+    std::scoped_lock lock(optimizer_mutex);
 
     globals.init(start_time, config.schedule_interval_duration, config.schedule_total_duration, config.slice_ampere,
                  config.slice_watt, config.debug, request);
