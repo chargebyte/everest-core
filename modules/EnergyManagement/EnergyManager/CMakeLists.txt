@@ -24,6 +24,11 @@ target_sources(${MODULE_NAME}
         "main/energy_managerImpl.cpp"
 )
 
+target_link_libraries(${MODULE_NAME}
+    PRIVATE
+        everest::util
+)
+
 # ev@c55432ab-152c-45a9-9d2e-7281d50c69c3:v1
 # insert other things like install cmds etc here
 # insert other things like install cmds etc here

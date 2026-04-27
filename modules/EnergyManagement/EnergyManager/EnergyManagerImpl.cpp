@@ -4,6 +4,7 @@
 #include <EnergyManagerImpl.hpp>
 
 #include <chrono>
+#include <everest/util/perf_scope.hpp>
 #include <fstream>
 
 #include "Broker.hpp"
@@ -75,6 +76,7 @@ void EnergyManagerImpl::start() {
     std::thread([this] {
         while (true) {
             auto optimized_values = this->run_optimizer(energy_flow_request, date::utc_clock::now());
+            everest::lib::util::perf::dump_if_requested();
             enforced_limits_callback(optimized_values);
             {
                 std::unique_lock<std::mutex> lock(mainloop_sleep_mutex);
@@ -98,6 +100,9 @@ void EnergyManagerImpl::on_energy_flow_request(const types::energy::EnergyFlowRe
 std::vector<types::energy::EnforcedLimits>
 EnergyManagerImpl::run_optimizer(const types::energy::EnergyFlowRequest& request,
                                  date::utc_clock::time_point start_time, const std::string& test_name) {
+    everest::lib::util::perf::dump_if_requested();
+    EVEREST_UTIL_PERF_SCOPE("EnergyManagerImpl::run_optimizer");
+
     std::scoped_lock lock(energy_mutex);
 
     globals.init(start_time, config.schedule_interval_duration, config.schedule_total_duration, config.slice_ampere,

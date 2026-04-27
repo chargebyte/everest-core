@@ -4,12 +4,15 @@
 #include "Broker.hpp"
 #include "BrokerFastCharging.hpp"
 #include "Market.hpp"
+#include <everest/util/perf_scope.hpp>
 #include <fmt/core.h>
 #include <optional>
 
 namespace module {
 
 void EnergyManager::init() {
+    everest::lib::util::perf::dump_at_exit();
+    everest::lib::util::perf::install_signal_dump();
 
     EnergyManagerConfig energy_manager_config;
     energy_manager_config.nominal_ac_voltage = config.nominal_ac_voltage;
