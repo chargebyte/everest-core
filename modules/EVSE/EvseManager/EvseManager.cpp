@@ -383,7 +383,7 @@ void EvseManager::ready() {
             payment_options.push_back(types::iso15118::PaymentOption::ExternalPayment);
         }
         r_hlc[0]->call_session_setup(payment_options, _contract_certificate_installation_enabled,
-                                     _central_contract_validation_allowed, false);
+                                     _central_contract_validation_allowed, config.ac_with_soc);
 
         r_hlc[0]->subscribe_hlc_session_failed([this](types::evse_manager::HlcSessionFailedReasonEnum reason) {
             types::evse_manager::HlcSessionFailedEvent ev;
@@ -1243,9 +1243,14 @@ void EvseManager::ready() {
             // Notify charger whether matching was started (or is done) or not
             if (s == types::slac::State::UNMATCHED) {
                 charger->set_matching_started(false);
+                charger->set_slac_matched(false);
                 slac_unmatched = true;
+            } else if (s == types::slac::State::MATCHED) {
+                charger->set_slac_matched(true);
+                slac_unmatched = false;
             } else {
                 charger->set_matching_started(true);
+                charger->set_slac_matched(false);
                 slac_unmatched = false;
             }
         });
@@ -1331,7 +1336,7 @@ void EvseManager::ready() {
             payment_options.push_back(types::iso15118::PaymentOption::ExternalPayment);
         }
         r_hlc[0]->call_session_setup(payment_options, _contract_certificate_installation_enabled,
-                                     _central_contract_validation_allowed, false);
+                                     _central_contract_validation_allowed, config.ac_with_soc);
     });
 
     charger->signal_session_started_event.connect(
@@ -1367,7 +1372,7 @@ void EvseManager::ready() {
                 }
             }
             r_hlc[0]->call_session_setup(payment_options, _contract_certificate_installation_enabled,
-                                         _central_contract_validation_allowed, false);
+                                         _central_contract_validation_allowed, config.ac_with_soc);
         });
 
     invoke_ready(*p_evse);
@@ -1564,6 +1569,7 @@ void EvseManager::switch_DC_mode() {
 
 void EvseManager::switch_AC_mode() {
     setup_AC_mode();
+    charger->start_reinit();
 }
 
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
