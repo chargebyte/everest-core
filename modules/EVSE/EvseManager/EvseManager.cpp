@@ -904,17 +904,30 @@ void EvseManager::ready() {
                 [this](types::iso15118::DcEvseMaximumLimits limits) { process_dc_ev_target_voltage_current(limits); });
 
             // Current demand has finished - switch off DC supply
-            r_hlc[0]->subscribe_current_demand_finished([this] { powersupply_DC_off(); });
+            r_hlc[0]->subscribe_current_demand_finished([this] {
+                {
+                    std::scoped_lock lock(external_local_limits_mutex);
+                    ev_local_max_charge_power_W.reset();
+                }
+                powersupply_DC_off();
+            });
 
             r_hlc[0]->subscribe_dc_ev_maximum_limits([this](types::iso15118::DcEvMaximumLimits l) {
                 EVLOG_info << "Received EV maximum limits: " << l;
-                Everest::scoped_lock_timeout lock(ev_info_mutex,
-                                                  Everest::MutexDescription::EVSE_subscribe_dc_ev_maximum_limits);
+                {
+                    Everest::scoped_lock_timeout lock(ev_info_mutex,
+                                                      Everest::MutexDescription::EVSE_subscribe_dc_ev_maximum_limits);
 
-                ev_info.maximum_current_limit = l.dc_ev_maximum_current_limit;
-                ev_info.maximum_power_limit = l.dc_ev_maximum_power_limit;
-                ev_info.maximum_voltage_limit = l.dc_ev_maximum_voltage_limit;
-                p_evse->publish_ev_info(ev_info);
+                    ev_info.maximum_current_limit = l.dc_ev_maximum_current_limit;
+                    ev_info.maximum_power_limit = l.dc_ev_maximum_power_limit;
+                    ev_info.maximum_voltage_limit = l.dc_ev_maximum_voltage_limit;
+                    p_evse->publish_ev_info(ev_info);
+                }
+
+                {
+                    std::scoped_lock limits_lock(external_local_limits_mutex);
+                    ev_local_max_charge_power_W = l.dc_ev_maximum_power_limit;
+                }
 
                 // Update limits for over voltage monitoring
                 if (not r_over_voltage_monitor.empty()) {
@@ -1333,6 +1346,12 @@ void EvseManager::ready() {
             // Reset EV information on Session start and end
             ev_info = types::evse_manager::EVInfo();
             p_evse->publish_ev_info(ev_info);
+
+            // Clear the EV's maximum power limit as soon as the session ends.
+            {
+                std::scoped_lock lock(external_local_limits_mutex);
+                ev_local_max_charge_power_W.reset();
+            }
         }
 
         if (not hlc_enabled) {
@@ -1405,6 +1424,15 @@ void EvseManager::ready() {
             r_hlc[0]->call_session_setup(payment_options, _contract_certificate_installation_enabled,
                                          _central_contract_validation_allowed);
         });
+
+    charger->signal_state.connect([this](Charger::EvseState state) {
+        // Safety net for unplug/error paths: once the charger is back in Idle,
+        // an EV-specific max-power limit must never be kept for the next session.
+        if (state == Charger::EvseState::Idle) {
+            std::scoped_lock lock(external_local_limits_mutex);
+            ev_local_max_charge_power_W.reset();
+        }
+    });
 
     invoke_ready(*p_evse);
     invoke_ready(*p_energy_grid);
@@ -1717,6 +1745,32 @@ bool EvseManager::update_max_watt_limit(types::energy::ExternalLimits& limits, f
     limits.schedule_export = std::vector<types::energy::ScheduleReqEntry>(1, e);
 
     return true;
+}
+
+void EvseManager::apply_ev_max_power_limit(types::energy::ExternalLimits& limits) {
+    if (config.charge_mode != "DC" or not ev_local_max_charge_power_W.has_value()) {
+        return;
+    }
+
+    const auto ev_max_power = ev_local_max_charge_power_W.value();
+
+    // Reuse the existing helper to build a schedule format that EnergyManager already consumes.
+    if (limits.schedule_import.empty()) {
+        types::energy::ExternalLimits ev_limits;
+        update_max_watt_limit(ev_limits, ev_max_power, std::nullopt);
+        limits.schedule_import = ev_limits.schedule_import;
+        return;
+    }
+
+    for (auto& entry : limits.schedule_import) {
+        if (entry.limits_to_leaves.total_power_W.has_value()) {
+            entry.limits_to_leaves.total_power_W.value().value =
+                std::min(entry.limits_to_leaves.total_power_W.value().value, ev_max_power);
+            entry.limits_to_leaves.total_power_W.value().source += "," + info.id + " /ev_maximum_power_limit";
+        } else {
+            entry.limits_to_leaves.total_power_W = {ev_max_power, info.id + " /ev_maximum_power_limit"};
+        }
+    }
 }
 
 void EvseManager::update_to_zero_discharge_limit(types::energy::ExternalLimits& limits) {
@@ -2554,6 +2608,8 @@ types::energy::ExternalLimits EvseManager::get_local_energy_limits() {
         // apply external limits if they are lower
         active_local_limits = external_local_energy_limits;
     }
+
+    apply_ev_max_power_limit(active_local_limits);
 
     // Bidi: set local limits to 0A/0W for exporting to grid, except if bidi is actually active at the moment
     if (not(config.hack_allow_bpt_with_iso2 or sae_bidi_active or session_is_iso_d20_dc_bpt() or
