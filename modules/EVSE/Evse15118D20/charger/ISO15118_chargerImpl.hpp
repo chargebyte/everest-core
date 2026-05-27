@@ -99,12 +99,14 @@ private:
     std::mutex published_dc_values_mutex;
     std::optional<types::iso15118::DcEvTargetValues> last_published_dc_ev_target_values;
     std::optional<types::iso15118::DcEvMaximumLimits> last_published_dc_ev_maximum_limits;
+    std::optional<types::iso15118::DcEvseMaximumLimits> last_published_dc_evse_adjusted_maximum_limits;
 
     void update_supported_vas_services();
     std::optional<size_t> get_vas_provider_index(uint16_t service_id);
     void reset_published_value_cache();
     void publish_dc_ev_target_voltage_current_if_changed(const types::iso15118::DcEvTargetValues& values);
     void publish_dc_ev_maximum_limits_if_changed(const types::iso15118::DcEvMaximumLimits& limits);
+    void publish_dc_evse_adjusted_maximum_limits_if_changed(const types::iso15118::DcEvseMaximumLimits& limits);
     // ev@3370e4dd-95f4-47a9-aaec-ea76f34a66c9:v1
 };
 
