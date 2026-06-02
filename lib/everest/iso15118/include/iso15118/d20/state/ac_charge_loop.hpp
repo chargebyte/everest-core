@@ -20,6 +20,7 @@ private:
     float target_frequency{0};
     bool stop{false};
     bool pause{false};
+    bool error_shutdown{false};
 
     UpdateDynamicModeParameters dynamic_parameters{};
     AcTargetPower target_powers{};

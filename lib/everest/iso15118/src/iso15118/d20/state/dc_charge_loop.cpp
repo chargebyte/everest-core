@@ -204,6 +204,8 @@ Result DC_ChargeLoop::feed(Event ev) {
             stop = *control_data;
         } else if (const auto* control_data = m_ctx.get_control_event<PauseCharging>()) {
             pause = *control_data;
+        } else if (const auto* control_data = m_ctx.get_control_event<ErrorShutdown>()) {
+            error_shutdown = *control_data;
         } else if (const auto* control_data = m_ctx.get_control_event<UpdateDynamicModeParameters>()) {
             dynamic_parameters = *control_data;
         }
@@ -247,8 +249,12 @@ Result DC_ChargeLoop::feed(Event ev) {
             first_entry_in_charge_loop = false;
         }
 
-        const auto res = handle_request(*req, m_ctx.session, present_voltage, present_current, stop, pause,
-                                        m_ctx.session_config.dc_limits, dynamic_parameters);
+        auto res = handle_request(*req, m_ctx.session, present_voltage, present_current, stop, pause,
+                                  m_ctx.session_config.dc_limits, dynamic_parameters);
+
+        if (stop && error_shutdown && res.response_code == dt::ResponseCode::OK) {
+            res.response_code = dt::ResponseCode::FAILED;
+        }
 
         m_ctx.respond(res);
         m_ctx.feedback.response_code(res.response_code);

@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <tuple>
 
 #include <iso15118/d20/timeout.hpp>
@@ -90,7 +91,9 @@ public:
     message_20::Type peek_request_type() const;
 
     template <typename MessageType> void respond(const MessageType& msg) {
-        message_exchange.set_response(msg);
+        auto response = msg;
+        apply_forced_failed_response(response);
+        message_exchange.set_response(response);
     }
 
     template <typename Msg> std::optional<Msg> get_response() {
@@ -140,6 +143,10 @@ public:
         current_timeout = timeout;
     }
 
+    void request_forced_failed_response() {
+        force_failed_response = true;
+    }
+
     const session::Feedback feedback;
 
     session::SessionLogger& log;
@@ -164,6 +171,41 @@ public:
     std::optional<DcTransferLimits> dc_limits_after_charge_param_bounds;
 
 private:
+    template <typename T, typename = void> struct has_response_code_member : std::false_type {};
+
+    template <typename T>
+    struct has_response_code_member<T, std::void_t<decltype(std::declval<T&>().response_code)>> : std::true_type {};
+
+    template <typename T, typename = void> struct has_processing_member : std::false_type {};
+
+    template <typename T>
+    struct has_processing_member<T, std::void_t<decltype(std::declval<T&>().processing)>> : std::true_type {};
+
+    template <typename MessageType> void apply_forced_failed_response(MessageType& response) {
+        if (not force_failed_response) {
+            return;
+        }
+
+        if constexpr (has_response_code_member<MessageType>::value) {
+            using ResponseCodeType = std::decay_t<decltype(response.response_code)>;
+            if constexpr (std::is_same_v<ResponseCodeType, message_20::datatypes::ResponseCode>) {
+                if (response.response_code < message_20::datatypes::ResponseCode::FAILED) {
+                    response.response_code = message_20::datatypes::ResponseCode::FAILED;
+                }
+
+                if constexpr (has_processing_member<MessageType>::value) {
+                    using ProcessingType = std::decay_t<decltype(response.processing)>;
+                    if constexpr (std::is_same_v<ProcessingType, message_20::datatypes::Processing>) {
+                        response.processing = message_20::datatypes::Processing::Finished;
+                    }
+                }
+
+                session_stopped = true;
+                force_failed_response = false;
+            }
+        }
+    }
+
     const std::optional<ControlEvent>& current_control_event;
     MessageExchange& message_exchange;
 
@@ -172,6 +214,7 @@ private:
     Timeouts& timeouts;
 
     std::optional<TimeoutType> current_timeout{std::nullopt};
+    bool force_failed_response{false};
 };
 
 } // namespace iso15118::d20

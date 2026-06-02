@@ -190,6 +190,12 @@ TimePoint const& Session::poll() {
     // send all of our queued control events
     while ((active_control_event = control_event_queue.pop()) != std::nullopt) {
 
+        if (const auto control_data = ctx.get_control_event<d20::ErrorShutdown>()) {
+            if (static_cast<bool>(*control_data)) {
+                ctx.request_forced_failed_response();
+            }
+        }
+
         if (const auto control_data = ctx.get_control_event<d20::DcTransferLimits>()) {
             auto updated_limits = *control_data;
             if (ctx.dc_limits_locked_after_charge_param) {
