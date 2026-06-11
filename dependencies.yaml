@@ -79,6 +79,8 @@ libnfc-nci:
   git: https://github.com/EVerest/linux_libnfc-nci.git
   git_tag: 2024.11.0
   cmake_condition: "EVEREST_DEPENDENCY_ENABLED_LIBNFC_NCI"
+  options:
+  - LIBNFCNCI_LIBGPIOD ON
 # UI library for BringUp modules
 ftxui:
   git: https://github.com/ArthurSonzogni/ftxui
