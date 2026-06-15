@@ -484,6 +484,18 @@ types:
       maximum_power_limit:
         description: Maximum power that the vehicle supports [W]
         type: number
+      minimum_power_limit:
+        description: Minimum charge power that the vehicle supports [W]
+        type: number
+      maximum_discharge_power_limit:
+        description: Maximum discharge power that the vehicle supports [W]
+        type: number
+      minimum_discharge_power_limit:
+        description: Minimum discharge power that the vehicle supports [W]
+        type: number
+      maximum_discharge_current_limit:
+        description: Maximum discharge current that the vehicle supports [A]
+        type: number
       estimated_time_full:
         description: Estimated time when the vehicle is fully charged
         type: string
