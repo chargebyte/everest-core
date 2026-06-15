@@ -29,6 +29,14 @@ struct SessionState {
     bool connected{false};
     bool new_data{false};
     bool fsm_needs_call{false};
+    // EVCC side: the vehicle closes the transport connection.
+    // That ends the ISO15118 session immediately and triggers DLINK_TERMINATE.
+    bool peer_disconnected{false};
+    // Charger side: the EV charger initiates the transport shutdown after a protocol-driven stop.
+    // The connection implementation may report CLOSED synchronously while the charger tears down the link.
+    bool connection_close_requested{false};
+    // Guards the feedback path so the shutdown signal is emitted only once.
+    bool shutdown_signal_sent{false};
 };
 
 class Session {
@@ -41,7 +49,10 @@ public:
     void push_control_event(const d20::ControlEvent&);
 
     bool is_finished() const {
-        return (ctx.session_stopped or ctx.session_paused) and not message_exchange.has_response();
+        // EVCC disconnect ends the session immediately.
+        // Charger-driven shutdowns wait until the response queue is drained before the link is closed.
+        return state.peer_disconnected or
+               ((ctx.session_stopped or ctx.session_paused) and not message_exchange.has_response());
     }
 
     void close();
@@ -72,7 +83,9 @@ private:
 
     d20::Timeouts timeouts;
 
+    void finish_session();
     void handle_connection_event(io::ConnectionEvent event);
+    void signal_session_shutdown(session::feedback::Signal signal);
     void send_response();
     std::optional<TimePoint> last_response_tx_time; // timestamp of the last response message sent
     std::optional<TimePoint> response_send_after;   // time point when the next response message can be sent

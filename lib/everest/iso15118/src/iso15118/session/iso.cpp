@@ -173,6 +173,11 @@ TimePoint const& Session::poll() {
     // This is the default next session event, which is used when nothing else happens.
     next_session_event = offset_time_point_by_ms(now, SESSION_IDLE_TIMEOUT_MS);
 
+    if (is_finished()) {
+        finish_session();
+        return next_session_event;
+    }
+
     if (not state.connected) {
         // nothing happened so far, just return
         return next_session_event;
@@ -293,19 +298,35 @@ TimePoint const& Session::poll() {
         response_send_after.reset();
     }
 
+    // The session can also become finished while processing timeouts or responses above.
     if (is_finished()) {
-        // TODO(SL): Does this also apply when a timeout is triggered? Or should the TCP/TLS connection be terminated
-        // directly?
-        // Wait for 5 seconds [V2G20-1643]
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        connection->close();
-
-        const auto signal =
-            (ctx.session_paused) ? session::feedback::Signal::DLINK_PAUSE : session::feedback::Signal::DLINK_TERMINATE;
-        ctx.feedback.signal(signal);
+        finish_session();
     }
 
     return next_session_event;
+}
+
+void Session::finish_session() {
+    if (not is_finished()) {
+        return;
+    }
+
+    if (state.peer_disconnected or state.shutdown_signal_sent) {
+        return;
+    }
+
+    // Charger side: a protocol-driven stop has already been accepted by the FSM, so the charger
+    // waits for the response queue to drain, then tears down the transport and emits CLOSED.
+    // EVCC side disconnects bypass this path and finish immediately in handle_connection_event().
+    // Mark the close request before calling into the connection object because CLOSED may be
+    // reported synchronously while the charger tears down the socket or TLS session.
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    state.connection_close_requested = true;
+    connection->close();
+
+    const auto signal =
+        (ctx.session_paused) ? session::feedback::Signal::DLINK_PAUSE : session::feedback::Signal::DLINK_TERMINATE;
+    signal_session_shutdown(signal);
 }
 
 void Session::send_response() {
@@ -353,14 +374,40 @@ void Session::handle_connection_event(io::ConnectionEvent event) {
     case Event::CLOSED:
         state.connected = false;
         logf_info("Connection is closed");
+        if (state.connection_close_requested) {
+            // Charger side: CLOSED is the echo of the charger initiated close path.
+            // The session was already marked finished before the transport was closed.
+            return;
+        }
+        // EVCC side: the vehicle dropped the transport, so the session ends right here.
+        state.peer_disconnected = true;
+        ctx.session_stopped = true;
+        signal_session_shutdown(session::feedback::Signal::DLINK_TERMINATE);
         return;
     }
 }
 
+void Session::signal_session_shutdown(session::feedback::Signal signal) {
+    if (state.shutdown_signal_sent) {
+        return;
+    }
+
+    state.shutdown_signal_sent = true;
+    ctx.feedback.signal(signal);
+}
+
 void Session::close() {
-    connection->close();
-    ctx.feedback.signal(session::feedback::Signal::DLINK_TERMINATE);
+    // Charger side shutdown entry point.
+    // The session is marked stopped first, then the transport is closed, and the CLOSED event is
+    // treated as the echo of that charger initiated teardown.
     ctx.session_stopped = true;
+    if (state.connected and not state.connection_close_requested) {
+        // Set the flag before closing because CLOSED may come back synchronously from the charger
+        // connection path while the socket or TLS state is torn down.
+        state.connection_close_requested = true;
+        connection->close();
+    }
+    signal_session_shutdown(session::feedback::Signal::DLINK_TERMINATE);
 }
 
 } // namespace iso15118

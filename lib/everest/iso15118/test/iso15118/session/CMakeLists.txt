@@ -1,6 +1,7 @@
 include(Catch)
 
 add_executable(test_feedback feedback.cpp)
+add_executable(test_session_iso iso.cpp)
 
 target_link_libraries(test_feedback
     PRIVATE
@@ -8,4 +9,11 @@ target_link_libraries(test_feedback
         Catch2::Catch2WithMain
 )
 
+target_link_libraries(test_session_iso
+    PRIVATE
+        iso15118
+        Catch2::Catch2WithMain
+)
+
 catch_discover_tests(test_feedback)
+catch_discover_tests(test_session_iso)
