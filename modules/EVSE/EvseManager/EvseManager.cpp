@@ -6,6 +6,7 @@
 #include <chrono>
 #include <fmt/color.h>
 #include <fmt/core.h>
+#include <optional>
 
 #include "IECStateMachine.hpp"
 #include "SessionLog.hpp"
@@ -758,14 +759,6 @@ void EvseManager::ready() {
 
             r_hlc[0]->subscribe_d20_dc_dynamic_charge_mode(
                 [this](types::iso15118::DcChargeDynamicModeValues const& values) {
-                    static bool last_is_actually_exporting_to_grid{false};
-
-                    const auto energy_flow_changed =
-                        is_actually_exporting_to_grid != last_is_actually_exporting_to_grid;
-                    last_is_actually_exporting_to_grid = is_actually_exporting_to_grid;
-
-                    bool target_changed{false};
-
                     double min_charge_power{0.0};
                     double max_charge_power{0.0};
                     double max_charge_current{0.0};
@@ -776,49 +769,56 @@ void EvseManager::ready() {
                     const auto max_hlc_limits = charger->get_evse_max_hlc_limits();
                     const auto min_hlc_limits = charger->get_evse_min_hlc_limits();
 
+                    const auto effective_max_charge_power =
+                        std::min(values.max_charge_power, max_hlc_limits.evse_maximum_power_limit);
+                    const auto effective_min_charge_power =
+                        std::max(values.min_charge_power, min_hlc_limits.evse_minimum_power_limit);
+                    const auto effective_max_charge_current =
+                        std::min(values.max_charge_current, max_hlc_limits.evse_maximum_current_limit);
+
+                    std::optional<double> effective_max_discharge_power;
+                    std::optional<double> effective_min_discharge_power;
+                    std::optional<double> effective_max_discharge_current;
+
+                    if (values.max_discharge_power.has_value() and
+                        max_hlc_limits.evse_maximum_discharge_power_limit.has_value()) {
+                        effective_max_discharge_power =
+                            std::min(std::fabs(values.max_discharge_power.value()),
+                                     std::fabs(max_hlc_limits.evse_maximum_discharge_power_limit.value()));
+                    }
+
+                    if (values.min_discharge_power.has_value() and
+                        min_hlc_limits.evse_minimum_discharge_power_limit.has_value()) {
+                        effective_min_discharge_power =
+                            std::max(std::fabs(values.min_discharge_power.value()),
+                                     std::fabs(min_hlc_limits.evse_minimum_discharge_power_limit.value()));
+                    }
+
+                    if (values.max_discharge_current.has_value() and
+                        max_hlc_limits.evse_maximum_discharge_current_limit.has_value()) {
+                        effective_max_discharge_current =
+                            std::min(std::fabs(values.max_discharge_current.value()),
+                                     std::fabs(max_hlc_limits.evse_maximum_discharge_current_limit.value()));
+                    }
+
                     // TODO(SL): How to handle 0kW step between switching from uni to bidi
                     if (is_actually_exporting_to_grid and current_demand_active) {
-                        if (values.max_discharge_power.has_value() and
-                            max_hlc_limits.evse_maximum_discharge_power_limit.has_value()) {
-                            // fabs every discharge limit
-                            const auto ev_max_discharge_power = std::fabs(values.max_discharge_power.value());
-                            const auto evse_max_discharge_power =
-                                std::fabs(max_hlc_limits.evse_maximum_discharge_power_limit.value());
-                            max_charge_power = (ev_max_discharge_power > evse_max_discharge_power)
-                                                   ? evse_max_discharge_power
-                                                   : ev_max_discharge_power;
+                        if (effective_max_discharge_power.has_value()) {
+                            max_charge_power = effective_max_discharge_power.value();
                         }
 
-                        if (values.min_discharge_power.has_value() and
-                            min_hlc_limits.evse_minimum_discharge_power_limit.has_value()) {
-                            const auto ev_min_discharge_power = std::fabs(values.min_discharge_power.value());
-                            const auto evse_min_discharge_power =
-                                std::fabs(min_hlc_limits.evse_minimum_discharge_power_limit.value());
-                            min_charge_power = (ev_min_discharge_power < evse_min_discharge_power)
-                                                   ? evse_min_discharge_power
-                                                   : ev_min_discharge_power;
+                        if (effective_min_discharge_power.has_value()) {
+                            min_charge_power = effective_min_discharge_power.value();
                         }
 
-                        if (values.max_discharge_current.has_value() and
-                            max_hlc_limits.evse_maximum_discharge_current_limit.has_value()) {
-                            const auto ev_max_discharge_current = std::fabs(values.max_discharge_current.value());
-                            const auto evse_max_discharge_current =
-                                std::fabs(max_hlc_limits.evse_maximum_discharge_current_limit.value());
-                            max_charge_current = (ev_max_discharge_current > evse_max_discharge_current)
-                                                     ? evse_max_discharge_current
-                                                     : ev_max_discharge_current;
+                        if (effective_max_discharge_current.has_value()) {
+                            max_charge_current = effective_max_discharge_current.value();
                         }
                     } else {
                         // Charging
-                        max_charge_power = (values.max_charge_power > max_hlc_limits.evse_maximum_power_limit)
-                                               ? max_hlc_limits.evse_maximum_power_limit
-                                               : values.max_charge_power;
-                        min_charge_power = (values.min_charge_power > min_hlc_limits.evse_minimum_power_limit)
-                                               ? values.min_charge_power
-                                               : min_hlc_limits.evse_minimum_power_limit;
-                        max_charge_current = (values.max_charge_current > max_hlc_limits.evse_maximum_current_limit)
-                                                 ? max_hlc_limits.evse_maximum_current_limit
-                                                 : values.max_charge_current;
+                        max_charge_power = effective_max_charge_power;
+                        min_charge_power = effective_min_charge_power;
+                        max_charge_current = effective_max_charge_current;
                     }
 
                     if (min_charge_power > max_charge_power) {
