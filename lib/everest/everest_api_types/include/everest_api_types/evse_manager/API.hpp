@@ -170,6 +170,10 @@ struct EVInfo {
     std::optional<float> minimum_current_limit;
     std::optional<float> maximum_voltage_limit;
     std::optional<float> maximum_power_limit;
+    std::optional<float> minimum_power_limit;
+    std::optional<float> maximum_discharge_power_limit;
+    std::optional<float> minimum_discharge_power_limit;
+    std::optional<float> maximum_discharge_current_limit;
     std::optional<std::string> estimated_time_full;
     std::optional<std::string> departure_time;
     std::optional<std::string> estimated_time_bulk;

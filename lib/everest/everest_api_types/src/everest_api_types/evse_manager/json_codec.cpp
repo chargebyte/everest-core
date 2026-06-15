@@ -605,6 +605,18 @@ void to_json(json& j, EVInfo const& k) noexcept {
     if (k.maximum_power_limit) {
         j["maximum_power_limit"] = k.maximum_power_limit.value();
     }
+    if (k.minimum_power_limit) {
+        j["minimum_power_limit"] = k.minimum_power_limit.value();
+    }
+    if (k.maximum_discharge_power_limit) {
+        j["maximum_discharge_power_limit"] = k.maximum_discharge_power_limit.value();
+    }
+    if (k.minimum_discharge_power_limit) {
+        j["minimum_discharge_power_limit"] = k.minimum_discharge_power_limit.value();
+    }
+    if (k.maximum_discharge_current_limit) {
+        j["maximum_discharge_current_limit"] = k.maximum_discharge_current_limit.value();
+    }
     if (k.estimated_time_full) {
         j["estimated_time_full"] = k.estimated_time_full.value();
     }
@@ -658,6 +670,18 @@ void from_json(json const& j, EVInfo& k) {
     }
     if (j.contains("maximum_power_limit")) {
         k.maximum_power_limit.emplace(j.at("maximum_power_limit"));
+    }
+    if (j.contains("minimum_power_limit")) {
+        k.minimum_power_limit.emplace(j.at("minimum_power_limit"));
+    }
+    if (j.contains("maximum_discharge_power_limit")) {
+        k.maximum_discharge_power_limit.emplace(j.at("maximum_discharge_power_limit"));
+    }
+    if (j.contains("minimum_discharge_power_limit")) {
+        k.minimum_discharge_power_limit.emplace(j.at("minimum_discharge_power_limit"));
+    }
+    if (j.contains("maximum_discharge_current_limit")) {
+        k.maximum_discharge_current_limit.emplace(j.at("maximum_discharge_current_limit"));
     }
     if (j.contains("estimated_time_full")) {
         k.estimated_time_full.emplace(j.at("estimated_time_full"));

@@ -817,6 +817,29 @@ void EvseManager::ready() {
                                              : values.max_charge_current;
                 }
 
+                {
+                    Everest::scoped_lock_timeout lock(ev_info_mutex,
+                                                      Everest::MutexDescription::EVSE_publish_ev_info);
+                    bool ev_info_changed = false;
+                    const auto update_ev_info_value = [&ev_info_changed](auto& ev_info_value, const auto& value) {
+                        if (ev_info_value != value) {
+                            ev_info_value = value;
+                            ev_info_changed = true;
+                        }
+                    };
+
+                    update_ev_info_value(ev_info.maximum_power_limit, values.max_charge_power);
+                    update_ev_info_value(ev_info.minimum_power_limit, values.min_charge_power);
+                    update_ev_info_value(ev_info.maximum_current_limit, values.max_charge_current);
+                    update_ev_info_value(ev_info.maximum_discharge_power_limit, values.max_discharge_power);
+                    update_ev_info_value(ev_info.minimum_discharge_power_limit, values.min_discharge_power);
+                    update_ev_info_value(ev_info.maximum_discharge_current_limit, values.max_discharge_current);
+
+                    if (ev_info_changed) {
+                        p_evse->publish_ev_info(ev_info);
+                    }
+                }
+
                 if (min_charge_power > max_charge_power) {
                     EVLOG_error << "Minimum charge power limit is greater then the maximum charge power limit";
                     return;
