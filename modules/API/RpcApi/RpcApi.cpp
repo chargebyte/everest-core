@@ -238,6 +238,31 @@ void RpcApi::subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evs
             result = display_parameters;
         }
         evse_data.evsestatus.set_display_parameters(result);
+
+        auto dc_charge_param = evse_data.evsestatus.get_dc_charge_param();
+        if (dc_charge_param.has_value()) {
+            bool has_ev_dc_limit = false;
+            const auto update_dc_limit = [&has_ev_dc_limit](std::optional<float>& dc_limit,
+                                                            const std::optional<float>& ev_info_limit) {
+                if (ev_info_limit.has_value()) {
+                    dc_limit = ev_info_limit.value();
+                    has_ev_dc_limit = true;
+                }
+            };
+
+            update_dc_limit(dc_charge_param->ev_maximum_charge_current, ev_info.maximum_current_limit);
+            update_dc_limit(dc_charge_param->ev_maximum_charge_power, ev_info.maximum_power_limit);
+            update_dc_limit(dc_charge_param->ev_maximum_voltage, ev_info.maximum_voltage_limit);
+            update_dc_limit(dc_charge_param->ev_minimum_charge_current, ev_info.minimum_current_limit);
+            update_dc_limit(dc_charge_param->ev_minimum_charge_power, ev_info.minimum_power_limit);
+            update_dc_limit(dc_charge_param->ev_maximum_discharge_current, ev_info.maximum_discharge_current_limit);
+            update_dc_limit(dc_charge_param->ev_maximum_discharge_power, ev_info.maximum_discharge_power_limit);
+            update_dc_limit(dc_charge_param->ev_minimum_discharge_power, ev_info.minimum_discharge_power_limit);
+
+            if (has_ev_dc_limit) {
+                evse_data.evsestatus.set_dc_charge_param(dc_charge_param);
+            }
+        }
     });
 }
 

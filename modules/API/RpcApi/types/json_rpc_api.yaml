@@ -299,6 +299,30 @@ types:
       evse_minimum_discharge_power:
         description: evse_minimum_discharge_power
         type: number
+      ev_maximum_charge_current:
+        description: ev_maximum_charge_current
+        type: number
+      ev_maximum_charge_power:
+        description: ev_maximum_charge_power
+        type: number
+      ev_maximum_voltage:
+        description: ev_maximum_voltage
+        type: number
+      ev_minimum_charge_current:
+        description: ev_minimum_charge_current
+        type: number
+      ev_minimum_charge_power:
+        description: ev_minimum_charge_power
+        type: number
+      ev_maximum_discharge_current:
+        description: ev_maximum_discharge_current
+        type: number
+      ev_maximum_discharge_power:
+        description: ev_maximum_discharge_power
+        type: number
+      ev_minimum_discharge_power:
+        description: ev_minimum_discharge_power
+        type: number
   ACChargeStatusObj:
     description: AC related parameters during charging of a charge point EVSE
     type: object

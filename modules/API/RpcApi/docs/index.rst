@@ -750,10 +750,13 @@ and “evse_max_phase_count“ are supported.
 
 DCChargeParametersObj
 ~~~~~~~~~~~~~~~~~~~~~
-Currently not supported.
+This object contains all DC charging parameters exchanged between the EVSE and the EV during a DC charging session.
 
-This object contains all DC related parameters of a charge point EVSE. Parameters like “evse_maximum_discharge_power”
-are only transmitted if a BPT (bidirectional power transfer) session is active.
+Parameters prefixed with evse_ describe limits or targets provided by the charging station (EVSE), while parameters
+prefixed with ev_ describe limits communicated by the electric vehicle (EV).
+
+Bidirectional Power Transfer (BPT) parameters, such as evse_maximum_discharge_power or ev_maximum_discharge_power, are
+only included when a BPT-capable charging session is active.
 
 .. code-block:: json
 
@@ -768,7 +771,15 @@ are only transmitted if a BPT (bidirectional power transfer) session is active.
      "evse_maximum_discharge_current": "float",
      "evse_maximum_discharge_power": "float",
      "evse_minimum_discharge_current": "float",
-     "evse_minimum_discharge_power": "float"
+     "evse_minimum_discharge_power": "float",
+     "ev_maximum_charge_current": "float",
+     "ev_maximum_charge_power": "float",
+     "ev_maximum_voltage": "float",
+     "ev_minimum_charge_current": "float",
+     "ev_minimum_charge_power": "float",
+     "ev_maximum_discharge_current": "float",
+     "ev_maximum_discharge_power": "float",
+     "ev_minimum_discharge_power": "float"
    }
 
 ACChargeStatusObj
