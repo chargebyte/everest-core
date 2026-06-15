@@ -446,6 +446,10 @@ EVInfo_Internal to_internal_api(EVInfo_External const& val) {
     result.minimum_current_limit = val.minimum_current_limit;
     result.maximum_voltage_limit = val.maximum_voltage_limit;
     result.maximum_power_limit = val.maximum_power_limit;
+    result.minimum_power_limit = val.minimum_power_limit;
+    result.maximum_discharge_power_limit = val.maximum_discharge_power_limit;
+    result.minimum_discharge_power_limit = val.minimum_discharge_power_limit;
+    result.maximum_discharge_current_limit = val.maximum_discharge_current_limit;
     result.estimated_time_full = val.estimated_time_full;
     result.departure_time = val.departure_time;
     result.estimated_time_bulk = val.estimated_time_bulk;
@@ -468,6 +472,10 @@ EVInfo_External to_external_api(EVInfo_Internal const& val) {
     result.minimum_current_limit = val.minimum_current_limit;
     result.maximum_voltage_limit = val.maximum_voltage_limit;
     result.maximum_power_limit = val.maximum_power_limit;
+    result.minimum_power_limit = val.minimum_power_limit;
+    result.maximum_discharge_power_limit = val.maximum_discharge_power_limit;
+    result.minimum_discharge_power_limit = val.minimum_discharge_power_limit;
+    result.maximum_discharge_current_limit = val.maximum_discharge_current_limit;
     result.estimated_time_full = val.estimated_time_full;
     result.departure_time = val.departure_time;
     result.estimated_time_bulk = val.estimated_time_bulk;
