@@ -99,21 +99,7 @@ Result PowerDelivery::feed(Event ev) {
 
     const auto variant = m_ctx.pull_request();
 
-    if (const auto req = variant->get_if<message_20::DC_PreChargeRequest>()) {
-        const auto res = handle_request(*req, m_ctx.session, present_voltage);
-
-        m_ctx.feedback.dc_pre_charge_target_voltage(dt::from_RationalNumber(req->target_voltage));
-
-        m_ctx.respond(res);
-        m_ctx.feedback.response_code(res.response_code);
-
-        if (res.response_code >= dt::ResponseCode::FAILED) {
-            m_ctx.session_stopped = true;
-            return {};
-        }
-
-        return {};
-    } else if (const auto req = variant->get_if<message_20::PowerDeliveryRequest>()) {
+    if (const auto req = variant->get_if<message_20::PowerDeliveryRequest>()) {
         if (req->charge_progress == dt::Progress::Start) {
             m_ctx.feedback.signal(session::feedback::Signal::SETUP_FINISHED);
         }
@@ -152,7 +138,7 @@ Result PowerDelivery::feed(Event ev) {
         return {};
 
     } else {
-        m_ctx.log("Expected DC_PreChargeReq or PowerDeliveryReq! But code type id: %d", variant->get_type());
+        m_ctx.log("Expected PowerDeliveryReq! But code type id: %d", variant->get_type());
 
         // Sequence Error
         const message_20::Type req_type = variant->get_type();
