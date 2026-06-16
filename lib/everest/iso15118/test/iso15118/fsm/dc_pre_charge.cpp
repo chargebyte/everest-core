@@ -57,19 +57,53 @@ SCENARIO("ISO15118-20 dc pre charge state transitions") {
         }
     }
 
-    GIVEN("Good Case") {
+    GIVEN("Good Case - Ongoing") {
         fsm::v2::FSM<d20::StateBase> fsm{ctx.create_state<d20::state::DC_PreCharge>()};
 
         ctx.session_config.supported_energy_transfer_services = {dt::ServiceCategory::DC};
 
         // Set control event for present voltage (400.1V)
-        state_helper.set_control_event(d20::PresentVoltageCurrent{400.1f, 0.0f});
+        state_helper.set_active_control_event(d20::PresentVoltageCurrent{400.1f, 0.0f});
         fsm.feed(d20::Event::CONTROL_MESSAGE);
 
         message_20::DC_PreChargeRequest req;
         req.header.session_id = ctx.session.get_id();
         req.header.timestamp = 1691411798;
         req.processing = dt::Processing::Ongoing;
+        req.present_voltage = {0, 0};
+        req.target_voltage = {400, 0};
+
+        state_helper.handle_request(req);
+        const auto result = fsm.feed(d20::Event::V2GTP_MESSAGE);
+
+        THEN("Check state transition and response") {
+            REQUIRE(result.transitioned() == false);
+            REQUIRE(fsm.get_current_state_id() == d20::StateID::DC_PreCharge);
+
+            const auto response_message = ctx.get_response<message_20::DC_PreChargeResponse>();
+            REQUIRE(response_message.has_value());
+
+            const auto& res = response_message.value();
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+            // 400.1 = 4001 * 10^-1
+            REQUIRE(res.present_voltage.value == 4001);
+            REQUIRE(res.present_voltage.exponent == -1);
+        }
+    }
+
+    GIVEN("Good Case - Finished") {
+        fsm::v2::FSM<d20::StateBase> fsm{ctx.create_state<d20::state::DC_PreCharge>()};
+
+        ctx.session_config.supported_energy_transfer_services = {dt::ServiceCategory::DC};
+
+        // Set control event for present voltage (400.1V)
+        state_helper.set_active_control_event(d20::PresentVoltageCurrent{400.1f, 0.0f});
+        fsm.feed(d20::Event::CONTROL_MESSAGE);
+
+        message_20::DC_PreChargeRequest req;
+        req.header.session_id = ctx.session.get_id();
+        req.header.timestamp = 1691411798;
+        req.processing = dt::Processing::Finished;
         req.present_voltage = {0, 0};
         req.target_voltage = {400, 0};
 
