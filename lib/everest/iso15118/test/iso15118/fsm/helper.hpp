@@ -46,6 +46,14 @@ public:
         msg_exch.set_request(std::make_unique<message_20::Variant>(request));
     }
 
+    template <typename ControlEventType> void set_control_event(const ControlEventType& event) {
+        active_control_event = event;
+    }
+
+    void clear_control_event() {
+        active_control_event.reset();
+    }
+
 private:
     std::array<uint8_t, 1024> output_buffer{};
     io::StreamOutputView output_stream_view{output_buffer.data(), output_buffer.size()};
