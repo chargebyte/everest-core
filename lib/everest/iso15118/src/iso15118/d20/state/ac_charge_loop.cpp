@@ -202,10 +202,9 @@ Result AC_ChargeLoop::feed(Event ev) {
     if (const auto req = variant->get_if<message_20::PowerDeliveryRequest>()) {
         const auto res = handle_request(*req, m_ctx.session, false);
 
-        m_ctx.respond(res);
-        m_ctx.feedback.response_code(res.response_code);
+        const auto response_code = m_ctx.respond_and_publish_response_code(res);
 
-        if (res.response_code >= dt::ResponseCode::FAILED) {
+        if (response_code >= dt::ResponseCode::FAILED) {
             m_ctx.session_stopped = true;
             return {};
         }
@@ -227,10 +226,9 @@ Result AC_ChargeLoop::feed(Event ev) {
         const auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency, target_powers,
                                         present_powers, dynamic_parameters);
 
-        m_ctx.respond(res);
-        m_ctx.feedback.response_code(res.response_code);
+        const auto response_code = m_ctx.respond_and_publish_response_code(res);
 
-        if (res.response_code >= dt::ResponseCode::FAILED) {
+        if (response_code >= dt::ResponseCode::FAILED) {
             m_ctx.session_stopped = true;
             return {};
         }
