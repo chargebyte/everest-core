@@ -214,12 +214,10 @@ SCENARIO("ISO15118-20 DC charge loop - error forced via ErrorShutdown") {
 
     std::optional<d20::PauseContext> pause_ctx{std::nullopt};
 
-    GIVEN("ErrorShutdown + StopCharging active - response code must be FAILED") {
-    // This test verifies the FSM-level error override in DC_ChargeLoop::feed().
-    // The pure handle_request() function itself does not know about ErrorShutdown;
-    // the override happens in the FSM state after handle_request() returns:
-    //   if (stop && error_shutdown && res.response_code < FAILED) { res.response_code = FAILED; }
-    // Both the response message and the response_code feedback callback must reflect FAILED.
+    GIVEN("forced failed response requested - response code must be FAILED") {
+    // This test verifies the centralized forced-failed mechanism in Context.
+    // The state itself forwards the generated response through
+    // respond_and_publish_response_code(), which applies the override before sending.
 
     dt::ResponseCode captured_response_code{dt::ResponseCode::OK};
 
@@ -237,15 +235,8 @@ SCENARIO("ISO15118-20 DC charge loop - error forced via ErrorShutdown") {
             dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing));
 
         fsm::v2::FSM<d20::StateBase> fsm{ctx.create_state<d20::state::DC_ChargeLoop>()};
-    // Signal stop: the FSM state sets its internal stop flag to true
-    state_helper.set_control_event(d20::StopCharging{true});
-        fsm.feed(d20::Event::CONTROL_MESSAGE);
-    // Signal error shutdown: the FSM state sets its internal error_shutdown flag to true.
-    // Combined with stop=true this will force response_code to FAILED on the next V2GTP message.
-    state_helper.set_control_event(d20::ErrorShutdown{true});
-        fsm.feed(d20::Event::CONTROL_MESSAGE);
-        state_helper.clear_control_event();
-    // Build a valid DC_ChargeLoopRequest (would produce OK without the error flags)
+        ctx.request_forced_failed_response();
+    // Build a valid DC_ChargeLoopRequest (would produce OK without forced failed response)
     message_20::DC_ChargeLoopRequest req;
         req.header.session_id = ctx.session.get_id();
         req.header.timestamp = 1691411798;

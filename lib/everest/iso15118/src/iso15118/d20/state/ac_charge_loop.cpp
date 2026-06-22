@@ -181,8 +181,6 @@ Result AC_ChargeLoop::feed(Event ev) {
             stop = *control_data;
         } else if (const auto* control_data = m_ctx.get_control_event<PauseCharging>()) {
             pause = *control_data;
-        } else if (const auto* control_data = m_ctx.get_control_event<ErrorShutdown>()) {
-            error_shutdown = *control_data;
         } else if (const auto* control_data = m_ctx.get_control_event<UpdateDynamicModeParameters>()) {
             dynamic_parameters = *control_data;
         } else if (const auto* control_data = m_ctx.get_control_event<AcTargetPower>()) {
@@ -227,10 +225,6 @@ Result AC_ChargeLoop::feed(Event ev) {
 
         auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency, target_powers, present_powers,
                                   dynamic_parameters);
-
-        if (stop && error_shutdown && res.response_code < dt::ResponseCode::FAILED) {
-            res.response_code = dt::ResponseCode::FAILED;
-        }
 
         const auto response_code = m_ctx.respond_and_publish_response_code(res);
         

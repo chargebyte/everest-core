@@ -24,7 +24,6 @@ private:
     float present_current{0};
     bool stop{false};
     bool pause{false};
-    bool error_shutdown{false};
 
     UpdateDynamicModeParameters dynamic_parameters;
 
