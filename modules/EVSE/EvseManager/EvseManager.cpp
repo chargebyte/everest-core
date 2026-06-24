@@ -1768,8 +1768,8 @@ void EvseManager::apply_session_max_power_limit(types::energy::ExternalLimits& l
     }
     if (hlc_adjusted_max_charge_power_W.has_value()) {
         const auto adjusted_power = std::fabs(hlc_adjusted_max_charge_power_W.value());
-        max_power_limit = max_power_limit.has_value() ? std::min(max_power_limit.value(), adjusted_power)
-                                                      : adjusted_power;
+        max_power_limit =
+            max_power_limit.has_value() ? std::min(max_power_limit.value(), adjusted_power) : adjusted_power;
     }
 
     if (not max_power_limit.has_value()) {
@@ -1785,8 +1785,8 @@ void EvseManager::apply_session_max_power_limit(types::energy::ExternalLimits& l
 
     for (auto& entry : limits.schedule_import) {
         if (entry.limits_to_leaves.total_power_W.has_value()) {
-            entry.limits_to_leaves.total_power_W.value().value = std::min(
-                entry.limits_to_leaves.total_power_W.value().value, max_power_limit.value());
+            entry.limits_to_leaves.total_power_W.value().value =
+                std::min(entry.limits_to_leaves.total_power_W.value().value, max_power_limit.value());
             entry.limits_to_leaves.total_power_W.value().source += "," + info.id + " /session_maximum_power_limit";
         } else {
             entry.limits_to_leaves.total_power_W = {max_power_limit.value(), info.id + " /session_maximum_power_limit"};

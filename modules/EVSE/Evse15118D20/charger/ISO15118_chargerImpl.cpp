@@ -155,8 +155,7 @@ types::iso15118::DcEvseMaximumLimits to_adjusted_evse_maximum_limits(const iso15
 
     if (limits.discharge_limits.has_value()) {
         const auto& discharge_limits = limits.discharge_limits.value();
-        out.evse_maximum_discharge_current_limit =
-            std::fabs(dt::from_RationalNumber(discharge_limits.current.max));
+        out.evse_maximum_discharge_current_limit = std::fabs(dt::from_RationalNumber(discharge_limits.current.max));
         out.evse_maximum_discharge_power_limit = std::fabs(dt::from_RationalNumber(discharge_limits.power.max));
     }
 
