@@ -929,6 +929,8 @@ void EvseManager::ready() {
                     std::scoped_lock limits_lock(external_local_limits_mutex);
                     // Keep EV-advertised session max power as protocol-agnostic fallback
                     // (used e.g. when no adjusted value is available).
+                    // Note: assiging std::optional to std::optional, i.e. if
+                    // the right hand side is unavailable, the left hand side will be reset.
                     ev_local_max_charge_power_W = l.dc_ev_maximum_power_limit;
                 }
 
