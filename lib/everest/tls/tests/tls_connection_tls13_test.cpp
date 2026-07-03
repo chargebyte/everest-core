@@ -7,6 +7,7 @@
 #include <array>
 #include <condition_variable>
 #include <cstring>
+#include <fcntl.h>
 #include <mutex>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -481,6 +482,27 @@ TEST_F(TlsTest, WrapAcceptedFdHandshake) {
         client_thread.join();
     }
     (void)::close(listener.fd);
+}
+
+TEST_F(TlsTest, WrapAcceptedFdOnUninitServerReturnsNull) {
+    // A server whose init() failed or was never called has no SSL_CTX. Wrapping
+    // an accepted fd must fail cleanly with nullptr rather than constructing a
+    // connection over a null SSL (which would null-deref on a later accept()).
+    // Per the documented ownership contract the factory does not close the fd on
+    // failure, so the caller retains ownership and the fd stays open.
+    int sv[2] = {-1, -1};
+    ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
+
+    // server is the fixture's default, uninitialised Server (start()/init() not called).
+    tls::Server::ConnectionPtr conn = server.wrap_accepted_fd(sv[0], "127.0.0.1", "0");
+    EXPECT_EQ(conn, nullptr);
+
+    // The factory must not have closed the caller's fd.
+    EXPECT_NE(::fcntl(sv[0], F_GETFD), -1);
+
+    conn.reset();
+    (void)::close(sv[0]);
+    (void)::close(sv[1]);
 }
 
 TEST_F(TlsTest, LastErrorPopulatedOnFailedAccept) {
