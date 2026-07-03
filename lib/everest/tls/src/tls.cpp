@@ -1280,7 +1280,8 @@ void Server::wait_for_connection(const ConnectionHandler& handler) {
 }
 
 Server::ConnectionPtr Server::wrap_accepted_fd(int soc, const char* ip, const char* service) {
-    if (m_context == nullptr) {
+    // without an initialized SSL_CTX the connection would null-deref on accept()
+    if ((m_context == nullptr) || (m_context->ctx == nullptr)) {
         return nullptr;
     }
     return std::make_unique<ServerConnection>(m_context->ctx.get(), soc, ip, service, m_timeout_ms,
