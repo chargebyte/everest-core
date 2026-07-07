@@ -1117,6 +1117,22 @@ void EvseManager::ready() {
                 hlc_waiting_for_auth_pnc = false;
                 hlc_waiting_for_auth_eim = false;
             }
+        } else {
+            // no SLAC, just signal DLINK ready when plugged
+            // Note: slac_enabled = false implies hlc_enabled = false, so
+            // ensure availability of r_hlc[0] differently
+            if (not r_hlc.empty()) {
+                switch (event) {
+                case CPEvent::CarUnplugged:
+                    this->r_hlc[0]->call_dlink_ready(false);
+                    break;
+                case CPEvent::CarPluggedIn:
+                    this->r_hlc[0]->call_dlink_ready(true);
+                    break;
+                default:
+                    break;
+                }
+            }
         }
 
         if (not r_over_voltage_monitor.empty() and event == CPEvent::CarUnplugged) {
