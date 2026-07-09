@@ -844,38 +844,28 @@ bool is_tls_1_3(const std::uint8_t* in, std::size_t inlen) {
     // Byte 2+3 -> first version  (e.g. 03 04)
     // Byte 4+5 -> second version (e.g. 03 03)
     // ...
-    if (in == nullptr) {
-        return false;
-    }
-
-    if (inlen == 0) {
-        return false;
-    }
-
-    const std::uint8_t length_supported_versions = *(in++);
-    inlen -= 1;
-
-    if (length_supported_versions != inlen) {
-        log_error("length_supported_versions does not match remaining bytes");
-        return false;
-    }
-
-    if (length_supported_versions % 2 != 0) {
-        log_error("length_supported_versions is not divisible by 2");
-        return false;
-    }
-
     bool result{false};
 
-    for (std::size_t i = 0; i < length_supported_versions; i += 2) {
-        const std::uint8_t first_byte = *(in++);
-        const std::uint8_t second_byte = *(in++);
+    if (in != nullptr && inlen > 0) {
+        const std::uint8_t length_supported_versions = *(in++);
+        inlen -= 1;
 
-        const auto tls_version = static_cast<int>(first_byte) << 8 | second_byte;
+        if (length_supported_versions != inlen) {
+            log_error("length_supported_versions does not match remaining bytes");
+        } else if (length_supported_versions % 2 != 0) {
+            log_error("length_supported_versions is not divisible by 2");
+        } else {
+            for (std::size_t i = 0; i < length_supported_versions; i += 2) {
+                const std::uint8_t first_byte = *(in++);
+                const std::uint8_t second_byte = *(in++);
 
-        if (tls_version == TLS1_3_VERSION) {
-            result = true;
-            break;
+                const auto tls_version = static_cast<int>(first_byte) << 8 | second_byte;
+
+                if (tls_version == TLS1_3_VERSION) {
+                    result = true;
+                    break;
+                }
+            }
         }
     }
 

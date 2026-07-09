@@ -75,7 +75,7 @@ std::vector<tls::Server::certificate_config_t> build_chain_configs(const config:
 }
 
 tls::Server::config_t make_tls_server_config(const config::SSLConfig& cfg, const std::string& interface_name,
-                                             int listen_fd, std::vector<tls::Server::certificate_config_t> chains) {
+                                             int listen_fd, std::vector<tls::Server::certificate_config_t>&& chains) {
     tls::Server::config_t out{};
     out.cipher_list = "ECDHE-ECDSA-AES128-SHA256";
     out.ciphersuites = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256";
@@ -236,7 +236,6 @@ ReadResult ConnectionSSL::read(uint8_t* buf, size_t len) {
         msg += ssl_err;
     }
     log_and_throw(msg.c_str());
-    return {false, 0};
 }
 
 void ConnectionSSL::handle_connect() {
@@ -282,8 +281,6 @@ void ConnectionSSL::handle_data() {
     if (not handshake_complete) {
         const auto result = ssl->connection->accept(/*timeout_ms=*/0);
         switch (result) {
-        case tls::Connection::result_t::success:
-            break;
         case tls::Connection::result_t::want_read:
         case tls::Connection::result_t::want_write:
         case tls::Connection::result_t::timeout:
@@ -295,15 +292,15 @@ void ConnectionSSL::handle_data() {
             logf_error("TLS handshake failed: connection closed");
             this->close();
             return;
+        case tls::Connection::result_t::success:
+            logf_info("Handshake complete!");
+            ssl->vehicle_cert_hash = ssl->connection->peer_certificate_sha512();
+            handshake_complete = true;
+            call_if_available(event_callback, ConnectionEvent::OPEN);
+            return;
         default:
             log_and_throw("Failed to complete TLS handshake");
         }
-
-        logf_info("Handshake complete!");
-        ssl->vehicle_cert_hash = ssl->connection->peer_certificate_sha512();
-        handshake_complete = true;
-        call_if_available(event_callback, ConnectionEvent::OPEN);
-        return;
     }
 
     call_if_available(event_callback, ConnectionEvent::NEW_DATA);
