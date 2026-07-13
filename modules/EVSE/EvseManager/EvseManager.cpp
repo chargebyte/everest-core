@@ -1183,6 +1183,18 @@ void EvseManager::ready() {
                 hlc_waiting_for_auth_pnc = false;
                 hlc_waiting_for_auth_eim = false;
             }
+        } else {
+            // no SLAC, just signal DLINK ready when plugged
+            switch (event) {
+            case CPEvent::CarUnplugged:
+                this->r_hlc[0]->call_dlink_ready(false);
+                break;
+            case CPEvent::CarPluggedIn:
+                this->r_hlc[0]->call_dlink_ready(true);
+                break;
+            default:
+                break;
+            }
         }
 
         if (not r_over_voltage_monitor.empty() and event == CPEvent::CarUnplugged) {
@@ -2124,7 +2136,12 @@ bool EvseManager::check_voltage_to_protective_earth_in_range(types::isolation_mo
 }
 
 bool EvseManager::check_isolation_resistance_in_range(double resistance) {
-    if (resistance < CABLECHECK_INSULATION_FAULT_RESISTANCE_OHM) {
+    const double insulation_fault_resistance_ohm =
+        (connector_type.has_value() and connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS)
+            ? CABLECHECK_MCS_INSULATION_FAULT_RESISTANCE_OHM
+            : CABLECHECK_INSULATION_FAULT_RESISTANCE_OHM;
+
+    if (resistance < insulation_fault_resistance_ohm) {
         session_log.evse(false, fmt::format("Isolation measurement FAULT R_F {}.", resistance));
         r_hlc[0]->call_update_isolation_status(types::iso15118::IsolationStatus::Fault);
         return false;

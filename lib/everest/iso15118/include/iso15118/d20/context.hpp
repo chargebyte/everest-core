@@ -159,6 +159,14 @@ public:
         force_failed_response = true;
     }
 
+    void request_shutdown() {
+        requested_shutdown = true;
+    }
+
+    [[nodiscard]] bool shutdown_requested() const {
+        return requested_shutdown;
+    }
+
     const session::Feedback feedback;
 
     session::SessionLogger& log;
@@ -227,6 +235,8 @@ private:
 
     std::optional<TimeoutType> current_timeout{std::nullopt};
     bool force_failed_response{false};
+
+    bool requested_shutdown{false};
 };
 
 } // namespace iso15118::d20

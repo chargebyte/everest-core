@@ -7,7 +7,7 @@
 #include <cstring>
 #include <thread>
 
-#include <endian.h>
+#include <arpa/inet.h>
 
 #include <iso15118/d20/state/supported_app_protocol.hpp>
 
@@ -87,9 +87,19 @@ void raise_invalid_packet_state(const io::SdpPacket& sdp_packet) {
     log_and_throw(error.c_str());
 }
 
-// NOTE (aw): this function return true, if it would block to read a complete packet
-//            if it returns false, the packet is complete
-bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_packet) {
+namespace {
+enum class V2GTPReadResult {
+    complete,          //!< a full packet was read
+    would_block,       //!< more data is needed to complete the packet
+    connection_closed, //!< the peer closed the connection mid-read
+};
+} // namespace
+
+// NOTE (aw): this function reports a tri-state result:
+//            - would_block: it would block to read a complete packet
+//            - complete: the packet is complete
+//            - connection_closed: the peer closed the connection during the read
+V2GTPReadResult read_single_v2gtp_packet(io::IConnection& connection, io::SdpPacket& sdp_packet) {
     // NOTE (aw): not happy with this function
     //            main problem is, that it combines too much logic of the sdp packet and io related stuff
     using PacketState = io::SdpPacket::State;
@@ -99,16 +109,20 @@ bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_pack
     const auto first_try =
         connection.read(sdp_packet.get_current_buffer_pos(), sdp_packet.get_remaining_bytes_to_read());
 
+    if (first_try.connection_closed) {
+        return V2GTPReadResult::connection_closed;
+    }
+
     sdp_packet.update_read_bytes(first_try.bytes_read);
 
     if (first_try.would_block) {
         // need more data for at least the header
-        return true;
+        return V2GTPReadResult::would_block;
     }
 
     if (sdp_packet.get_state() == PacketState::COMPLETE) {
         // done
-        return false;
+        return V2GTPReadResult::complete;
     }
 
     // packet not finished
@@ -120,11 +134,15 @@ bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_pack
     const auto second_try =
         connection.read(sdp_packet.get_current_buffer_pos(), sdp_packet.get_remaining_bytes_to_read());
 
+    if (second_try.connection_closed) {
+        return V2GTPReadResult::connection_closed;
+    }
+
     sdp_packet.update_read_bytes(second_try.bytes_read);
 
     if (second_try.would_block) {
         // need more data for the rest of the packet!
-        return true;
+        return V2GTPReadResult::would_block;
     }
 
     // assert finished packet
@@ -132,7 +150,7 @@ bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_pack
         raise_invalid_packet_state(sdp_packet);
     }
 
-    return false;
+    return V2GTPReadResult::complete;
 }
 
 static size_t setup_response_header(uint8_t* buffer, iso15118::io::v2gtp::PayloadType payload_type, size_t size) {
@@ -140,11 +158,11 @@ static size_t setup_response_header(uint8_t* buffer, iso15118::io::v2gtp::Payloa
     buffer[1] = iso15118::io::SDP_INVERSE_PROTOCOL_VERSION;
 
     const uint16_t response_payload_type =
-        htobe16(static_cast<std::underlying_type_t<iso15118::io::v2gtp::PayloadType>>(payload_type));
+        htons(static_cast<std::underlying_type_t<iso15118::io::v2gtp::PayloadType>>(payload_type));
 
     std::memcpy(buffer + 2, &response_payload_type, sizeof(response_payload_type));
 
-    const uint32_t tmp32 = htobe32(size);
+    const uint32_t tmp32 = htonl(size);
 
     std::memcpy(buffer + 4, &tmp32, sizeof(tmp32));
 
@@ -180,10 +198,16 @@ TimePoint const& Session::poll() {
 
     // check for new data to read
     if (state.new_data and not message_exchange.has_response()) {
-        const bool would_block = read_single_sdp_packet(*connection, packet);
-
-        if (would_block) {
+        switch (read_single_v2gtp_packet(*connection, packet)) {
+        case V2GTPReadResult::connection_closed:
+            logf_info("Peer closed the connection");
+            close();
+            return next_session_event;
+        case V2GTPReadResult::would_block:
             state.new_data = false;
+            break;
+        case V2GTPReadResult::complete:
+            break;
         }
     }
 
@@ -229,7 +253,7 @@ TimePoint const& Session::poll() {
 
         for (const auto& timeout : reached) {
             if (timeout == d20::TimeoutType::SEQUENCE) {
-                logf_error("Sequence Timeout 40secs is reached. Stopping the session");
+                logf_error("Sequence timeout (60s) reached. Stopping the session");
                 ctx.session_stopped = true;
                 break;
             } else {
@@ -352,6 +376,9 @@ void Session::handle_connection_event(io::ConnectionEvent event) {
 
     case Event::CLOSED:
         state.connected = false;
+        // Terminal: trip is_finished() so the controller reaps this session.
+        // Re-entry from Session::close() (which already set the flag) is a no-op.
+        ctx.session_stopped = true;
         logf_info("Connection is closed");
         return;
     }
@@ -359,8 +386,22 @@ void Session::handle_connection_event(io::ConnectionEvent event) {
 
 void Session::close() {
     connection->close();
+    // transport gone; a rate-limiter-deferred response is undeliverable
+    (void)message_exchange.check_and_clear_response();
     ctx.feedback.signal(session::feedback::Signal::DLINK_TERMINATE);
     ctx.session_stopped = true;
+}
+
+void Session::request_shutdown() {
+    if (not state.connected) {
+        logf_info("Shutdown requested before an EV connected");
+        ctx.session_stopped = true;
+        connection->close();
+        ctx.feedback.signal(session::feedback::Signal::DLINK_TERMINATE);
+    } else {
+        push_control_event(d20::StopCharging{true}); // Stopping active charge loop
+        ctx.request_shutdown();
+    }
 }
 
 } // namespace iso15118
