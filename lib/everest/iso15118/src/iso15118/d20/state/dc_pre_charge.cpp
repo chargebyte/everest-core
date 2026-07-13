@@ -59,22 +59,24 @@ Result DC_PreCharge::feed(Event ev) {
 
         m_ctx.feedback.dc_pre_charge_target_voltage(message_20::datatypes::from_RationalNumber(req->target_voltage));
 
-        m_ctx.respond(res);
-        m_ctx.feedback.response_code(res.response_code);
+        const auto response_code = m_ctx.respond_and_publish_response_code(res);
 
-        if (res.response_code >= dt::ResponseCode::FAILED) {
+        if (response_code >= dt::ResponseCode::FAILED) {
             m_ctx.session_stopped = true;
             return {};
         }
 
-        return m_ctx.create_state<PowerDelivery>();
+        if (req->processing == dt::Processing::Finished) {
+            return m_ctx.create_state<PowerDelivery>();
+        }
+
+        return {};
 
     } else if (const auto req = variant->get_if<message_20::SessionStopRequest>()) {
         const auto res = handle_request(*req, m_ctx.session);
 
-        m_ctx.respond(res);
+        m_ctx.respond_and_publish_response_code(res);
         m_ctx.session_stopped = true;
-        m_ctx.feedback.response_code(res.response_code);
 
         return {};
     } else {
