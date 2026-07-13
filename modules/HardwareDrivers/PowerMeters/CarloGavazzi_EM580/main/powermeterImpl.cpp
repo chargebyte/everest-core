@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -24,6 +25,7 @@ using em580::registers::MODBUS_BASE_ADDRESS;
 using em580::registers::MODBUS_DEVICE_STATE_ADDRESS;
 using em580::registers::MODBUS_FIRMWARE_COMMUNICATION_MODULE_ADDRESS;
 using em580::registers::MODBUS_FIRMWARE_MEASURE_MODULE_ADDRESS;
+using em580::registers::MODBUS_IDENTIFICATION_CODE_ADDRESS;
 using em580::registers::MODBUS_OCMF_CHARGING_POINT_ID_START_ADDRESS;
 using em580::registers::MODBUS_OCMF_CHARGING_POINT_ID_TYPE_ADDRESS;
 using em580::registers::MODBUS_OCMF_CHARGING_POINT_ID_WORD_COUNT;
@@ -46,16 +48,22 @@ using em580::registers::MODBUS_OCMF_STATE_ADDRESS;
 using em580::registers::MODBUS_OCMF_STATE_FILE_ADDRESS;
 using em580::registers::MODBUS_OCMF_STATE_NOT_READY;
 using em580::registers::MODBUS_OCMF_STATE_READY;
+using em580::registers::MODBUS_OCMF_STATE_RUNNING;
 using em580::registers::MODBUS_OCMF_STATE_SIZE_ADDRESS;
 using em580::registers::MODBUS_OCMF_TARIFF_TEXT_ADDRESS;
 using em580::registers::MODBUS_OCMF_TARIFF_TEXT_WORD_COUNT;
 using em580::registers::MODBUS_OCMF_TIME_SYNC_STATUS_ADDRESS;
 using em580::registers::MODBUS_OCMF_TRANSACTION_ID_GENERATION_ADDRESS;
 using em580::registers::MODBUS_PRODUCTION_YEAR_ADDRESS;
+using em580::registers::MODBUS_PRODUCTION_YEAR_ADDRESS_EM300_SERIES;
 using em580::registers::MODBUS_PUBLIC_KEY_ADDRESS;
 using em580::registers::MODBUS_PUBLIC_KEY_DER_ADDRESS;
 using em580::registers::MODBUS_PUBLIC_KEY_DER_WORD_COUNT_256;
 using em580::registers::MODBUS_PUBLIC_KEY_DER_WORD_COUNT_384;
+using em580::registers::MODBUS_REAL_TIME_ENERGY_ADDRESS;
+using em580::registers::MODBUS_REAL_TIME_ENERGY_ADDRESS_EM300_SERIES;
+using em580::registers::MODBUS_REAL_TIME_ENERGY_COUNT;
+using em580::registers::MODBUS_REAL_TIME_ENERGY_COUNT_EM300_SERIES;
 using em580::registers::MODBUS_REAL_TIME_VALUES_ADDRESS;
 using em580::registers::MODBUS_REAL_TIME_VALUES_COUNT;
 using em580::registers::MODBUS_SERIAL_NUMBER_REGISTER_COUNT;
@@ -64,6 +72,23 @@ using em580::registers::MODBUS_SIGNATURE_TYPE_ADDRESS;
 using em580::registers::MODBUS_TEMPERATURE_ADDRESS;
 using em580::registers::MODBUS_TIMEZONE_OFFSET_ADDRESS;
 using em580::registers::MODBUS_UTC_TIMESTAMP_ADDRESS;
+
+using em580::registers::MODBUS_SIGNED_MAP_ADDRESS;
+using em580::registers::MODBUS_SIGNED_MAP_WORD_COUNT_256;
+using em580::registers::MODBUS_SIGNED_MAP_WORD_COUNT_384;
+
+const char* ocmf_state_to_string(std::uint16_t ocmf_state) {
+    switch (ocmf_state) {
+    case MODBUS_OCMF_STATE_READY:
+        return "READY";
+    case MODBUS_OCMF_STATE_RUNNING:
+        return "RUNNING";
+    case MODBUS_OCMF_STATE_NOT_READY:
+        return "NOT_READY";
+    default:
+        return "UNKNOWN";
+    }
+}
 } // namespace
 
 // Byte offsets for Modbus register 300001-300055 (physical addresses
@@ -97,24 +122,67 @@ constexpr std::size_t PHASE_SEQUENCE = 100; // 300051 (0032h)
 // Frequency register (INT16, 2 bytes)
 constexpr std::size_t FREQUENCY = 102; // 300052 (0033h)
 
-// Energy registers (INT32, 4 bytes each) - within extended read range
-// (300001-300080)
-constexpr std::size_t ENERGY_IMPORT = 104; // 300053 (0034h) - kWh (+) TOT, byte offset 104 (52*2)
-constexpr std::size_t ENERGY_EXPORT = 156; // 300079 (004Eh) - kWh (-) TOT, byte offset 156 (78*2)
+// Energy registers (INT64, 8 bytes each) - within extended read range
+constexpr std::size_t ENERGY_IMPORT = 0;  // 301281 (0500h) - kWh (+) TOT, byte offset 0 (52*2)
+constexpr std::size_t ENERGY_EXPORT = 56; // 301309 (051Ch) - kWh (-) TOT, byte offset 28 (28*2)
+
+// Energy registers (INT32, 4 bytes each) — Table 2.5-1 EM/ET300 Modbus (rev 2.17)
+constexpr std::size_t ENERGY_IMPORT_INT = 0;  // 301025 (0400h) - kWh (+) TOT INT, byte offset 0 (0*2)
+constexpr std::size_t ENERGY_IMPORT_DEC = 4;  // 301027 (0402h) - kWh (+) TOT DEC, byte offset 4 (2*2)
+constexpr std::size_t ENERGY_EXPORT_INT = 16; // 301033 (0408h) - kWh (-) TOT INT, byte offset 16 (8*2)
+constexpr std::size_t ENERGY_EXPORT_DEC = 20; // 301035 (040Ah) - kWh (-) TOT DEC, byte offset 20 (10*2)
 } // namespace Offsets
 
 // Scaling factors from Modbus document
 namespace Factors {
-constexpr float VOLTAGE = 0.1F;            // Value weight: Volt*10
-constexpr float CURRENT = 0.001F;          // Value weight: Ampere*1000
-constexpr float POWER = 0.1F;              // Value weight: Watt*10
-constexpr float REACTIVE_POWER = 0.1F;     // Value weight: var*10
-constexpr float FREQUENCY = 0.1F;          // Value weight: Hz*10
-constexpr float ENERGY_KWH_TO_WH = 100.0F; // Value weight: kWh*10, convert to Wh (kWh*10 * 100 = Wh)
-constexpr float TEMPERATURE = 0.1F;        // Value weight: Temperature*10
+constexpr float VOLTAGE = 0.1F;        // Value weight: Volt*10
+constexpr float CURRENT = 0.001F;      // Value weight: Ampere*1000
+constexpr float POWER = 0.1F;          // Value weight: Watt*10
+constexpr float REACTIVE_POWER = 0.1F; // Value weight: var*10
+constexpr float FREQUENCY = 0.1F;      // Value weight: Hz*10
+constexpr float TEMPERATURE = 0.1F;    // Value weight: Temperature*10
+constexpr float ENERGY_INT = 1000.0F;  // Value weight: kWh*1
+constexpr float ENERGY_DEC = 1.0F;     // Value weight: kWh*1000
 } // namespace Factors
 
 namespace module::main {
+
+namespace {
+
+/// Build a stop-transaction reply with explicit fields (avoids brace-init field-order mistakes vs
+/// types/powermeter.yaml).
+[[nodiscard]] types::powermeter::TransactionStopResponse
+make_transaction_stop_response(types::powermeter::TransactionRequestStatus status) {
+    types::powermeter::TransactionStopResponse response;
+    response.status = status;
+    return response;
+}
+
+[[nodiscard]] types::powermeter::TransactionStopResponse
+make_transaction_stop_response(types::powermeter::TransactionRequestStatus status, std::string error) {
+    types::powermeter::TransactionStopResponse response;
+    response.status = status;
+    response.error = std::move(error);
+    return response;
+}
+
+/// Build a start-transaction reply with explicit fields (types/powermeter.yaml: status, error, min/max stop time).
+[[nodiscard]] types::powermeter::TransactionStartResponse
+make_transaction_start_response(types::powermeter::TransactionRequestStatus status) {
+    types::powermeter::TransactionStartResponse response;
+    response.status = status;
+    return response;
+}
+
+[[nodiscard]] types::powermeter::TransactionStartResponse
+make_transaction_start_response(types::powermeter::TransactionRequestStatus status, std::string error) {
+    types::powermeter::TransactionStartResponse response;
+    response.status = status;
+    response.error = std::move(error);
+    return response;
+}
+
+} // namespace
 
 powermeterImpl::~powermeterImpl() {
     stop_requested_.store(true);
@@ -132,10 +200,10 @@ void powermeterImpl::init() {
     // Set up error handler for CommunicationFault
     transport::ErrorHandler error_handler = [this](const std::string& error_message) {
         // Check if error is already active to avoid duplicate errors
-        if (!this->error_state_monitor->is_error_active("powermeter/CommunicationFault", "CommunicationError")) {
+        if (!error_state_monitor->is_error_active("powermeter/CommunicationFault", "CommunicationError")) {
             EVLOG_error << "Raising CommunicationFault: " << error_message;
-            auto error = this->error_factory->create_error("powermeter/CommunicationFault", "CommunicationError",
-                                                           error_message, Everest::error::Severity::High);
+            auto error = error_factory->create_error("powermeter/CommunicationFault", "CommunicationError",
+                                                     error_message, Everest::error::Severity::High);
             raise_error(error);
         }
     };
@@ -143,7 +211,7 @@ void powermeterImpl::init() {
     // Set up clear error handler for CommunicationFault
     transport::ClearErrorHandler clear_error_handler = [this]() {
         // Clear CommunicationFault error if it's active
-        if (this->error_state_monitor->is_error_active("powermeter/CommunicationFault", "CommunicationError")) {
+        if (error_state_monitor->is_error_active("powermeter/CommunicationFault", "CommunicationError")) {
             EVLOG_info << "Clearing CommunicationFault: Communication restored";
             clear_error("powermeter/CommunicationFault", "CommunicationError");
         }
@@ -206,14 +274,20 @@ void powermeterImpl::read_signature_config() {
 
     switch (signature_type) {
     case SIGNATURE_256_BIT:
-        this->m_public_key_length_in_bits = 256;
+        m_public_key_length_in_bits = 256;
         signature_type_string = "256-bit";
+        m_signature_method_string = "ECDSA-brainpoolP256r1-SHA256";
         der_word_count = MODBUS_PUBLIC_KEY_DER_WORD_COUNT_256;
+        // Spec Table 4.5: 256-bit signature is 32 words (= CHAR[64] = 64 bytes)
+        m_signed_map_word_count = MODBUS_SIGNED_MAP_WORD_COUNT_256;
         break;
     case SIGNATURE_384_BIT:
-        this->m_public_key_length_in_bits = 384;
+        m_public_key_length_in_bits = 384;
         signature_type_string = "384-bit";
+        m_signature_method_string = "ECDSA-brainpoolP384r1-SHA256";
         der_word_count = MODBUS_PUBLIC_KEY_DER_WORD_COUNT_384;
+        // Spec Table 4.6: 384-bit signature is 48 words (= CHAR[96] = 96 bytes)
+        m_signed_map_word_count = MODBUS_SIGNED_MAP_WORD_COUNT_384;
         break;
     default:
         signature_type_string = "none";
@@ -222,15 +296,30 @@ void powermeterImpl::read_signature_config() {
     EVLOG_info << "Signature type detected: " << signature_type_string;
 
     if (config.public_key_format == "binary") {
-        this->m_public_key_hex = read_public_key_in_hex(this->m_public_key_length_in_bits);
-        EVLOG_info << "Public key (raw, hex): " << this->m_public_key_hex;
+        m_public_key_hex = read_public_key_in_hex(m_public_key_length_in_bits);
+        EVLOG_info << "Public key (raw, hex): " << m_public_key_hex;
     } else if (config.public_key_format == "der") {
-        this->m_public_key_hex = read_public_key_der_in_hex(der_word_count);
-        EVLOG_info << "Public key (DER, hex): " << this->m_public_key_hex;
+        m_public_key_hex = read_public_key_der_in_hex(der_word_count);
+        EVLOG_info << "Public key (DER, hex): " << m_public_key_hex;
     } else {
         throw std::invalid_argument("invalid public key format: " + config.public_key_format);
     }
-    this->publish_public_key_ocmf(this->m_public_key_hex);
+    publish_public_key_ocmf(m_public_key_hex);
+}
+
+void powermeterImpl::read_identification() {
+    static const std::set<std::uint16_t> em300_series_ids = {331, 332, 335, 336, 340, 341, 345, 346, 355};
+
+    // Read the identification code to detect meter model
+    transport::DataVector cgc_id_data = p_modbus_transport->fetch(MODBUS_IDENTIFICATION_CODE_ADDRESS, 1);
+    std::uint16_t cgc_id = modbus_utils::to_uint16(cgc_id_data, modbus_utils::ByteOffset{0});
+
+    EVLOG_info << "Carlo Gavazzi Controls identification code: " << (int)cgc_id;
+
+    // check for EM300/ET300 series
+    if (em300_series_ids.count(cgc_id)) {
+        m_transaction_support = false;
+    }
 }
 
 void powermeterImpl::read_firmware_versions() {
@@ -271,24 +360,41 @@ void powermeterImpl::read_serial_number() {
     transport::DataVector serial_data =
         p_modbus_transport->fetch(MODBUS_SERIAL_NUMBER_START_ADDRESS, MODBUS_SERIAL_NUMBER_REGISTER_COUNT);
 
-    // Convert bytes to string (serial number is stored as ASCII)
-    // Modbus returns data in big-endian format: each UINT16 register is [MSB,
-    // LSB] So for 7 registers, we get: [reg0_MSB, reg0_LSB, reg1_MSB, reg1_LSB,
-    // ...] We assume the string contains only printable characters and null
-    // terminator is correctly set or at the end
     std::string serial_str;
-    serial_str.reserve(14);
-    for (const auto& byte : serial_data) {
-        char byte_char = static_cast<char>(byte);
-        // Stop at null terminator if present
-        if (byte_char == '\0') {
-            break;
+    if (m_transaction_support) {
+        // Convert bytes to string (serial number is stored as ASCII)
+        // Modbus returns data in big-endian format: each UINT16 register is [MSB,
+        // LSB] So for 7 registers, we get: [reg0_MSB, reg0_LSB, reg1_MSB, reg1_LSB,
+        // ...] We assume the string contains only printable characters and null
+        // terminator is correctly set or at the end
+        serial_str.reserve(14);
+        for (const auto& byte : serial_data) {
+            char byte_char = static_cast<char>(byte);
+            // Stop at null terminator if present
+            if (byte_char == '\0') {
+                break;
+            }
+            serial_str += byte_char;
         }
-        serial_str += byte_char;
+    } else {
+        // on older devices like EM300 series, only the LSB is used
+        serial_str.reserve(7);
+        for (auto byte = serial_data.begin() + 1; byte < serial_data.end(); byte += 2) {
+            char byte_char = static_cast<char>(*byte);
+            // Stop at null terminator if present
+            if (byte_char == '\0') {
+                break;
+            }
+            serial_str += byte_char;
+        }
     }
 
-    // Read production year (register 320488, 1 UINT16 register)
-    transport::DataVector year_data = p_modbus_transport->fetch(MODBUS_PRODUCTION_YEAR_ADDRESS, 1);
+    // production year register moved in newer devices:
+    // register 320488 on newer device like EM580,
+    // register 320497 on EM300 series
+    // we coupled it here to the transaction support to keep things simple
+    transport::DataVector year_data = p_modbus_transport->fetch(
+        m_transaction_support ? MODBUS_PRODUCTION_YEAR_ADDRESS : MODBUS_PRODUCTION_YEAR_ADDRESS_EM300_SERIES, 1);
     std::uint16_t production_year = modbus_utils::to_uint16(year_data, modbus_utils::ByteOffset{0});
 
     // Combine serial number and production year with a dot separator
@@ -299,26 +405,52 @@ void powermeterImpl::read_serial_number() {
 void powermeterImpl::read_transaction_state_and_id() {
     transport::DataVector state_data = p_modbus_transport->fetch(MODBUS_OCMF_STATE_ADDRESS, 1);
     std::uint16_t ocmf_state = modbus_utils::to_uint16(state_data, modbus_utils::ByteOffset{0});
+
+    // Read transaction id from the tariff text (6900h, TT) which we write as:
+    // "<tariff_text><=><transaction_id>".
+    try {
+        transport::DataVector tt_data =
+            p_modbus_transport->fetch(MODBUS_OCMF_TARIFF_TEXT_ADDRESS, MODBUS_OCMF_TARIFF_TEXT_WORD_COUNT);
+        auto null_pos = std::find(tt_data.begin(), tt_data.end(), 0);
+        std::string tt_str(tt_data.begin(), null_pos);
+        const auto tx_id_opt =
+            ocmf::extract_transaction_id_from_tariff_text(tt_str, powermeterImpl::TARIFF_TEXT_TRANSACTION_ID_MARKER);
+        if (tx_id_opt.has_value()) {
+            m_transaction_id = *tx_id_opt;
+            EVLOG_info << "Recovered transaction id from tariff text (6900h): " << m_transaction_id;
+        }
+    } catch (const std::exception& e) {
+        EVLOG_warning << "Failed to read tariff text (6900h): " << e.what();
+    }
+
     if (ocmf_state == MODBUS_OCMF_STATE_READY) {
         m_pending_closed_transaction = true;
         EVLOG_info << "Detected a closed transaction with data pending to be read";
+    }
+    if (ocmf_state == MODBUS_OCMF_STATE_RUNNING) {
+        EVLOG_info << "Detected a running transaction, waiting for a stop transaction command with transaction id: "
+                   << m_transaction_id << " or an empty transaction id";
+        m_transaction_active.store(true);
     }
 }
 
 void powermeterImpl::configure_device() {
     EVLOG_info << "Configure the device...";
+    read_identification();
     read_firmware_versions();
     read_serial_number();
-    read_signature_config();
-    // need a delay here because if the device comes from a power outage, the time
-    // sync will fail
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    // Initial time synchronization
-    synchronize_time();
-    // Set timezone offset
-    set_timezone(config.timezone_offset_minutes);
-    // see if there is a pending closed transaction that needs to be read
-    read_transaction_state_and_id();
+    if (m_transaction_support) {
+        read_signature_config();
+        // need a delay here because if the device comes from a power outage, the time
+        // sync will fail
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // Initial time synchronization
+        synchronize_time();
+        // Set timezone offset
+        set_timezone(config.timezone_offset_minutes);
+        // see if there is a pending closed transaction that needs to be read
+        read_transaction_state_and_id();
+    }
     EVLOG_info << "Device configured";
 }
 
@@ -337,11 +469,13 @@ void powermeterImpl::ready() {
                     last_device_state_read = std::chrono::steady_clock::time_point{}; // force state read
                 }
                 read_powermeter_values();
-                const auto now = std::chrono::steady_clock::now();
-                if (last_device_state_read == std::chrono::steady_clock::time_point{} ||
-                    (now - last_device_state_read) >= device_state_interval) {
-                    read_device_state();
-                    last_device_state_read = now;
+                if (m_transaction_support) {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (last_device_state_read == std::chrono::steady_clock::time_point{} ||
+                        (now - last_device_state_read) >= device_state_interval) {
+                        read_device_state();
+                        last_device_state_read = now;
+                    }
                 }
             } catch (const std::invalid_argument& e) {
                 EVLOG_error << "Configuration error (will not retry): " << e.what();
@@ -398,8 +532,7 @@ void powermeterImpl::write_transaction_registers(const types::powermeter::Transa
     p_modbus_transport->write_multiple_registers(MODBUS_OCMF_IDENTIFICATION_TYPE_ADDRESS, type_data);
 
     // 5. Write OCMF Identification Data (registers 328680-328699, 7007h-701Ah) -
-    // CHAR[40] = 20 words Format: identification_data + ',' + transaction_id Max
-    // length: 40 characters - the transaction_id is 36 characters max
+    // CHAR[40] = 20 words.
     std::string client_id_str = transaction_req.identification_data.value_or("");
     modbus_utils::log_truncation_warning_if_needed("OCMF Identification Data", client_id_str,
                                                    MODBUS_OCMF_IDENTIFICATION_DATA_WORD_COUNT);
@@ -423,9 +556,12 @@ void powermeterImpl::write_transaction_registers(const types::powermeter::Transa
 
     // 8. Write tariff text (register 326881, 6900h) - CHAR[252] = 126 words
     // The device accepts partial writes as long as the string is 0-terminated.
-    const std::string tt_marker = "<=>";
-    const std::string tariff_text =
-        transaction_req.tariff_text.value_or("") + tt_marker + transaction_req.transaction_id;
+    std::string tariff_text;
+    const std::string& base = transaction_req.tariff_text.value_or("");
+    tariff_text.reserve(base.size() + TARIFF_TEXT_TRANSACTION_ID_MARKER.size() + transaction_req.transaction_id.size());
+    tariff_text.append(base);
+    tariff_text.append(TARIFF_TEXT_TRANSACTION_ID_MARKER);
+    tariff_text.append(transaction_req.transaction_id);
     modbus_utils::log_truncation_warning_if_needed("OCMF Tariff Text (TT)", tariff_text,
                                                    MODBUS_OCMF_TARIFF_TEXT_WORD_COUNT);
     const std::vector<std::uint16_t> tariff_text_data =
@@ -448,7 +584,7 @@ void powermeterImpl::clear_transaction_states() {
     std::uint16_t ocmf_state = modbus_utils::to_uint16(state_data, modbus_utils::ByteOffset{0});
 
     if (ocmf_state == MODBUS_OCMF_STATE_READY) {
-        EVLOG_info << "OCMF state before starting transaction: " << ocmf_state;
+        EVLOG_info << "Current OCMF state: " << ocmf_state_to_string(ocmf_state) << "(" << ocmf_state << ")";
         EVLOG_info << "Cleanup necessary ...";
         read_ocmf_file();
         // write 0 to the OCMF state to confirm the reading of the OCMF file
@@ -460,6 +596,11 @@ void powermeterImpl::clear_transaction_states() {
 
 types::powermeter::TransactionStartResponse
 powermeterImpl::handle_start_transaction(types::powermeter::TransactionReq& treq) {
+    if (not m_transaction_support) {
+        EVLOG_info << "start transaction rejected: meter model does not support transactions";
+        return make_transaction_start_response(types::powermeter::TransactionRequestStatus::NOT_SUPPORTED,
+                                               "This meter model does not support transactions.");
+    }
     try {
         EVLOG_info << "Starting transaction with transaction id: " << treq.transaction_id
                    << " evse id: " << treq.evse_id << " identification status: " << treq.identification_status
@@ -475,13 +616,13 @@ powermeterImpl::handle_start_transaction(types::powermeter::TransactionReq& treq
         // start a new transaction
         transport::DataVector state_data = p_modbus_transport->fetch(MODBUS_OCMF_STATE_ADDRESS, 1);
         std::uint16_t ocmf_state = modbus_utils::to_uint16(state_data, modbus_utils::ByteOffset{0});
-        EVLOG_info << "OCMF state before starting transaction: " << ocmf_state;
+        EVLOG_info << "Current OCMF state: " << ocmf_state_to_string(ocmf_state) << "(" << ocmf_state << ")";
 
         if (ocmf_state != MODBUS_OCMF_STATE_NOT_READY) {
             EVLOG_warning << "Spurious transaction detected, clearing transaction states ...";
             clear_transaction_states();
             m_pending_closed_transaction = false;
-            return {types::powermeter::TransactionRequestStatus::OK};
+            return make_transaction_start_response(types::powermeter::TransactionRequestStatus::OK);
         }
 
         // Write transaction registers first
@@ -500,14 +641,25 @@ powermeterImpl::handle_start_transaction(types::powermeter::TransactionReq& treq
         // Track local state (only used internally, not in device dump)
         m_transaction_active.store(true);
         m_transaction_id = treq.transaction_id;
-        return {types::powermeter::TransactionRequestStatus::OK};
+
+        // Capture signed meter value for transaction start (returned on stop)
+        m_start_signed_meter_value.emplace(read_signed_meter_value());
+
+        return make_transaction_start_response(types::powermeter::TransactionRequestStatus::OK);
     } catch (const std::exception& e) {
-        EVLOG_error << __PRETTY_FUNCTION__ << " Error: " << e.what() << std::endl;
-        return {types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR, {}, {}, "get_signed_meter_value_error"};
+        EVLOG_error << e.what();
+        return make_transaction_start_response(types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
+                                               fmt::format("can't start transaction: {}", e.what()));
     }
 }
 
 types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transaction(std::string& transaction_id) {
+    if (not m_transaction_support) {
+        EVLOG_info << "stop transaction rejected: meter model does not support transactions";
+        return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::NOT_SUPPORTED,
+                                              "This meter model does not support transactions.");
+    }
+
     EVLOG_info << "Stopping transaction with transaction id: " << (transaction_id.empty() ? "empty" : transaction_id);
     // if the transaction id is empty, we need to clean up the transaction states
     // we do our best to clean up the transaction states
@@ -522,10 +674,10 @@ types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transacti
             m_pending_closed_transaction = false;
             clear_transaction_states();
         } catch (const std::exception& e) {
-            EVLOG_error << __PRETTY_FUNCTION__ << " Error: " << e.what() << std::endl;
+            EVLOG_error << e.what();
         }
         m_pending_closed_transaction = false;
-        return {types::powermeter::TransactionRequestStatus::OK, {}, {}};
+        return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::OK);
     }
     try {
         if (m_pending_closed_transaction) {
@@ -539,16 +691,14 @@ types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transacti
             const auto ocmf_file_transaction_id_opt = ocmf::extract_transaction_id_from_ocmf_record(ocmf_file);
             if (!ocmf_file_transaction_id_opt.has_value()) {
                 EVLOG_error << "Failed to extract transaction id from OCMF file TT field";
-                return {types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
-                        {},
-                        {},
-                        "Failed to extract transaction id from OCMF file"};
+                return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
+                                                      "Failed to extract transaction id from OCMF file");
             }
             const std::string& ocmf_file_transaction_id = *ocmf_file_transaction_id_opt;
             EVLOG_info << "OCMF file transaction id: " << ocmf_file_transaction_id;
             if (ocmf_file_transaction_id != transaction_id) {
-                return {
-                    types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR, {}, {}, "Transaction id mismatch"};
+                return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
+                                                      "Transaction id mismatch");
             }
             EVLOG_info << "Transaction id matches, sending successful transaction "
                           "stop response with OCMF file";
@@ -569,14 +719,12 @@ types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transacti
 
             // check if the OCMF state is ready (Table 4.36, register 328742)
             if (!ocmf::wait_for_ready(*p_modbus_transport)) {
-                return {types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
-                        {},
-                        {},
-                        "get_signed_meter_value_error"};
+                return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
+                                                      "can't stop transaction: OCMF did not reach ready state");
             }
 
+            // For Eichrecht, return the OCMF file as the signed meter value report.
             const std::string ocmf_data = read_ocmf_file();
-            // EVLOG_info << "OCMF data: " << ocmf_data;
             auto signed_meter_value = types::units_signed::SignedMeterValue{ocmf_data, "", "OCMF"};
             signed_meter_value.public_key.emplace(m_public_key_hex);
 
@@ -584,36 +732,36 @@ types::powermeter::TransactionStopResponse powermeterImpl::handle_stop_transacti
             ocmf::confirm_file_read(*p_modbus_transport);
             m_pending_closed_transaction = false;
             return types::powermeter::TransactionStopResponse{types::powermeter::TransactionRequestStatus::OK,
-                                                              {}, // Empty start_signed_meter_value
-                                                              signed_meter_value};
+                                                              m_start_signed_meter_value, signed_meter_value};
         } else {
             EVLOG_error << "No open transaction or unknown transaction id: " << transaction_id;
-            return {types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
-                    {},
-                    {},
-                    "No open transaction or unknown transaction id"};
+            return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
+                                                  "No open transaction or unknown transaction id");
         }
     } catch (const std::exception& e) {
-        EVLOG_error << __PRETTY_FUNCTION__ << " Error: " << e.what() << std::endl;
-        return {types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR, {}, {}, "get_signed_meter_value_error"};
+        EVLOG_error << e.what();
+        return make_transaction_stop_response(types::powermeter::TransactionRequestStatus::UNEXPECTED_ERROR,
+                                              fmt::format("can't stop transaction: {}", e.what()));
     }
 }
 
 void powermeterImpl::read_powermeter_values() {
-    // Read registers 300001-300082 (82 words = 0x50+2)
-    // This single read includes:
-    // - 300001-300052: Real-time values (52 words)
-    // - 300053-300054: kWh (+) TOT (energy import) - INT32, 2 words
-    // - Gap: 300055-300078 (Modbus will read but we ignore these bytes)
-    // - 300079-300080: kWh (-) TOT (energy export) - INT32, 2 words
-    // This optimization reduces Modbus requests from 3 to 2 (removing the
-    // separate totals read)
-    transport::DataVector data =
-        p_modbus_transport->fetch(MODBUS_REAL_TIME_VALUES_ADDRESS, MODBUS_REAL_TIME_VALUES_COUNT);
+    transport::DataVector data;
+
+    if (m_transaction_support) {
+        // Read a compact range starting at 300001 containing all instantaneous values we use
+        // up to 300052 (frequency). Energy totals are read separately from 301281+ (INT64, Wh).
+        data = p_modbus_transport->fetch(MODBUS_REAL_TIME_VALUES_ADDRESS, MODBUS_REAL_TIME_VALUES_COUNT);
+    } else {
+        // older models/firmwares are nasty when reading the whole block, so we split the request manually
+        data = p_modbus_transport->fetch(MODBUS_REAL_TIME_VALUES_ADDRESS, MODBUS_REAL_TIME_VALUES_COUNT - 2);
+        auto data2 = p_modbus_transport->fetch(MODBUS_REAL_TIME_VALUES_ADDRESS + MODBUS_REAL_TIME_VALUES_COUNT - 2, 2);
+        data.insert(data.end(), data2.begin(), data2.end());
+    }
 
     types::powermeter::Powermeter powermeter{};
     powermeter.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
-    powermeter.meter_id = std::move(std::string(this->mod->info.id));
+    powermeter.meter_id = m_serial_number;
 
     // Voltage values (INT32, weight: Volt*10)
     // 300001 (0000h): V L1-N
@@ -694,20 +842,51 @@ void powermeterImpl::read_powermeter_values() {
         powermeter.phase_seq_error = false; // L1-L2-L3 is correct (clockwise)
     }
 
-    // Energy import: register 300053 (kWh (+) TOT) - INT32, 2 words
-    // Byte offset in data: 104 (52*2, since 300053 is at offset 52 from 300001)
-    // Note: energy_Wh_import is a required field, not optional
-    powermeter.energy_Wh_import.total =
-        Factors::ENERGY_KWH_TO_WH *
-        static_cast<float>(modbus_utils::to_int32(data, modbus_utils::ByteOffset{Offsets::ENERGY_IMPORT}));
+    if (m_transaction_support) {
+        transport::DataVector dataEnergy =
+            p_modbus_transport->fetch(MODBUS_REAL_TIME_ENERGY_ADDRESS, MODBUS_REAL_TIME_ENERGY_COUNT);
 
-    // Energy export: register 300079 (kWh (-) TOT) - INT32, 2 words
-    // Byte offset in data: 156 (78*2, since 300079 is at offset 78 from 300001)
-    types::units::Energy energy_Wh_export;
-    energy_Wh_export.total =
-        Factors::ENERGY_KWH_TO_WH *
-        static_cast<float>(modbus_utils::to_int32(data, modbus_utils::ByteOffset{Offsets::ENERGY_EXPORT}));
-    powermeter.energy_Wh_export = energy_Wh_export;
+        // Energy import: register 301281 (kWh (+) TOT) - INT64, 4 words
+        // Spec (Table 4.3): value weight is Wh.
+        // Note: energy_Wh_import is a required field, not optional
+        powermeter.energy_Wh_import.total =
+            static_cast<float>(modbus_utils::to_int64(dataEnergy, modbus_utils::ByteOffset{Offsets::ENERGY_IMPORT}));
+
+        // Energy export: register 301309 (kWh (-) TOT) - INT64, 4 words
+        // Spec (Table 4.3): value weight is Wh.
+        types::units::Energy energy_Wh_export;
+        energy_Wh_export.total =
+            static_cast<float>(modbus_utils::to_int64(dataEnergy, modbus_utils::ByteOffset{Offsets::ENERGY_EXPORT}));
+        powermeter.energy_Wh_export = energy_Wh_export;
+    } else {
+        transport::DataVector dataEnergy = p_modbus_transport->fetch(MODBUS_REAL_TIME_ENERGY_ADDRESS_EM300_SERIES,
+                                                                     MODBUS_REAL_TIME_ENERGY_COUNT_EM300_SERIES);
+
+        // Energy import: register 301025 (kWh (+) TOT) - INT32, 2 words -> INT part
+        // Spec (Table 2.5.1): value weight is kWh*1.
+        // Note: energy_Wh_import is a required field, not optional
+        powermeter.energy_Wh_import.total =
+            Factors::ENERGY_INT * static_cast<float>(modbus_utils::to_int32(
+                                      dataEnergy, modbus_utils::ByteOffset{Offsets::ENERGY_IMPORT_INT}));
+        // Energy import: register 301027 (kWh (+) TOT) - INT32, 2 words -> DEC part
+        // Spec (Table 2.5.1): value weight is kWh*1000.
+        powermeter.energy_Wh_import.total +=
+            Factors::ENERGY_DEC * static_cast<float>(modbus_utils::to_int32(
+                                      dataEnergy, modbus_utils::ByteOffset{Offsets::ENERGY_IMPORT_DEC}));
+
+        // Energy export: register 301033 (kWh (-) TOT) - INT32, 2 words -> INT part
+        // Spec (Table 2.5.1): value weight is kWh*1.
+        types::units::Energy energy_Wh_export;
+        energy_Wh_export.total =
+            Factors::ENERGY_INT * static_cast<float>(modbus_utils::to_int32(
+                                      dataEnergy, modbus_utils::ByteOffset{Offsets::ENERGY_EXPORT_INT}));
+        // Energy export: register 301035 (kWh (-) TOT) - INT32, 2 words -> DEC part
+        // Spec (Table 2.5.1): value weight is kWh*1000.
+        energy_Wh_export.total +=
+            Factors::ENERGY_DEC * static_cast<float>(modbus_utils::to_int32(
+                                      dataEnergy, modbus_utils::ByteOffset{Offsets::ENERGY_EXPORT_DEC}));
+        powermeter.energy_Wh_export = energy_Wh_export;
+    }
 
     // Disable for now the temperature reading, since I can't read it in the above
     // block read Read internal temperature (INT16, weight: Temperature*10) -
@@ -722,7 +901,10 @@ void powermeterImpl::read_powermeter_values() {
     // temperatures.push_back(temperature);
     // powermeter.temperatures = temperatures;
 
-    this->publish_powermeter(powermeter);
+    if (m_transaction_support) {
+        powermeter.signed_meter_value = read_signed_meter_value();
+    }
+    publish_powermeter(powermeter);
 }
 
 void powermeterImpl::dump_device_state() {
@@ -866,11 +1048,37 @@ void powermeterImpl::read_device_state() {
         error_description += " (device state: 0x" + fmt::format("{:04X}", device_state) + ")";
 
         EVLOG_error << "Device state error: " << error_description;
-        auto error = this->error_factory->create_error("powermeter/VendorError", "DeviceStateError", error_description);
+        auto error = error_factory->create_error("powermeter/VendorError", "DeviceStateError", error_description);
         raise_error(error);
     } else {
         EVLOG_debug << "Device state OK (0x" << fmt::format("{:04X}", device_state) << ")";
     }
+}
+
+types::units_signed::SignedMeterValue powermeterImpl::read_signed_meter_value() {
+    transport::DataVector signed_data = p_modbus_transport->fetch(MODBUS_SIGNED_MAP_ADDRESS, m_signed_map_word_count);
+
+    // Spec (Table 4.4): signed data spans 61 words (302049..302109) and signature starts at 302110.
+    static constexpr std::size_t SIGNED_MAP_SIGNED_DATA_WORDS = 61;
+    static constexpr std::size_t SIGNED_MAP_SIGNED_DATA_BYTES = SIGNED_MAP_SIGNED_DATA_WORDS * 2;
+    const std::size_t signature_bytes =
+        (m_signed_map_word_count > SIGNED_MAP_SIGNED_DATA_WORDS)
+            ? (static_cast<std::size_t>(m_signed_map_word_count) - SIGNED_MAP_SIGNED_DATA_WORDS) * 2
+            : 0;
+
+    std::string signed_data_string = modbus_utils::to_hex_string(
+        signed_data, modbus_utils::ByteOffset{0}, modbus_utils::ByteLength{SIGNED_MAP_SIGNED_DATA_BYTES});
+    std::string signed_data_signature_string = modbus_utils::to_hex_string(
+        signed_data, modbus_utils::ByteOffset{SIGNED_MAP_SIGNED_DATA_BYTES}, modbus_utils::ByteLength{signature_bytes});
+
+    types::units_signed::SignedMeterValue smv;
+    smv.signed_meter_data =
+        R"({"signedData":")" + signed_data_string + R"(","signature":")" + signed_data_signature_string + R"("})";
+    smv.signing_method = m_signature_method_string;
+    smv.encoding_method = "plain";
+    smv.public_key = m_public_key_hex;
+    smv.timestamp = Everest::Date::to_rfc3339(date::utc_clock::now());
+    return smv;
 }
 
 } // namespace module::main
