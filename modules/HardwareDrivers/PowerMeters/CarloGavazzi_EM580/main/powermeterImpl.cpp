@@ -1005,6 +1005,9 @@ void powermeterImpl::time_sync_thread() {
         if (stop_requested_.load()) {
             break;
         }
+        if (!m_transaction_support) {
+            break;
+        }
 
         if (!is_transaction_active()) {
             // No active transaction, perform time sync immediately
