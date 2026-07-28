@@ -67,11 +67,19 @@ if (TIMER_INSTALL)
         TYPE INCLUDE
     )
 
-    evc_setup_package(
-        NAME everest-timer
-        EXPORT timer-targets
-        NAMESPACE everest
-        ADDITIONAL_CONTENT
-            "find_dependency(Boost COMPONENTS system)"
-    )
+    if(Boost_VERSION_STRING VERSION_LESS "1.69.0")
+        evc_setup_package(
+            NAME everest-timer
+            EXPORT timer-targets
+            NAMESPACE everest
+            ADDITIONAL_CONTENT
+                "find_dependency(Boost COMPONENTS system)"
+        )
+    else()
+        evc_setup_package(
+            NAME everest-timer
+            EXPORT timer-targets
+            NAMESPACE everest
+        )
+    endif()
 endif()
