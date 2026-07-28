@@ -3,6 +3,8 @@ From: Yasumasa Suenaga <ysuenaga@openjdk.org>
 Date: Thu, 19 May 2022 05:53:10 +0000
 Subject: [PATCH] 8286694: Incorrect argument processing in java launcher
 
+Upstream-Status: Backport
+
 Reviewed-by: dholmes
 ---
  src/java.base/share/native/libjli/java.c | 7 +++++--

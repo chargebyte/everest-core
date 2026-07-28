@@ -3,6 +3,8 @@ From: Harold Seigel <hseigel@openjdk.org>
 Date: Thu, 9 Jun 2022 12:03:54 +0000
 Subject: [PATCH] 8287854: Dangling reference in ClassVerifier::verify_class
 
+Upstream-Status: Backport
+
 Reviewed-by: dholmes, coleenp
 ---
  src/hotspot/share/classfile/verifier.cpp |  8 ++------

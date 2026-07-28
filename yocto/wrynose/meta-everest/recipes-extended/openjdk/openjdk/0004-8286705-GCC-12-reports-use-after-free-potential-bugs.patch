@@ -3,6 +3,8 @@ From: Yasumasa Suenaga <ysuenaga@openjdk.org>
 Date: Sun, 15 May 2022 01:32:40 +0000
 Subject: [PATCH] 8286705: GCC 12 reports use-after-free potential bugs
 
+Upstream-Status: Backport
+
 Reviewed-by: kbarrett
 ---
  src/java.base/share/native/libjli/parse_manifest.c       | 4 ++--

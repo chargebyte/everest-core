@@ -3,6 +3,8 @@ From: Yasumasa Suenaga <ysuenaga@openjdk.org>
 Date: Sat, 28 May 2022 02:09:05 +0000
 Subject: [PATCH] 8286562: GCC 12 reports some compiler warnings
 
+Upstream-Status: Backport
+
 Reviewed-by: ihse, kbarrett, prr
 ---
  .../java.desktop/lib/Awt2dLibraries.gmk       |  2 +-
