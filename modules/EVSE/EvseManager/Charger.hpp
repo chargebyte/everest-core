@@ -72,6 +72,28 @@ public:
         int duration;
     };
 
+    struct SetupConfig {
+        bool has_ventilation;
+        ChargeMode charge_mode;
+        bool ac_hlc_enabled;
+        bool ac_hlc_use_5percent;
+        bool ac_enforce_hlc;
+        bool ac_with_soc_timeout;
+        float soft_over_current_tolerance_percent;
+        float soft_over_current_measurement_noise_A;
+        int switch_3ph1ph_delay_s;
+        std::string switch_3ph1ph_cp_state;
+        int soft_over_current_timeout_ms;
+        int state_F_after_fault_ms;
+        int reinit_duration_ms;
+        std::string reinit_method;
+        bool fail_on_powermeter_errors;
+        bool raise_mrec9;
+        int sleep_before_enabling_pwm_hlc_mode_ms;
+        utils::SessionIdType session_id_type;
+        int hlc_charge_loop_without_energy_timeout_s;
+    };
+
     enum class EvseState {
         Disabled,
         Idle,
@@ -106,14 +128,7 @@ public:
 
     sigslot::signal<float> signal_max_current;
 
-    void setup(bool has_ventilation, const ChargeMode charge_mode, bool ac_hlc_enabled, bool ac_hlc_use_5percent,
-               bool ac_enforce_hlc, bool ac_with_soc_timeout, float soft_over_current_tolerance_percent,
-               float soft_over_current_measurement_noise_A, const int switch_3ph1ph_delay_s,
-               const std::string switch_3ph1ph_cp_state, const int soft_over_current_timeout_ms,
-               const int _state_F_after_fault_ms, const int reinit_duration_ms, const std::string& reinit_method,
-               const bool fail_on_powermeter_errors, const bool raise_mrec9,
-               const int sleep_before_enabling_pwm_hlc_mode_ms, const utils::SessionIdType session_id_type,
-               const int hlc_charge_loop_without_energy_timeout_s);
+    void setup(const SetupConfig& config);
 
     void enable_disable_initial_state_publish();
     bool enable_disable(int connector_id, const types::evse_manager::EnableDisableSource& source);
@@ -503,9 +518,9 @@ private:
     // 4 seconds according to table 3 of ISO15118-3
     static constexpr int T_STEP_EF = 4000;
     static constexpr int IEC_PWM_MAX_UPDATE_INTERVAL = 5000;
-    // EV READY certification requires a small pause of 500-1000 ms in X1 after a t_step_EF sequence before going to X2-
-    // This is not required by IEC61851-1, but it is allowed by the IEC. It helps some older EVs to start charging
-    // after the wake-up sequence.
+    // EV READY certification requires a small pause of 500-1000 ms in X1 after a t_step_EF sequence before going to
+    // X2- This is not required by IEC61851-1, but it is allowed by the IEC. It helps some older EVs to start
+    // charging after the wake-up sequence.
     static constexpr int STAY_IN_X1_AFTER_TSTEP_EF_MS = 750;
     static constexpr int WAIT_FOR_ENERGY_IN_AUTHLOOP_TIMEOUT_MS = 5000;
     static constexpr int AC_X1_FALLBACK_TO_NOMINAL_TIMEOUT_MS = 10000;
