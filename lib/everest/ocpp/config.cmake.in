@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+@CONFIG_ADDITIONAL_CONTENT@
+
+include(${CMAKE_CURRENT_LIST_DIR}/@LIBRARY_PACKAGE_NAME@-targets.cmake)
+
+check_required_components(@LIBRARY_PACKAGE_NAME@)
