@@ -20,13 +20,24 @@ set_target_properties(everest_util
         EXPORT_NAME util
 )
 
-install(TARGETS everest_util
-    EXPORT everest-core-targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+if (NOT DISABLE_EDM)
+    # everest_util also gets its own standalone, find_package-able config
+    # below when DISABLE_EDM is set (see comment there). Since it's a
+    # header-only INTERFACE library, participating in EXPORT
+    # everest-core-targets at the same time would make CMake see
+    # everest::util defined twice by the time everest-core-config.cmake's
+    # own combined everest-core-targets.cmake gets included -- "Some (but
+    # not all) targets in this export set were already defined." So only
+    # join the combined export set in EDM mode, where the standalone
+    # package below doesn't exist.
+    install(TARGETS everest_util
+        EXPORT everest-core-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+endif()
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/everest
     DESTINATION include
