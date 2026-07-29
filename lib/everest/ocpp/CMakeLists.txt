@@ -90,6 +90,7 @@ if (OCPP_INSTALL)
             "find_dependency(OpenSSL)"
             "find_dependency(SQLite3)"
             "find_dependency(libwebsockets)"
+            "find_dependency(everest-util)"
     )
 endif()
 
