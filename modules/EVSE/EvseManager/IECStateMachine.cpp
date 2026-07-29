@@ -12,9 +12,7 @@
 namespace module {
 
 // helper type for visitor
-template <class... Ts> struct overloaded : Ts... {
-    using Ts::operator()...;
-};
+template <class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 enum class TimerControl : std::uint8_t {
@@ -286,6 +284,11 @@ std::queue<CPEvent> IECStateMachine::state_machine(std::optional<RawCPState> con
             break;
 
         case RawCPState::E:
+            if (forced_cp_state_E) {
+                timer_state_C1 = TimerControl::stop;
+                call_allow_power_on_bsp(false);
+                break;
+            }
             connector_unlock();
             if (last_cp_state != RawCPState::E) {
                 timer_state_C1 = TimerControl::stop;
@@ -381,6 +384,7 @@ void IECStateMachine::set_cp_state_X1() {
     {
         Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::IEC_set_cp_state_X1);
         pwm_running = false;
+        forced_cp_state_E = false;
     }
     r_bsp->call_cp_state_X1();
     // Don't run the state machine in the callers context
@@ -392,8 +396,21 @@ void IECStateMachine::set_cp_state_F() {
     {
         Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::IEC_set_cp_state_F);
         pwm_running = false;
+        forced_cp_state_E = false;
     }
     r_bsp->call_cp_state_F();
+    // Don't run the state machine in the callers context
+    feed_state_machine(std::nullopt);
+}
+
+// High level state machine sets state E
+void IECStateMachine::set_cp_state_E() {
+    {
+        Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::IEC_set_cp_state_E);
+        pwm_running = false;
+        forced_cp_state_E = true;
+    }
+    r_bsp->call_cp_state_E();
     // Don't run the state machine in the callers context
     feed_state_machine(std::nullopt);
 }

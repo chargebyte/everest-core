@@ -903,6 +903,8 @@ void AuthHandler::handle_session_event(const int evse_id, const SessionEvent& ev
     case SessionEventEnum::SwitchingPhases:
         [[fallthrough]];
     case SessionEventEnum::SessionResumed:
+        [[fallthrough]];
+    case SessionEventEnum::Reinit:
         break;
     }
 

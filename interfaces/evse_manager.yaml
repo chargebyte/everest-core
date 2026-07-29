@@ -86,6 +86,20 @@ cmds:
     result:
       description: Returns true if successful
       type: boolean
+  reinit_charging_session:
+    description: >-
+      Performs a reinitialization sequence on an active AC or DC charging session
+      without ending its session or transaction. The reinitialization configuration
+      determines the requested state transition and duration. Omitted properties use
+      the configured defaults.
+    arguments:
+      reinit_configuration:
+        description: Configuration for the reinitialization of a charging session. Both properties are optional.
+        type: object
+        $ref: /evse_manager#/ReinitConfiguration
+    result:
+      description: Returns true when the reinitialization sequence was accepted.
+      type: boolean
   force_unlock:
     description: >-
       Forces connector to unlock connector now. During normal operation, connector

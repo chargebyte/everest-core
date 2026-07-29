@@ -27,6 +27,7 @@ struct BspStub : public module::stub::ModuleAdapterStub {
         _bsp["allow_power_on"] = &BspStub::call_allow_power_on;
         _bsp["enable"] = &BspStub::call_enable;
         _bsp["cp_state_X1"] = &BspStub::call_cp_state_X1;
+        _bsp["cp_state_E"] = &BspStub::call_cp_state_E;
         _bsp["pwm_on"] = &BspStub::call_pwm_on;
     }
 
@@ -59,6 +60,11 @@ struct BspStub : public module::stub::ModuleAdapterStub {
         return std::nullopt;
     }
 
+    virtual Result call_cp_state_E(Parameters p) {
+        std::cout << "call_cp_state_E(" << p << ")" << std::endl;
+        return std::nullopt;
+    }
+
     virtual Result call_pwm_on(Parameters p) {
         std::cout << "call_pwm_on(" << p << ")" << std::endl;
         return std::nullopt;
@@ -80,6 +86,36 @@ struct BspStub : public module::stub::ModuleAdapterStub {
         }
     }
 };
+
+struct BspStubForcedE : public BspStub {
+    int cp_state_x1_calls{0};
+    int cp_state_e_calls{0};
+
+    Result call_cp_state_X1(Parameters p) override {
+        ++cp_state_x1_calls;
+        return BspStub::call_cp_state_X1(p);
+    }
+
+    Result call_cp_state_E(Parameters p) override {
+        ++cp_state_e_calls;
+        return BspStub::call_cp_state_E(p);
+    }
+};
+
+TEST(IECStateMachine, ForcedCpStateERemainsAssertedOnFeedback) {
+    BspStubForcedE bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(std::move(bsp_if), true, false);
+
+    state_machine.enable(true);
+    state_machine.set_cp_state_E();
+    const auto cp_state_x1_calls_before_feedback = bsp.cp_state_x1_calls;
+
+    bsp.raise_event(Event::E);
+
+    EXPECT_EQ(bsp.cp_state_e_calls, 1);
+    EXPECT_EQ(bsp.cp_state_x1_calls, cp_state_x1_calls_before_feedback);
+}
 
 TEST(IECStateMachine, init) {
     module::stub::ModuleAdapterStub module_adapter = module::stub::ModuleAdapterStub();

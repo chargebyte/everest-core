@@ -91,6 +91,7 @@ public:
     void set_pwm(double value);
     void set_cp_state_X1();
     void set_cp_state_F();
+    void set_cp_state_E();
 
     void set_max_phases(AcPhases phases) {
         max_phases = phases;
@@ -119,6 +120,7 @@ private:
     bool lock_connector_in_state_b{true};
 
     bool pwm_running{false};
+    bool forced_cp_state_E{false};
     bool last_pwm_running{false};
 
     static constexpr float ev_simplified_mode_evse_limit_pwm{10 / 0.6 / 100.}; // Fixed 10A limit

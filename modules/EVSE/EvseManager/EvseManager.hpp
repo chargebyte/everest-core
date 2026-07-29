@@ -75,6 +75,8 @@ struct Conf {
     bool ac_hlc_use_5percent;
     bool ac_enforce_hlc;
     bool ac_with_soc;
+    int reinit_duration_ms;
+    std::string reinit_method;
     int internal_over_voltage_duration_ms;
     bool dbg_hlc_auth_after_tstep;
     int dc_isolation_voltage_V;
@@ -376,7 +378,8 @@ private:
 
     void setup_AC_mode();
     void setup_fake_DC_mode();
-    Charger::SetupConfig get_charger_setup_config(Charger::ChargeMode charge_mode, bool ac_with_soc_timeout) const;
+    Charger::SetupConfig get_charger_setup_config(Charger::ChargeMode charge_mode, bool ac_with_soc_timeout,
+                                                  bool supports_cp_state_e) const;
     void update_hlc_session_setup(bool include_contract_payment, bool supported_certificate_service,
                                   bool central_contract_validation, bool force_external_payment);
 

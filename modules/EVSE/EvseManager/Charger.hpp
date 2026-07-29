@@ -85,6 +85,9 @@ public:
         int sleep_before_enabling_pwm_hlc_mode_ms;
         utils::SessionIdType session_id_type;
         int hlc_charge_loop_without_energy_timeout_s;
+        int reinit_duration_ms;
+        types::evse_manager::ReinitStateEnum reinit_method;
+        bool supports_cp_state_E;
     };
 
     enum class EvseState {
@@ -99,7 +102,8 @@ public:
         Finished,
         T_step_EF,
         T_step_X1,
-        SwitchPhases
+        SwitchPhases,
+        Reinit
     };
 
     enum class HlcTerminatePause {
@@ -147,6 +151,8 @@ public:
 
     // trigger replug sequence while charging to switch number of phases
     bool switch_three_phases_while_charging(bool n);
+    bool start_reinit();
+    bool start_reinit(const types::evse_manager::ReinitConfiguration& configuration, bool supports_cp_state_E);
 
     bool pause_charging();
     bool resume_charging();
@@ -266,6 +272,7 @@ private:
     void update_pwm_max_every_5seconds_ampere(float duty_cycle);
     void cp_state_X1();
     void cp_state_F();
+    void cp_state_E();
 
     void process_cp_events_independent(CPEvent cp_event);
     void process_cp_events_state(CPEvent cp_event);
@@ -366,6 +373,9 @@ private:
         bool contactor_welded{false};
         bool switch_3ph1ph_threephase{false};
         bool switch_3ph1ph_threephase_ongoing{false};
+        std::optional<EvseState> stopping_charging_target_state;
+        types::evse_manager::ReinitConfiguration reinit_configuration{types::evse_manager::ReinitStateEnum::CPStateX1,
+                                                                      0};
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;
@@ -401,6 +411,9 @@ private:
         // Timeout in seconds that defines for how long the EVSE allows the ISO charge loop (AC: ChargingStatus, DC:
         // CurrentDemand)
         int hlc_charge_loop_without_energy_timeout_s{300};
+        int reinit_duration_ms{3000};
+        types::evse_manager::ReinitStateEnum reinit_method{types::evse_manager::ReinitStateEnum::CPStateE};
+        bool supports_cp_state_E{false};
     } config_context;
 
     // Used by different threads, but requires no complete state machine locking
@@ -445,7 +458,6 @@ private:
         bool ac_x1_fallback_nominal_timeout_running{false};
         std::chrono::time_point<std::chrono::steady_clock> ac_x1_fallback_nominal_timeout_started;
         bool auth_received_printed{false};
-
         bool hlc_charge_loop_no_energy_timeout_running{false};
         std::chrono::time_point<std::chrono::steady_clock> iso_charge_loop_no_energy_timeout_started;
 

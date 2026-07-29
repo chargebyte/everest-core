@@ -130,7 +130,8 @@ void energyImpl::ready() {
     // request energy at the start and end of a charging session
     mod->charger->signal_state.connect([this](Charger::EvseState s) {
         charger_state = s;
-        if (s == Charger::EvseState::WaitingForAuthentication || s == Charger::EvseState::Finished) {
+        if (s == Charger::EvseState::WaitingForAuthentication || s == Charger::EvseState::StoppingCharging ||
+            s == Charger::EvseState::Finished || s == Charger::EvseState::Reinit) {
             std::thread request_energy_thread([this]() { request_energy_from_energy_manager(true); });
             request_energy_thread.detach();
         }
@@ -175,6 +176,9 @@ types::energy::EvseState to_energy_evse_state(const Charger::EvseState charger_s
     case Charger::EvseState::SwitchPhases:
         return types::energy::EvseState::Charging;
         break;
+    case Charger::EvseState::Reinit:
+        return types::energy::EvseState::WaitForAuth;
+        break;
     }
     return types::energy::EvseState::Disabled;
 }
@@ -185,9 +189,10 @@ void energyImpl::request_energy_from_energy_manager(bool priority_request) {
     clear_export_request_schedule();
 
     // If we need energy, copy local limit schedules to energy_flow_request.
-    if (charger_state == Charger::EvseState::Charging || charger_state == Charger::EvseState::PrepareCharging ||
-        charger_state == Charger::EvseState::WaitingForAuthentication ||
-        charger_state == Charger::EvseState::ChargingPausedEV || !mod->config.request_zero_power_in_idle) {
+    if (charger_state != Charger::EvseState::Reinit &&
+        (charger_state == Charger::EvseState::Charging || charger_state == Charger::EvseState::PrepareCharging ||
+         charger_state == Charger::EvseState::WaitingForAuthentication ||
+         charger_state == Charger::EvseState::ChargingPausedEV || !mod->config.request_zero_power_in_idle)) {
 
         // copy complete external limit schedules for import
         if (not mod->get_local_energy_limits().schedule_import.empty()) {

@@ -29,9 +29,7 @@ using ocpp_module_common::v16::MREC_ERROR_MAP;
 using ocpp_module_common::v16::OCPP_ERROR_MAP;
 
 // helper type for visitor
-template <class... Ts> struct overloaded : Ts... {
-    using Ts::operator()...;
-};
+template <class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 const std::string CERTS_SUB_DIR = "certs";
@@ -283,6 +281,8 @@ void OCPP::process_session_event(int32_t evse_id, const types::evse_manager::Ses
         this->charge_point->on_reservation_end(ocpp_connector_id);
     } else if (session_event.event == types::evse_manager::SessionEventEnum::PluginTimeout) {
         this->charge_point->on_plugin_timeout(ocpp_connector_id);
+    } else if (session_event.event == types::evse_manager::SessionEventEnum::Reinit) {
+        // Reinitialization preserves the active transaction and has no OCPP event.
     }
 }
 

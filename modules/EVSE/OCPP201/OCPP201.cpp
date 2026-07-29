@@ -1427,6 +1427,7 @@ void OCPP201::process_session_event(const int32_t evse_id, const types::evse_man
     case types::evse_manager::SessionEventEnum::ChargingFinished:
     case types::evse_manager::SessionEventEnum::PluginTimeout:
     case types::evse_manager::SessionEventEnum::SwitchingPhases:
+    case types::evse_manager::SessionEventEnum::Reinit:
         break;
     }
 

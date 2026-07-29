@@ -1323,7 +1323,8 @@ void EvseManager::ready() {
         setup_fake_DC_mode();
     } else {
         const auto charge_mode = config.charge_mode == "DC" ? Charger::ChargeMode::DC : Charger::ChargeMode::AC;
-        charger->setup(get_charger_setup_config(charge_mode, false));
+        const auto hardware_capabilities = get_hw_capabilities();
+        charger->setup(get_charger_setup_config(charge_mode, false, hardware_capabilities.supports_cp_state_E));
     }
 
     telemetryThreadHandle = std::thread([this]() {
@@ -1528,8 +1529,8 @@ void EvseManager::update_hlc_session_setup(bool include_contract_payment, bool s
     r_hlc[0]->call_session_setup(payment_options, supported_certificate_service, central_contract_validation);
 }
 
-Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode charge_mode,
-                                                           bool ac_with_soc_timeout) const {
+Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode charge_mode, bool ac_with_soc_timeout,
+                                                           bool supports_cp_state_e) const {
     return {config.has_ventilation,
             charge_mode,
             hlc_enabled,
@@ -1546,13 +1547,17 @@ Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode c
             config.raise_mrec9,
             config.sleep_before_enabling_pwm_hlc_mode_ms,
             utils::get_session_id_type_from_string(config.session_id_type),
-            config.hlc_charge_loop_without_energy_timeout_s};
+            config.hlc_charge_loop_without_energy_timeout_s,
+            config.reinit_duration_ms,
+            types::evse_manager::string_to_reinit_state_enum(config.reinit_method),
+            supports_cp_state_e};
 }
 
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
-    charger->setup(get_charger_setup_config(Charger::ChargeMode::DC, false));
+    const auto hardware_capabilities = get_hw_capabilities();
+    charger->setup(get_charger_setup_config(Charger::ChargeMode::DC, false, hardware_capabilities.supports_cp_state_E));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
@@ -1589,7 +1594,8 @@ void EvseManager::setup_fake_DC_mode() {
 }
 
 void EvseManager::setup_AC_mode() {
-    charger->setup(get_charger_setup_config(Charger::ChargeMode::AC, true));
+    const auto hardware_capabilities = get_hw_capabilities();
+    charger->setup(get_charger_setup_config(Charger::ChargeMode::AC, true, hardware_capabilities.supports_cp_state_E));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 

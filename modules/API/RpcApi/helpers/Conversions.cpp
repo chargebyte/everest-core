@@ -53,6 +53,8 @@ EVSEStateEnum evse_manager_session_event_to_evse_state(types::evse_manager::Sess
         return EVSEStateEnum::Unplugged;
     case Event::SwitchingPhases:
         return EVSEStateEnum::SwitchingPhases;
+    case Event::Reinit:
+        return EVSEStateEnum::Unknown;
     case Event::Authorized:
         [[fallthrough]];
     case Event::Deauthorized:
