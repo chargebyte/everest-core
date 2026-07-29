@@ -20,24 +20,33 @@ set_target_properties(everest_util
         EXPORT_NAME util
 )
 
-if (NOT DISABLE_EDM)
-    # everest_util also gets its own standalone, find_package-able config
-    # below when DISABLE_EDM is set (see comment there). Since it's a
-    # header-only INTERFACE library, participating in EXPORT
-    # everest-core-targets at the same time would make CMake see
-    # everest::util defined twice by the time everest-core-config.cmake's
-    # own combined everest-core-targets.cmake gets included -- "Some (but
-    # not all) targets in this export set were already defined." So only
-    # join the combined export set in EDM mode, where the standalone
-    # package below doesn't exist.
-    install(TARGETS everest_util
-        EXPORT everest-core-targets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
+# everest_util also gets its own standalone, find_package-able config below
+# when DISABLE_EDM is set (see comment there), needed so consumers like
+# ocpp can resolve everest::util before everest-core-config.cmake reaches
+# its own combined include(everest-core-targets.cmake) several
+# find_package() calls later. Reusing the SAME "everest-core-targets"
+# export set for both would make CMake see everest::util defined once via
+# the standalone package, then fail when everest-core-targets.cmake tries
+# to define it again as part of the combined set ("Some (but not all)
+# targets in this export set were already defined."). But everest_util
+# still needs to be in *some* named export set, or install(EXPORT ...)
+# fails for everything that links it PUBLIC (everest_io, framework, ocpp,
+# tls: "requires target everest_util that is not in any export set"). So
+# give it its own dedicated export set in DISABLE_EDM mode instead of
+# dropping export participation entirely.
+if (DISABLE_EDM)
+    set(EVEREST_UTIL_EXPORT_SET util-targets)
+else()
+    set(EVEREST_UTIL_EXPORT_SET everest-core-targets)
 endif()
+
+install(TARGETS everest_util
+    EXPORT ${EVEREST_UTIL_EXPORT_SET}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/everest
     DESTINATION include
@@ -46,9 +55,16 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/everest
 
 if(DISABLE_EDM)
     # Do not use evc_setup_package() here: it unconditionally installs an
-    # export file for the package, which would export everest_util a second
-    # time alongside everest-core-targets and break non-EDM consumers.
+    # export file using the EXPORT set's own default name, and we need
+    # "util-targets.cmake" to match what config.cmake.in includes below.
     set(EVEREST_UTIL_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/everest-util")
+
+    install(
+        EXPORT util-targets
+        FILE util-targets.cmake
+        NAMESPACE everest::
+        DESTINATION ${EVEREST_UTIL_CMAKE_INSTALL_DIR}
+    )
 
     configure_package_config_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/config.cmake.in
