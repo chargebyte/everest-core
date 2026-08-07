@@ -277,6 +277,18 @@ in the EVerest documentation.
 ### everest_api/evse_manager/cmd/force_unlock
 Command to force unlock a connector on the EVSE. The payload should be a positive integer identifying the connector that should be unlocked. If the payload is empty or cannot be converted to an integer connector 1 is assumed.
 
+### everest_api/evse_manager/cmd/reinit_charging_session
+Starts a charging-session reinitialization sequence. An empty payload uses the configured defaults. To override either default, publish a JSON object; omitted properties still use their configured defaults.
+
+```json
+{
+    "state_transition": "CPStateE",
+    "duration": 4000
+}
+```
+
+`state_transition` can be `CPStateE`, `CPStateF`, or `CPStateX1`. `duration` is specified in milliseconds.
+
 ### everest_api/evse_manager/cmd/uk_random_delay
 Command to control the UK Smart Charging random delay feature. The payload can be the following enum: "enable" and "disable" to enable/disable the feature entirely or "cancel" to cancel an ongoing delay.
 
