@@ -32,6 +32,8 @@ class JsonRpcWebSocketClient:
 
     def setup_ui(self):
         self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)
+        self.root.rowconfigure(2, weight=2)
 
         # Connection frame
         conn_frame = ttk.LabelFrame(self.root, text="Connection")
@@ -68,7 +70,7 @@ class JsonRpcWebSocketClient:
         notif_frame = ttk.LabelFrame(self.root, text="Notifications")
         notif_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
         notif_frame.columnconfigure(0, weight=1)
-        notif_frame.rowconfigure(1, weight=1)
+        notif_frame.rowconfigure(2, weight=1)
 
         self.notification_autoscroll = tk.BooleanVar(value=True)
         self.notification_autoscroll_checkbutton = ttk.Checkbutton(notif_frame, text='Autoscroll',
