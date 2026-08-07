@@ -5,6 +5,7 @@
 
 #include <optional>
 
+#include <generated/types/evse_manager.hpp>
 #include <types/json_rpc_api/json_rpc_api.hpp>
 
 namespace RPCDataTypes = types::json_rpc_api;
@@ -26,6 +27,9 @@ public:
     virtual RPCDataTypes::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power) = 0;
     virtual RPCDataTypes::ErrorResObj enable_connector(const int32_t evse_index, int connector_id, bool enable,
                                                        int priority) = 0;
+    virtual RPCDataTypes::ErrorResObj
+    reinit_charging_session(int32_t evse_index,
+                            const types::evse_manager::ReinitConfiguration& reinit_configuration) = 0;
 };
 
 } // namespace request_interface

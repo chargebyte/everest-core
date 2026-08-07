@@ -753,6 +753,26 @@ types:
         description: Response error
         type: object
         $ref: /json_rpc_api#/ResponseErrorEnum
+  ReinitStateEnum:
+    description: Control-pilot state to apply during charging-session reinitialization.
+    type: string
+    enum:
+      - CPStateE
+      - CPStateF
+      - CPStateX1
+  ReinitConfiguration:
+    description: Optional settings for charging-session reinitialization.
+    type: object
+    additionalProperties: false
+    properties:
+      state_transition:
+        description: Control-pilot state to apply during reinitialization.
+        type: string
+        $ref: /json_rpc_api#/ReinitStateEnum
+      duration:
+        description: Duration of the state transition in milliseconds.
+        type: integer
+        minimum: 0
   ErrorResObj:
     description: Response which only contains an error type
     type: object

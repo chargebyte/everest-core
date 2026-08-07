@@ -851,6 +851,33 @@ TEST_F(RpcHandlerTest, EvseEnableConnectorReq) {
                               expected_error_invalid_connector_index, is_key_value_in_json_rpc_result);
 }
 
+// Test: Connect to WebSocket server and send EVSE.ReinitChargingSession requests with and without configuration
+TEST_F(RpcHandlerTest, EvseReinitChargingSessionReq) {
+    WebSocketTestClient client("localhost", test_port);
+    ASSERT_TRUE(client.connect());
+    ASSERT_TRUE(client.wait_until_connected(std::chrono::milliseconds(100)));
+
+    const nlohmann::json reinit_with_defaults =
+        create_json_rpc_request("EVSE.ReinitChargingSession", {{"evse_index", 1}}, 1);
+    const nlohmann::json reinit_with_configuration = create_json_rpc_request(
+        "EVSE.ReinitChargingSession",
+        {{"evse_index", 1}, {"reinit_configuration", {{"state_transition", "CPStateE"}, {"duration", 4000}}}}, 2);
+    const types::json_rpc_api::ErrorResObj result{RPCDataTypes::ResponseErrorEnum::NoError};
+
+    client.send_api_hello_req();
+    client.wait_for_data(std::chrono::seconds(1));
+
+    send_req_and_validate_res(client, reinit_with_defaults, create_json_rpc_response(result, 1));
+    EXPECT_FALSE(RequestHandlerDummy::last_reinit_configuration.state_transition.has_value());
+    EXPECT_FALSE(RequestHandlerDummy::last_reinit_configuration.duration.has_value());
+
+    send_req_and_validate_res(client, reinit_with_configuration, create_json_rpc_response(result, 2));
+    ASSERT_TRUE(RequestHandlerDummy::last_reinit_configuration.state_transition.has_value());
+    EXPECT_EQ(*RequestHandlerDummy::last_reinit_configuration.state_transition,
+              types::evse_manager::ReinitStateEnum::CPStateE);
+    EXPECT_EQ(RequestHandlerDummy::last_reinit_configuration.duration, 4000);
+}
+
 // Test: Connect to WebSocket server and send invalid request
 TEST_F(RpcHandlerTest, InvalidRequest) {
     WebSocketTestClient client("localhost", test_port);
