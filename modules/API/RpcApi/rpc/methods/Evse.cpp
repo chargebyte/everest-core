@@ -203,4 +203,29 @@ RPCDataTypes::ErrorResObj Evse::enable_connector(const int32_t evse_index, int c
     return m_request_handler_ptr->enable_connector(evse_index, connector_index, enable, priority);
 }
 
+RPCDataTypes::ErrorResObj Evse::reinit_charging_session(int32_t evse_index,
+                                                        std::optional<nlohmann::json> reinit_configuration) {
+    RPCDataTypes::ErrorResObj res{};
+
+    const auto* evse = m_dataobj.get_evse_store(evse_index);
+    if (!evse) {
+        res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidEVSEIndex;
+        return res;
+    }
+
+    types::evse_manager::ReinitConfiguration configuration;
+    if (reinit_configuration.has_value()) {
+        const auto& json_configuration = reinit_configuration.value();
+        if (json_configuration.contains("state_transition")) {
+            configuration.state_transition = types::evse_manager::string_to_reinit_state_enum(
+                json_configuration.at("state_transition").get<std::string>());
+        }
+        if (json_configuration.contains("duration")) {
+            configuration.duration = json_configuration.at("duration").get<int>();
+        }
+    }
+
+    return m_request_handler_ptr->reinit_charging_session(evse_index, configuration);
+}
+
 } // namespace methods

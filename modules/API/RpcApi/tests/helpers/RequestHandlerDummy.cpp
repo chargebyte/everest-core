@@ -5,6 +5,9 @@
 
 using namespace types::json_rpc_api;
 
+bool RequestHandlerDummy::reinit_result = true;
+types::evse_manager::ReinitConfiguration RequestHandlerDummy::last_reinit_configuration;
+
 RequestHandlerDummy::RequestHandlerDummy(data::DataStoreCharger& dataobj) : data_store(dataobj) {
 }
 
@@ -63,4 +66,17 @@ types::json_rpc_api::ErrorResObj RequestHandlerDummy::enable_connector(const int
                                                                        bool enable, int priority) {
     types::json_rpc_api::ErrorResObj res{types::json_rpc_api::ResponseErrorEnum::NoError};
     return res;
+}
+
+types::json_rpc_api::ErrorResObj
+RequestHandlerDummy::reinit_charging_session(int32_t evse_index,
+                                             const types::evse_manager::ReinitConfiguration& reinit_configuration) {
+    last_reinit_configuration = reinit_configuration;
+    ErrorResObj res{};
+    res.error = reinit_result ? ResponseErrorEnum::NoError : ResponseErrorEnum::ErrorValuesNotApplied;
+    return res;
+}
+
+void RequestHandlerDummy::set_reinit_result(bool result) {
+    reinit_result = result;
 }

@@ -38,6 +38,17 @@ template <typename T> auto extract_param(const nlohmann::json& j) {
     }
 }
 
+template <typename T> auto extract_param_at(const nlohmann::json& params, std::size_t index) {
+    if (index < params.size()) {
+        return extract_param<T>(params.at(index));
+    }
+    if constexpr (is_optional<T>::value) {
+        return T{};
+    } else {
+        throw std::out_of_range("missing required parameter");
+    }
+}
+
 // json-rpc-cpp does not support optional parameters in method signatures
 // so we need to create our own get_handle function to handle methods with optional parameters correctly
 template <typename...> using void_t = void;
@@ -62,7 +73,7 @@ template <typename T> constexpr bool is_to_json_serializable_v = is_detected<is_
 
 template <typename T, typename MethodT, typename... ParamTypes, std::size_t... I>
 auto invoke_with_params_impl(T& instance, MethodT method, const json& params, std::index_sequence<I...>) {
-    return (instance.*method)((extract_param<std::remove_reference_t<ParamTypes>>(params.at(I)))...);
+    return (instance.*method)((extract_param_at<std::remove_reference_t<ParamTypes>>(params, I))...);
 }
 
 template <typename T, typename MethodT, typename... ParamTypes>
@@ -79,7 +90,8 @@ MethodHandle get_handle(ReturnType (T::*method)(ParamTypes...), T& instance, int
         }
 
         constexpr size_t expected = sizeof...(ParamTypes);
-        if (params.size() != expected) {
+        constexpr size_t required = (0 + ... + (is_optional<std::remove_reference_t<ParamTypes>>::value ? 0 : 1));
+        if (params.size() < required || params.size() > expected) {
             throw std::runtime_error("invalid number of parameters");
         }
 
@@ -156,6 +168,9 @@ void RpcHandler::init_rpc_api() {
     m_rpc_server->Add(methods::METHOD_EVSE_ENABLE_CONNECTOR,
                       get_handle(&methods::Evse::enable_connector, m_methods_evse, m_precision),
                       {"evse_index", "connector_index", "enable", "priority"});
+    m_rpc_server->Add(methods::METHOD_EVSE_REINIT_CHARGING_SESSION,
+                      get_handle(&methods::Evse::reinit_charging_session, m_methods_evse, m_precision),
+                      {"evse_index", "reinit_configuration"});
 }
 
 void RpcHandler::init_transport_interfaces() {
@@ -318,8 +333,17 @@ void RpcHandler::process_client_requests() {
                 // Process the request in a detached thread, because HandleRequest is blocking until the response is
                 // received
                 std::thread([this, transport_interface, client_id, request]() {
+                    auto request_for_dispatch = request;
+                    // json-rpc-cxx requires every registered named parameter to be present, even when its C++ type is
+                    // optional. Normalize the optional reinitialization configuration to null so omitted properties
+                    // use the configured defaults.
+                    if (request_for_dispatch.value("method", "") == methods::METHOD_EVSE_REINIT_CHARGING_SESSION &&
+                        request_for_dispatch.contains("params") && request_for_dispatch["params"].is_object()) {
+                        request_for_dispatch["params"].emplace("reinit_configuration", nullptr);
+                    }
+
                     // Call the RPC server with the request
-                    std::string res = m_rpc_server->HandleRequest(request.dump());
+                    std::string res = m_rpc_server->HandleRequest(request_for_dispatch.dump());
                     // Send the response back to the client
                     transport_interface->send_data(client_id, res);
                     EVLOG_debug << "Sent response to client " << client_id << ": " << res;
