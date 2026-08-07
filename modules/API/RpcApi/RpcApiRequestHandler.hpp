@@ -28,6 +28,9 @@ public:
     types::json_rpc_api::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power) override;
     types::json_rpc_api::ErrorResObj enable_connector(const int32_t evse_index, int connector_id, bool enable,
                                                       int priority) override;
+    types::json_rpc_api::ErrorResObj
+    reinit_charging_session(int32_t evse_index,
+                            const types::evse_manager::ReinitConfiguration& reinit_configuration) override;
 
 private:
     // Add any private member variables or methods here

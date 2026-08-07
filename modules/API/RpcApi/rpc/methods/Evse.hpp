@@ -23,6 +23,7 @@ static const std::string METHOD_EVSE_SET_AC_CHARGING_PHASE_COUNT = "EVSE.SetACCh
 static const std::string METHOD_EVSE_SET_DC_CHARGING = "EVSE.SetDCCharging";
 static const std::string METHOD_EVSE_SET_DC_CHARGING_POWER = "EVSE.SetDCChargingPower";
 static const std::string METHOD_EVSE_ENABLE_CONNECTOR = "EVSE.EnableConnector";
+static const std::string METHOD_EVSE_REINIT_CHARGING_SESSION = "EVSE.ReinitChargingSession";
 
 /// This class includes all methods of the EVSE namespace.
 /// It contains the data object and the methods to access it.
@@ -50,6 +51,8 @@ public:
     RPCDataTypes::ErrorResObj set_dc_charging(const int32_t evse_index, bool charging_allowed, float max_power);
     RPCDataTypes::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power);
     RPCDataTypes::ErrorResObj enable_connector(const int32_t evse_index, int connector_id, bool enable, int priority);
+    RPCDataTypes::ErrorResObj reinit_charging_session(int32_t evse_index,
+                                                      std::optional<nlohmann::json> reinit_configuration);
 
 private:
     // Reference to the DataStoreCharger object that holds and manages EVSE-related data.

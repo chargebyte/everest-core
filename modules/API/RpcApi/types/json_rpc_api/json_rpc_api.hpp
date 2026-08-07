@@ -899,6 +899,80 @@ inline void from_json(const json& j, Severity& e) {
 } // namespace json_rpc_api
 } // namespace types
 
+namespace types {
+namespace json_rpc_api {
+enum class ReinitStateEnum {
+    CPStateE,
+    CPStateF,
+    CPStateX1,
+};
+
+/// \brief Converts the given ReinitStateEnum \p e to human readable string
+/// \returns a string representation of the ReinitStateEnum
+inline std::string reinit_state_enum_to_string(const ReinitStateEnum& e) {
+    switch (e) {
+    case ReinitStateEnum::CPStateE:
+        return "CPStateE";
+    case ReinitStateEnum::CPStateF:
+        return "CPStateF";
+    case ReinitStateEnum::CPStateX1:
+        return "CPStateX1";
+    }
+
+    throw std::out_of_range("No known string conversion for provided enum of type ReinitStateEnum");
+}
+
+/// \brief Converts the given ReinitStateEnum \p e to human readable string
+/// \returns a string_view representation of the ReinitStateEnum
+inline constexpr std::string_view reinit_state_enum_to_string_view(const ReinitStateEnum& e) {
+    switch (e) {
+    case ReinitStateEnum::CPStateE:
+        return "CPStateE";
+    case ReinitStateEnum::CPStateF:
+        return "CPStateF";
+    case ReinitStateEnum::CPStateX1:
+        return "CPStateX1";
+    }
+
+    throw std::out_of_range("No known string conversion for provided enum of type ReinitStateEnum");
+}
+
+/// \brief Converts the given std::string \p s to ReinitStateEnum
+/// \returns a ReinitStateEnum from a string representation
+inline ReinitStateEnum string_to_reinit_state_enum(const std::string& s) {
+    if (s == "CPStateE") {
+        return ReinitStateEnum::CPStateE;
+    }
+    if (s == "CPStateF") {
+        return ReinitStateEnum::CPStateF;
+    }
+    if (s == "CPStateX1") {
+        return ReinitStateEnum::CPStateX1;
+    }
+
+    throw std::out_of_range("Provided string " + s + " could not be converted to enum of type ReinitStateEnum");
+}
+
+/// \brief Writes the string representation of the given ReinitStateEnum \p reinit_state_enum to the given output stream
+/// \p os \returns an output stream with the ReinitStateEnum written to
+inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::ReinitStateEnum& reinit_state_enum) {
+    os << types::json_rpc_api::reinit_state_enum_to_string(reinit_state_enum);
+    return os;
+}
+
+/// \brief Conversion from a given ReinitStateEnum \p e to a given json object \p j
+inline void to_json(json& j, const ReinitStateEnum& e) {
+    j = types::json_rpc_api::reinit_state_enum_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given ReinitStateEnum \p e
+inline void from_json(const json& j, ReinitStateEnum& e) {
+    e = types::json_rpc_api::string_to_reinit_state_enum(j.get<std::string>());
+}
+
+} // namespace json_rpc_api
+} // namespace types
+
 // types of json_rpc_api
 namespace types {
 namespace json_rpc_api {
@@ -2641,6 +2715,59 @@ struct EVSEGetMeterDataResObj {
     /// \brief Writes the string representation of the given EVSEGetMeterDataResObj \p k to the given output stream \p
     /// os \returns an output stream with the EVSEGetMeterDataResObj written to
     friend std::ostream& operator<<(std::ostream& os, const EVSEGetMeterDataResObj& k) {
+        os << json(k).dump(4);
+        return os;
+    }
+};
+struct ReinitConfiguration {
+    std::optional<types::json_rpc_api::ReinitStateEnum>
+        state_transition;            ///< Control-pilot state to apply during reinitialization.
+    std::optional<int32_t> duration; ///< Duration of the state transition in milliseconds.
+
+    /// \brief Conversion from a given ReinitConfiguration \p k to a given json object \p j
+    friend void to_json(json& j, const ReinitConfiguration& k) {
+        // the required parts of the type
+        j = json({});
+        // the optional parts of the type
+        if (k.state_transition) {
+            j.emplace("state_transition", types::json_rpc_api::reinit_state_enum_to_string_view(*k.state_transition));
+        }
+        if (k.duration) {
+            j.emplace("duration", *k.duration);
+        }
+    }
+
+    /// \brief Conversion from a given json object \p j to a given ReinitConfiguration \p k
+    friend void from_json(const json& j, ReinitConfiguration& k) {
+        // the required parts of the type
+
+        // the optional parts of the type
+        auto it = j.end();
+        it = it = j.find("state_transition");
+        if (it != j.end()) {
+            k.state_transition = types::json_rpc_api::string_to_reinit_state_enum(it->get<std::string>());
+        }
+        it = it = j.find("duration");
+        if (it != j.end()) {
+            k.duration = it->get<int32_t>();
+        }
+    }
+
+    /// \brief Compares objects of type ReinitConfiguration for equality
+    friend constexpr bool operator==(const ReinitConfiguration& k, const ReinitConfiguration& l) {
+        const auto& lhs_tuple = std::tie(k.state_transition, k.duration);
+        const auto& rhs_tuple = std::tie(l.state_transition, l.duration);
+        return lhs_tuple == rhs_tuple;
+    }
+
+    /// \brief Compares objects of type ReinitConfiguration for inequality
+    friend constexpr bool operator!=(const ReinitConfiguration& k, const ReinitConfiguration& l) {
+        return not operator==(k, l);
+    }
+
+    /// \brief Writes the string representation of the given ReinitConfiguration \p k to the given output stream \p os
+    /// \returns an output stream with the ReinitConfiguration written to
+    friend std::ostream& operator<<(std::ostream& os, const ReinitConfiguration& k) {
         os << json(k).dump(4);
         return os;
     }
