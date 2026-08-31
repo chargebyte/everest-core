@@ -1188,15 +1188,19 @@ void EvseManager::ready() {
             }
         } else {
             // no SLAC, just signal DLINK ready when plugged
-            switch (event) {
-            case CPEvent::CarUnplugged:
-                this->r_hlc[0]->call_dlink_ready(false);
-                break;
-            case CPEvent::CarPluggedIn:
-                this->r_hlc[0]->call_dlink_ready(true);
-                break;
-            default:
-                break;
+            // Note: slac_enabled = false implies hlc_enabled = false, so
+            // ensure availability of r_hlc[0] differently
+            if (not r_hlc.empty()) {
+                switch (event) {
+                case CPEvent::CarUnplugged:
+                    this->r_hlc[0]->call_dlink_ready(false);
+                    break;
+                case CPEvent::CarPluggedIn:
+                    this->r_hlc[0]->call_dlink_ready(true);
+                    break;
+                default:
+                    break;
+                }
             }
         }
 
