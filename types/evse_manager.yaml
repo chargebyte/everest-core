@@ -148,6 +148,30 @@ types:
       - Error_NotSupported
       - Error_NotCharging
       - Error_Hardware
+  ReinitStateEnum:
+    description: >-
+      State to use for charging-session reinitialization.
+        CPStateE: Applies CP state E (0 V) to wake up legacy EV implementations.
+        CPStateF: Applies CP state F (-12 V) to indicate that the EVSE is unavailable.
+        CPStateX1: Applies CP state X1 (+12 V) to indicate that the EVSE will not deliver energy.
+    type: string
+    enum:
+      - CPStateE
+      - CPStateF
+      - CPStateX1
+  ReinitConfiguration:
+    description: Configuration for a reinitialization state transition.
+    type: object
+    additionalProperties: false
+    properties:
+      state_transition:
+        description: Control-pilot state to apply during reinitialization.
+        type: string
+        $ref: /evse_manager#/ReinitStateEnum
+      duration:
+        description: Duration of the state transition in milliseconds.
+        type: integer
+        minimum: 0
   SessionEventEnum:
     description: >-
       Session Event enum
@@ -171,6 +195,7 @@ types:
         PluginTimeout: Signaled when an EV has been plugged in but no authorization is present within specified ConnectionTimeout
         SwitchingPhases: Signaled when the EVSE Manager starts switching phases
         SessionResumed: Signaled when a session is resumed at startup (e.g. because of previous powerloss)
+        Reinit: Signaled when a charging session reinitialization sequence has started
     type: string
     enum:
       - Authorized
@@ -193,6 +218,7 @@ types:
       - PluginTimeout
       - SwitchingPhases
       - SessionResumed
+      - Reinit
   SessionStarted:
     description: Data for the SessionStarted event
     type: object
