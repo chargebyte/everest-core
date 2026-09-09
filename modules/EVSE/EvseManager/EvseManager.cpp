@@ -1571,7 +1571,7 @@ Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode c
             config.soft_over_current_timeout_ms,
             config.state_F_after_fault_ms,
             config.reinit_duration_ms,
-            config.reinit_method,
+            types::evse_manager::string_to_reinit_state_enum(config.reinit_method),
             config.fail_on_powermeter_errors,
             config.raise_mrec9,
             config.sleep_before_enabling_pwm_hlc_mode_ms,

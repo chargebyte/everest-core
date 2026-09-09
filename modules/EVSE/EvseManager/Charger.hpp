@@ -67,11 +67,6 @@ public:
         DC
     };
 
-    struct ReinitConfiguration {
-        std::string state_transition;
-        int duration;
-    };
-
     struct SetupConfig {
         bool has_ventilation;
         ChargeMode charge_mode;
@@ -86,7 +81,7 @@ public:
         int soft_over_current_timeout_ms;
         int state_F_after_fault_ms;
         int reinit_duration_ms;
-        std::string reinit_method;
+        types::evse_manager::ReinitStateEnum reinit_method;
         bool fail_on_powermeter_errors;
         bool raise_mrec9;
         int sleep_before_enabling_pwm_hlc_mode_ms;
@@ -157,6 +152,7 @@ public:
     // trigger replug sequence while charging to switch number of phases
     bool switch_three_phases_while_charging(bool n);
     bool start_reinit();
+    bool start_reinit(const types::evse_manager::ReinitConfiguration& configuration);
 
     bool pause_charging();
     bool resume_charging();
@@ -278,7 +274,6 @@ private:
     void cp_state_X1();
     void cp_state_E();
     void cp_state_F();
-    void apply_configured_reinit_method();
     void process_pending_reinit_request();
 
     void process_cp_events_independent(CPEvent cp_event);
@@ -383,7 +378,7 @@ private:
         bool switch_3ph1ph_threephase_ongoing{false};
         bool reinit_requested{false};
         bool reinit_running{false};
-        ReinitConfiguration reinit_config{"CPStateF", 3000};
+        types::evse_manager::ReinitConfiguration reinit_config{types::evse_manager::ReinitStateEnum::CPStateF, 3000};
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;
@@ -411,7 +406,7 @@ private:
         // Duration in milliseconds of the reinit state before returning to normal operation
         int reinit_duration_ms{3000};
         // CP state to use during reinitialization
-        std::string reinit_method{"CPStateF"};
+        types::evse_manager::ReinitStateEnum reinit_method{types::evse_manager::ReinitStateEnum::CPStateF};
         // Fail on powermeter errors
         bool fail_on_powermeter_errors;
         // Raise MREC9 authorization timeout error

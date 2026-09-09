@@ -26,6 +26,20 @@
 
 namespace module {
 
+namespace {
+struct ResolvedReinitConfiguration {
+    types::evse_manager::ReinitStateEnum state_transition;
+    int duration;
+};
+
+ResolvedReinitConfiguration resolve_reinit_configuration(const types::evse_manager::ReinitConfiguration& configuration,
+                                                         types::evse_manager::ReinitStateEnum default_state_transition,
+                                                         int default_duration) {
+    return {configuration.state_transition.value_or(default_state_transition),
+            configuration.duration.value_or(default_duration)};
+}
+} // namespace
+
 Charger::Charger(const std::unique_ptr<IECStateMachine>& bsp, const std::unique_ptr<ErrorHandling>& error_handling,
                  const std::vector<std::unique_ptr<powermeterIntf>>& r_powermeter_billing,
                  const std::unique_ptr<PersistentStore>& _store,
@@ -685,16 +699,29 @@ void Charger::run_state_machine() {
         case EvseState::Reinit:
             if (initialize_state) {
                 session_log.evse(false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
-                                                    shared_context.reinit_config.state_transition,
-                                                    shared_context.reinit_config.duration));
+                                                    types::evse_manager::reinit_state_enum_to_string(
+                                                        shared_context.reinit_config.state_transition.value()),
+                                                    shared_context.reinit_config.duration.value()));
                 shared_context.reinit_running = true;
+                signal_simple_event(types::evse_manager::SessionEventEnum::Reinit);
                 shared_context.iec_allow_close_contactor = false;
                 shared_context.hlc_allow_close_contactor = false;
-                apply_configured_reinit_method();
-                if (shared_context.reinit_config.duration > 0) {
+                switch (shared_context.reinit_config.state_transition.value()) {
+                case types::evse_manager::ReinitStateEnum::CPStateE:
+                    cp_state_E();
+                    break;
+                case types::evse_manager::ReinitStateEnum::CPStateF:
+                    cp_state_F();
+                    break;
+                case types::evse_manager::ReinitStateEnum::CPStateX1:
+                    cp_state_X1();
+                    break;
+                }
+                if (shared_context.reinit_config.duration.value() > 0) {
                     internal_context.reinit_timer_active = true;
-                    internal_context.reinit_deadline = std::chrono::steady_clock::now() +
-                                                       std::chrono::milliseconds(shared_context.reinit_config.duration);
+                    internal_context.reinit_deadline =
+                        std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(shared_context.reinit_config.duration.value());
                 } else {
                     internal_context.reinit_timer_active = false;
                 }
@@ -1328,22 +1355,12 @@ void Charger::cp_state_E() {
     bsp->set_cp_state_E();
 }
 
-void Charger::apply_configured_reinit_method() {
-    if (shared_context.reinit_config.state_transition == "CPStateE") {
-        cp_state_E();
-    } else if (shared_context.reinit_config.state_transition == "CPStateX1") {
-        cp_state_X1();
-    } else {
-        cp_state_F();
-    }
-}
-
 void Charger::set_supports_cp_state_E(bool value) {
     supports_cp_state_E = value;
     if (!value and config_context.switch_3ph1ph_cp_state == "E") {
         EVLOG_warning << "Phase switch CP state E configured but BSP does not support CP state E.";
     }
-    if (!value and config_context.reinit_method == "CPStateE") {
+    if (!value and config_context.reinit_method == types::evse_manager::ReinitStateEnum::CPStateE) {
         EVLOG_warning << "Reinit method CPStateE configured but BSP does not support CP state E.";
     }
 }
@@ -1620,6 +1637,10 @@ bool Charger::switch_three_phases_while_charging(bool n) {
 }
 
 bool Charger::start_reinit() {
+    return start_reinit(types::evse_manager::ReinitConfiguration{});
+}
+
+bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& configuration) {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
 
     if (shared_context.current_state == EvseState::Disabled or shared_context.current_state == EvseState::Idle) {
@@ -1627,7 +1648,15 @@ bool Charger::start_reinit() {
         return false;
     }
 
-    if (config_context.reinit_method == "CPStateE" and !supports_cp_state_E) {
+    const auto resolved_configuration =
+        resolve_reinit_configuration(configuration, config_context.reinit_method, config_context.reinit_duration_ms);
+    const auto state_transition = resolved_configuration.state_transition;
+    const auto duration = resolved_configuration.duration;
+    if (duration < 0) {
+        EVLOG_warning << "Reinit requested with a negative duration.";
+        return false;
+    }
+    if (state_transition == types::evse_manager::ReinitStateEnum::CPStateE and !supports_cp_state_E) {
         EVLOG_warning << "Reinit requested with CP state E but BSP does not support CP state E.";
         return false;
     }
@@ -1637,10 +1666,10 @@ bool Charger::start_reinit() {
         return false;
     }
 
-    shared_context.reinit_config = ReinitConfiguration{config_context.reinit_method, config_context.reinit_duration_ms};
+    shared_context.reinit_config = {state_transition, duration};
     shared_context.reinit_requested = true;
     EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
-                              shared_context.reinit_config.state_transition, shared_context.reinit_config.duration);
+                              types::evse_manager::reinit_state_enum_to_string(state_transition), duration);
     return true;
 }
 
@@ -1683,7 +1712,7 @@ void Charger::setup(const SetupConfig& config) {
     soft_over_current_measurement_noise_A = config.soft_over_current_measurement_noise_A;
 
     config_context.switch_3ph1ph_delay_s = config.switch_3ph1ph_delay_s;
-    config_context.switch_3ph1ph_cp_state_F = config.switch_3ph1ph_cp_state == "F";
+    config_context.switch_3ph1ph_cp_state = config.switch_3ph1ph_cp_state;
 
     config_context.state_F_after_fault_ms = config.state_F_after_fault_ms;
     config_context.reinit_duration_ms = config.reinit_duration_ms;
