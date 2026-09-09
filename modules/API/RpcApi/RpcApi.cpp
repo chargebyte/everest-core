@@ -85,6 +85,10 @@ void RpcApi::ready() {
 
 void RpcApi::check_evse_session_event(data::DataStoreEvse& evse_data,
                                       const types::evse_manager::SessionEvent& session_event) {
+    if (session_event.event == types::evse_manager::SessionEventEnum::Reinit) {
+        return;
+    }
+
     // store the session info in the data store
     types::json_rpc_api::EVSEStateEnum evse_state =
         types::json_rpc_api::evse_manager_session_event_to_evse_state(session_event);
