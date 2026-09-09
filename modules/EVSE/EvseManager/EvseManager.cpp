@@ -1780,7 +1780,7 @@ Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode c
     charger_setup.soft_over_current_stale_data_warning_ms = config.soft_over_current_stale_data_warning_ms;
     charger_setup.state_F_after_fault_ms = config.state_F_after_fault_ms;
     charger_setup.reinit_duration_ms = config.reinit_duration_ms;
-    charger_setup.reinit_method = config.reinit_method;
+    charger_setup.reinit_method = types::evse_manager::string_to_reinit_state_enum(config.reinit_method);
     charger_setup.fail_on_powermeter_errors = config.fail_on_powermeter_errors;
     charger_setup.raise_mrec9 = config.raise_mrec9;
     charger_setup.sleep_before_enabling_pwm_hlc_mode_ms = config.sleep_before_enabling_pwm_hlc_mode_ms;
