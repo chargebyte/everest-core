@@ -73,6 +73,10 @@ bool evse_managerImpl::handle_stop_transaction(types::evse_manager::StopTransact
     return true;
 }
 
+bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
+    return false;
+}
+
 bool evse_managerImpl::handle_force_unlock(int& connector_id) {
     // your code for cmd force_unlock goes here
     return true;
