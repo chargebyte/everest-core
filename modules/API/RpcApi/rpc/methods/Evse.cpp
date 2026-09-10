@@ -3,6 +3,9 @@
 
 #include "Evse.hpp"
 
+#include <exception>
+#include <limits>
+
 namespace methods {
 
 RPCDataTypes::EVSEGetInfoResObj Evse::get_info(const int32_t evse_index) {
@@ -216,12 +219,49 @@ RPCDataTypes::ErrorResObj Evse::reinit_charging_session(int32_t evse_index,
     types::evse_manager::ReinitConfiguration configuration;
     if (reinit_configuration.has_value()) {
         const auto& json_configuration = reinit_configuration.value();
-        if (json_configuration.contains("state_transition")) {
-            configuration.state_transition = types::evse_manager::string_to_reinit_state_enum(
-                json_configuration.at("state_transition").get<std::string>());
+        if (not json_configuration.is_object()) {
+            res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+            return res;
         }
-        if (json_configuration.contains("duration")) {
-            configuration.duration = json_configuration.at("duration").get<int>();
+
+        for (const auto& [key, value] : json_configuration.items()) {
+            if (key != "state_transition" and key != "duration") {
+                res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+                return res;
+            }
+
+            try {
+                if (key == "state_transition") {
+                    if (not value.is_string()) {
+                        res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+                        return res;
+                    }
+                    configuration.state_transition =
+                        types::evse_manager::string_to_reinit_state_enum(value.get<std::string>());
+                } else {
+                    if (value.is_number_unsigned()) {
+                        const auto duration = value.get<uint64_t>();
+                        if (duration > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
+                            res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+                            return res;
+                        }
+                        configuration.duration = static_cast<int32_t>(duration);
+                    } else if (value.is_number_integer()) {
+                        const auto duration = value.get<int64_t>();
+                        if (duration < 0 or duration > std::numeric_limits<int32_t>::max()) {
+                            res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+                            return res;
+                        }
+                        configuration.duration = static_cast<int32_t>(duration);
+                    } else {
+                        res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+                        return res;
+                    }
+                }
+            } catch (const std::exception&) {
+                res.error = RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter;
+                return res;
+            }
         }
     }
 

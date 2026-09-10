@@ -10,7 +10,7 @@
 
 namespace module {
 std::vector<std::string> observed_cp_state_commands;
-}
+} // namespace module
 
 namespace {
 using namespace module;
@@ -41,6 +41,47 @@ struct ChargerDerived : public Charger {
 
     constexpr void current_state(EvseState state) {
         get_shared_context().current_state = state;
+    }
+
+    void set_active_ac_session(EvseState state) {
+        auto& context = get_shared_context();
+        context.current_state = state;
+        context.connector_enabled = true;
+        context.flag_ev_plugged_in = true;
+        context.session_active = true;
+        context.flag_transaction_active = true;
+        context.flag_authorized = true;
+        context.hlc_charging_terminate_pause = HlcTerminatePause::Unknown;
+    }
+
+    void set_active_dc_session(EvseState state) {
+        set_active_ac_session(state);
+        configure_reinit(ChargeMode::DC, 0);
+    }
+
+    void configure_reinit(ChargeMode charge_mode, int reinit_duration_ms = 3000) {
+        setup({true,
+               charge_mode,
+               false,
+               false,
+               false,
+               false,
+               false,
+               10.,
+               0.5,
+               10,
+               "X1",
+               7000,
+               300,
+               0,
+               reinit_duration_ms,
+               ReinitStateEnum::CPStateE,
+               false,
+               false,
+               0,
+               utils::SessionIdType::UUID,
+               300});
+        set_supports_cp_state_E(true);
     }
 
     constexpr const auto& flag_disable_requested() {
@@ -120,6 +161,627 @@ TEST_F(ChargerTest, EnableDisableSourceInit) {
     EXPECT_EQ(last_event, default_event);
     EXPECT_TRUE(charger->connector_enabled());
     EXPECT_EQ(charger->current_state(), Charger::EvseState::Idle);
+}
+
+TEST_F(ChargerTest, ReinitRejectsDisconnectedSessionAndUnsupportedCpStateE) {
+    const ReinitConfiguration state_e{ReinitStateEnum::CPStateE, 100};
+    const ReinitConfiguration state_x1{ReinitStateEnum::CPStateX1, 100};
+    const ReinitConfiguration negative_duration{ReinitStateEnum::CPStateX1, -1};
+
+    EXPECT_FALSE(charger->start_reinit(state_x1));
+
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+    EXPECT_FALSE(charger->start_reinit(negative_duration));
+    charger->set_supports_cp_state_E(false);
+    EXPECT_FALSE(charger->start_reinit(state_e));
+    charger->set_supports_cp_state_E(true);
+    EXPECT_TRUE(charger->start_reinit(state_x1));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_FALSE(charger->start_reinit(state_x1));
+}
+
+TEST_F(ChargerTest, ReinitAllowsConnectedFinishedSessionWithoutTransaction) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 0);
+    auto& context = charger->get_shared_context();
+    context.current_state = Charger::EvseState::Finished;
+    context.connector_enabled = true;
+    context.flag_ev_plugged_in = true;
+    context.session_active = false;
+    context.flag_transaction_active = false;
+    context.flag_authorized = false;
+
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateX1, 0};
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::WaitingForAuthentication);
+    EXPECT_EQ(last_event, SessionEventEnum::AuthRequired);
+}
+
+TEST_F(ChargerTest, ReinitRejectsFinishedSessionWithActiveTransaction) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 0);
+    auto& context = charger->get_shared_context();
+    context.current_state = Charger::EvseState::Finished;
+    context.connector_enabled = true;
+    context.flag_ev_plugged_in = true;
+    context.session_active = true;
+    context.flag_transaction_active = true;
+    context.flag_authorized = true;
+
+    EXPECT_FALSE(charger->start_reinit({ReinitStateEnum::CPStateX1, 0}));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Finished);
+}
+
+TEST_F(ChargerTest, ReinitClearsPendingTStepX1UnmatchedTransition) {
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_terminate_pause = Charger::HlcTerminatePause::Terminate;
+    context.hlc_d20_active = true;
+    auto& internal = charger->get_internal_context();
+    internal.t_step_X1_until_unmatched = true;
+    internal.t_step_X1_return_state = Charger::EvseState::T_step_EF;
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 0}));
+    charger->run_state_machine();
+
+    EXPECT_EQ(context.hlc_charging_terminate_pause, Charger::HlcTerminatePause::Unknown);
+    EXPECT_FALSE(context.hlc_d20_active);
+    EXPECT_FALSE(internal.t_step_X1_until_unmatched);
+    EXPECT_EQ(internal.t_step_X1_return_state, Charger::EvseState::Idle);
+    EXPECT_EQ(internal.t_step_EF_return_state, Charger::EvseState::Idle);
+    EXPECT_EQ(internal.t_step_EF_return_pwm, 0.);
+    EXPECT_EQ(internal.t_step_EF_return_ampere, 0.);
+    EXPECT_FALSE(internal.session_stop_pwm_off_deadline.has_value());
+}
+
+TEST_F(ChargerTest, ReinitUsesDefaultsForEmptyAndPartialConfiguration) {
+    charger->configure_reinit(Charger::ChargeMode::AC);
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+
+    EXPECT_TRUE(charger->start_reinit());
+    EXPECT_EQ(charger->get_shared_context().reinit_configuration.state_transition, ReinitStateEnum::CPStateE);
+    EXPECT_EQ(charger->get_shared_context().reinit_configuration.duration, 3000);
+
+    charger->current_state(Charger::EvseState::Charging);
+    ReinitConfiguration partial_configuration;
+    partial_configuration.duration = 100;
+    EXPECT_TRUE(charger->start_reinit(partial_configuration));
+    EXPECT_EQ(charger->get_shared_context().reinit_configuration.state_transition, ReinitStateEnum::CPStateE);
+    EXPECT_EQ(charger->get_shared_context().reinit_configuration.duration, 100);
+}
+
+TEST_F(ChargerTest, DcReinitFromPrepareChargingWaitsForOpenContactorAndStoppedHlc) {
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    charger->set_active_dc_session(Charger::EvseState::PrepareCharging);
+    auto& context = charger->get_shared_context();
+    context.contactor_open = false;
+    charger->set_hlc_charging_active();
+
+    EXPECT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateX1, 100}));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Reinit);
+
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    context.hlc_charging_active = false;
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    context.contactor_open = true;
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerTest, ReinitRetargetsExistingHlcStopWithoutDuplicateRequest) {
+    charger->set_active_ac_session(Charger::EvseState::StoppingCharging);
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = true;
+    context.hlc_charging_terminate_pause = Charger::HlcTerminatePause::Unknown;
+    auto& internal = charger->get_internal_context();
+    internal.stopping_hlc_stop_requested = true;
+    int hlc_stop_calls = 0;
+    charger->signal_hlc_stop_charging.connect([&] { hlc_stop_calls++; });
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::seconds(1);
+    const auto stop_started = internal.current_state_started;
+
+    EXPECT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 0}));
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Reinit);
+    EXPECT_EQ(internal.current_state_started, stop_started);
+    EXPECT_EQ(hlc_stop_calls, 0);
+}
+
+TEST_F(ChargerTest, ReinitRetargetingDynamicPauseCancelsPendingPauseRequest) {
+    charger->set_active_dc_session(Charger::EvseState::StoppingCharging);
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = true;
+    context.hlc_d20_active = true;
+    context.hlc_d20_dynamic_mode = true;
+    context.contactor_open = false;
+    auto& internal = charger->get_internal_context();
+    internal.last_state_detect_state_change = Charger::EvseState::StoppingCharging;
+    internal.d20_pause_ramp_start = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+    internal.stopping_charging_timeout_ms = 999999;
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::seconds(1);
+    int pause_calls = 0;
+    int stop_calls = 0;
+    charger->signal_hlc_pause_charging.connect([&] { pause_calls++; });
+    charger->signal_hlc_stop_charging.connect([&] { stop_calls++; });
+
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 100}));
+
+    ASSERT_TRUE(internal.d20_pause_ramp_start.has_value());
+    EXPECT_TRUE(internal.d20_pause_cancelled_for_stop);
+    EXPECT_FALSE(internal.d20_pause_notified);
+    EXPECT_FALSE(internal.stopping_for_evse_pause);
+    EXPECT_LT(internal.stopping_charging_timeout_ms, 120000);
+    charger->run_state_machine();
+    EXPECT_EQ(pause_calls, 0);
+    EXPECT_EQ(stop_calls, 1);
+    EXPECT_TRUE(charger->get_dc_pause_ramp_start().has_value());
+
+    const auto stop_timeout_ms = internal.stopping_charging_timeout_ms;
+    context.flag_externally_cancelled = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Finished);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(pause_calls, 0);
+    EXPECT_EQ(internal.stopping_charging_timeout_ms, stop_timeout_ms);
+    EXPECT_TRUE(internal.d20_pause_ramp_start.has_value());
+
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Finished);
+    EXPECT_EQ(pause_calls, 0);
+    EXPECT_FALSE(internal.d20_pause_notified);
+    EXPECT_EQ(internal.stopping_charging_timeout_ms, stop_timeout_ms);
+    EXPECT_TRUE(internal.d20_pause_ramp_start.has_value());
+
+    context.contactor_open = true;
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Finished);
+    EXPECT_EQ(pause_calls, 0);
+
+    EXPECT_TRUE(internal.d20_pause_cancelled_for_stop);
+    context.current_state = Charger::EvseState::Idle;
+    charger->run_state_machine();
+    EXPECT_FALSE(internal.d20_pause_cancelled_for_stop);
+}
+
+TEST_F(ChargerTest, ReinitFromEvsePausedHlcRequestsStopInsteadOfPause) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
+    charger->set_active_ac_session(Charger::EvseState::ChargingPausedEVSE);
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = true;
+    context.hlc_d20_active = true;
+    context.flag_paused_by_evse = true;
+    context.contactor_open = true;
+    int stop_calls = 0;
+    int pause_calls = 0;
+    charger->signal_hlc_stop_charging.connect([&] { stop_calls++; });
+    charger->signal_hlc_pause_charging.connect([&] { pause_calls++; });
+
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 100}));
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Reinit);
+    EXPECT_EQ(stop_calls, 1);
+    EXPECT_EQ(pause_calls, 0);
+}
+
+TEST_F(ChargerTest, OrdinaryStoppingTimeoutDoesNotChangeCpState) {
+    charger->set_active_ac_session(Charger::EvseState::StoppingCharging);
+    int dc_supply_off_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { dc_supply_off_calls++; });
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = true;
+    context.contactor_open = false;
+    charger->run_state_machine();
+    auto& internal = charger->get_internal_context();
+    internal.stopping_charging_timeout_ms = 1;
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::seconds(1);
+
+    charger->run_state_machine();
+
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(dc_supply_off_calls, 1);
+
+    charger->run_state_machine();
+    EXPECT_EQ(dc_supply_off_calls, 2);
+}
+
+TEST_F(ChargerTest, ReinitFromHlcPausedByEvDoesNotWaitForAnotherHlcStop) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
+    charger->set_active_ac_session(Charger::EvseState::ChargingPausedEV);
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = true;
+    context.hlc_charging_terminate_pause = Charger::HlcTerminatePause::Pause;
+    context.matching_started = true;
+    context.contactor_open = true;
+    context.pwm_running = true;
+    auto& internal = charger->get_internal_context();
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    int hlc_stop_calls = 0;
+    int slac_reset_calls = 0;
+    charger->signal_hlc_stop_charging.connect([&] { hlc_stop_calls++; });
+    charger->signal_slac_reset.connect([&] {
+        slac_reset_calls++;
+        context.matching_started = false;
+    });
+
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 100}));
+    charger->run_state_machine();
+
+    EXPECT_EQ(hlc_stop_calls, 0);
+    EXPECT_EQ(slac_reset_calls, 0);
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() - std::chrono::milliseconds(1);
+    charger->run_state_machine();
+
+    EXPECT_EQ(slac_reset_calls, 1);
+    EXPECT_EQ(observed_cp_state_commands.front(), "X1");
+    EXPECT_NE(charger->current_state(), Charger::EvseState::StoppingCharging);
+}
+
+TEST_F(ChargerTest, ReinitPreservesCpDuringSessionStopRetainWindow) {
+    charger->set_active_dc_session(Charger::EvseState::Charging);
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = true;
+    context.hlc_charging_terminate_pause = Charger::HlcTerminatePause::Terminate;
+    context.contactor_open = true;
+    context.pwm_running = true;
+    auto& internal = charger->get_internal_context();
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 100}));
+    charger->run_state_machine();
+
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+    EXPECT_TRUE(internal.session_stop_pwm_off_deadline.has_value());
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    charger->dlink_error();
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+    EXPECT_TRUE(internal.session_stop_pwm_off_deadline.has_value());
+
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() - std::chrono::milliseconds(1);
+    charger->run_state_machine();
+
+    ASSERT_FALSE(observed_cp_state_commands.empty());
+    EXPECT_EQ(observed_cp_state_commands.front(), "X1");
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerTest, ReinitStopTimeoutDefersAcSlacResetUntilRetainExpires) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
+    charger->set_active_ac_session(Charger::EvseState::StoppingCharging);
+    auto& context = charger->get_shared_context();
+    context.stopping_charging_target_state = Charger::EvseState::Reinit;
+    context.matching_started = true;
+    context.contactor_open = true;
+    auto& internal = charger->get_internal_context();
+    internal.last_state_detect_state_change = Charger::EvseState::StoppingCharging;
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    internal.stopping_charging_timeout_ms = 1;
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::seconds(1);
+    int slac_reset_calls = 0;
+    charger->signal_slac_reset.connect([&] { slac_reset_calls++; });
+
+    charger->run_state_machine();
+
+    EXPECT_TRUE(internal.stopping_charging_timeout_handled);
+    EXPECT_EQ(slac_reset_calls, 0);
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+
+    internal.current_state_started = std::chrono::system_clock::now();
+    internal.stopping_charging_timeout_ms = 100000;
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() - std::chrono::milliseconds(1);
+    charger->run_state_machine();
+
+    EXPECT_EQ(slac_reset_calls, 1);
+    charger->run_state_machine();
+    EXPECT_EQ(slac_reset_calls, 1);
+}
+
+TEST_F(ChargerTest, ReinitFromFinishedRoutesThroughRetainWindow) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
+    auto& context = charger->get_shared_context();
+    context.current_state = Charger::EvseState::Finished;
+    context.connector_enabled = true;
+    context.flag_ev_plugged_in = true;
+    context.flag_transaction_active = false;
+    context.flag_authorized = false;
+    context.matching_started = true;
+    context.contactor_open = true;
+    context.pwm_running = true;
+    auto& internal = charger->get_internal_context();
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    int slac_reset_calls = 0;
+    charger->signal_slac_reset.connect([&] {
+        slac_reset_calls++;
+        context.matching_started = false;
+    });
+
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateF, 100}));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(slac_reset_calls, 0);
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+
+    internal.session_stop_pwm_off_deadline = std::chrono::steady_clock::now() - std::chrono::milliseconds(1);
+    charger->run_state_machine();
+
+    EXPECT_EQ(slac_reset_calls, 1);
+    EXPECT_EQ(observed_cp_state_commands.front(), "X1");
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerTest, ReinitRejectsStopAlreadyTargetedToFinished) {
+    charger->set_active_ac_session(Charger::EvseState::StoppingCharging);
+    auto& context = charger->get_shared_context();
+    context.stopping_charging_target_state = Charger::EvseState::Finished;
+
+    EXPECT_FALSE(charger->start_reinit({ReinitStateEnum::CPStateF, 0}));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Finished);
+}
+
+TEST_F(ChargerTest, ReinitStopTimeoutHardStopsWithoutFinishingRecoverableSession) {
+    int dc_supply_off_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { dc_supply_off_calls++; });
+    charger->set_active_dc_session(Charger::EvseState::Charging);
+    auto& context = charger->get_shared_context();
+    context.contactor_open = false;
+
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateX1, 0}));
+    charger->run_state_machine();
+    auto& internal = charger->get_internal_context();
+    internal.stopping_charging_timeout_ms = 1;
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::seconds(1);
+
+    charger->run_state_machine();
+
+    EXPECT_EQ(dc_supply_off_calls, 1);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerTest, ReinitRemoteCancellationKeepsGracefulStopPath) {
+    int dc_supply_off_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { dc_supply_off_calls++; });
+    charger->set_active_dc_session(Charger::EvseState::Charging);
+    auto& context = charger->get_shared_context();
+    context.contactor_open = false;
+    ASSERT_TRUE(charger->start_reinit({ReinitStateEnum::CPStateX1, 0}));
+    charger->run_state_machine();
+
+    context.flag_externally_cancelled = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(dc_supply_off_calls, 0);
+    EXPECT_FALSE(context.contactor_open);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Finished);
+    EXPECT_TRUE(observed_cp_state_commands.empty());
+}
+
+TEST_F(ChargerTest, ReinitFinishesIfAcSlacDoesNotUnmatchAfterTimeout) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
+    charger->set_active_ac_session(Charger::EvseState::StoppingCharging);
+    auto& context = charger->get_shared_context();
+    context.stopping_charging_target_state = Charger::EvseState::Reinit;
+    context.matching_started = true;
+    context.contactor_open = true;
+    auto& internal = charger->get_internal_context();
+    int slac_reset_calls = 0;
+    charger->signal_slac_reset.connect([&] { slac_reset_calls++; });
+    charger->run_state_machine();
+    internal.stopping_charging_timeout_handled = true;
+    internal.stopping_charging_timeout_ms = 1;
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::hours(1);
+
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Finished);
+    EXPECT_FALSE(context.stopping_charging_target_state.has_value());
+    EXPECT_EQ(slac_reset_calls, 1);
+}
+
+TEST_F(ChargerTest, DcCpStateX1ReinitRestartsSlacAfterStopAndContactorOpen) {
+    int slac_reset_calls = 0;
+    int slac_start_calls = 0;
+    charger->signal_slac_reset.connect([&] { slac_reset_calls++; });
+    charger->signal_slac_start.connect([&] { slac_start_calls++; });
+    charger->set_active_dc_session(Charger::EvseState::Charging);
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    auto& context = charger->get_shared_context();
+    context.contactor_open = false;
+
+    ReinitConfiguration configuration;
+    configuration.state_transition = ReinitStateEnum::CPStateX1;
+    configuration.duration = 100;
+    EXPECT_TRUE(charger->start_reinit(configuration));
+
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    context.hlc_charging_active = false;
+    context.hlc_charging_terminate_pause = Charger::HlcTerminatePause::Terminate;
+    context.contactor_open = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(slac_reset_calls, 0);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+
+    charger->get_internal_context().current_state_started -= std::chrono::seconds(1);
+    charger->run_state_machine();
+    EXPECT_EQ(slac_start_calls, 1);
+    EXPECT_EQ(last_event, SessionEventEnum::AuthRequired);
+    EXPECT_TRUE(charger->get_shared_context().hlc_charging_active);
+    EXPECT_TRUE(charger->get_shared_context().session_active);
+    EXPECT_TRUE(charger->get_shared_context().flag_transaction_active);
+    EXPECT_TRUE(charger->get_shared_context().flag_authorized);
+}
+
+TEST_F(ChargerTest, DcReinitResetsAndWaitsForStaleSlacMatch) {
+    int slac_reset_calls = 0;
+    charger->signal_slac_reset.connect([&] { slac_reset_calls++; });
+    charger->set_active_dc_session(Charger::EvseState::Charging);
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    charger->set_matching_started(true);
+    charger->set_slac_matched(true);
+
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateX1, 100};
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    charger->run_state_machine();
+    ASSERT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    auto& context = charger->get_shared_context();
+    context.hlc_charging_active = false;
+    context.hlc_charging_terminate_pause = Charger::HlcTerminatePause::Terminate;
+    context.contactor_open = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(slac_reset_calls, 1);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    charger->set_matching_started(false);
+    charger->set_slac_matched(false);
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerTest, AcCpStateX1ReinitRestartsSlacNegotiation) {
+    int slac_start_calls = 0;
+    charger->signal_slac_start.connect([&] { slac_start_calls++; });
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+
+    ReinitConfiguration configuration;
+    configuration.state_transition = ReinitStateEnum::CPStateX1;
+    configuration.duration = 0;
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    charger->run_state_machine();
+
+    EXPECT_EQ(slac_start_calls, 1);
+    EXPECT_EQ(last_event, SessionEventEnum::AuthRequired);
+}
+
+TEST_F(ChargerTest, ReinitUsesStoppingChargingForHlcTermination) {
+    int hlc_stop_calls = 0;
+    int hlc_pause_calls = 0;
+    charger->signal_hlc_stop_charging.connect([&] { hlc_stop_calls++; });
+    charger->signal_hlc_pause_charging.connect([&] { hlc_pause_calls++; });
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateF, 100};
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+    charger->set_hlc_charging_active();
+    charger->set_matching_started(true);
+
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(last_event, SessionEventEnum::StoppingCharging);
+    EXPECT_EQ(hlc_stop_calls, 1);
+    EXPECT_EQ(hlc_pause_calls, 0);
+
+    charger->dlink_terminate();
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    charger->set_matching_started(false);
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+    EXPECT_EQ(last_event, SessionEventEnum::Reinit);
+}
+
+TEST_F(ChargerTest, ReinitDurationUsesMonotonicClock) {
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+    charger->get_shared_context().contactor_open = true;
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateF, 10000};
+
+    ASSERT_TRUE(charger->start_reinit(configuration));
+    charger->run_state_machine();
+    charger->run_state_machine();
+    ASSERT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+    charger->run_state_machine();
+
+    charger->get_internal_context().current_state_started = std::chrono::system_clock::now() - std::chrono::hours(1);
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerTest, ReinitContinuesAfterDlinkError) {
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateF, 100};
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+    charger->set_hlc_charging_active();
+    charger->set_matching_started(true);
+
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    charger->run_state_machine();
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+
+    charger->dlink_error();
+    auto& context = charger->get_shared_context();
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Reinit);
+    EXPECT_FALSE(context.hlc_charging_active);
+
+    // The SLAC layer reports UNMATCHED after it receives D-LINK_ERROR.req.
+    charger->set_matching_started(false);
+    context.contactor_open = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+    EXPECT_TRUE(context.session_active);
+    EXPECT_TRUE(context.flag_transaction_active);
+    EXPECT_TRUE(context.flag_authorized);
+}
+
+TEST_F(ChargerTest, ActiveReinitIgnoresDlinkError) {
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
+    auto& context = charger->get_shared_context();
+    context.current_state = Charger::EvseState::Reinit;
+    context.reinit_configuration = {ReinitStateEnum::CPStateF, 100};
+
+    charger->dlink_error();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
+    EXPECT_FALSE(context.stopping_charging_target_state.has_value());
+}
+
+TEST_F(ChargerTest, DcReinitStopsHlcBeforeCpReinit) {
+    int hlc_stop_calls = 0;
+    int dc_supply_off_calls = 0;
+    charger->signal_hlc_stop_charging.connect([&] { hlc_stop_calls++; });
+    charger->signal_dc_supply_off.connect([&] { dc_supply_off_calls++; });
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateX1, 100};
+    charger->set_active_dc_session(Charger::EvseState::Charging);
+    charger->set_hlc_charging_active();
+
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    charger->run_state_machine();
+
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(hlc_stop_calls, 1);
+    EXPECT_EQ(dc_supply_off_calls, 0);
+}
+
+TEST_F(ChargerTest, ReinitRoutesThroughStoppingChargingWhenSlacIsActive) {
+    const ReinitConfiguration configuration{ReinitStateEnum::CPStateF, 100};
+    charger->set_active_ac_session(Charger::EvseState::Charging);
+    charger->set_matching_started(true);
+
+    EXPECT_TRUE(charger->start_reinit(configuration));
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
 }
 
 TEST_F(ChargerTest, EnableDisableSourceInitPlusStateEnabled) {
@@ -835,6 +1497,9 @@ struct ChargerDlinkErrorTest : public ChargerTest {
         ctx.hlc_charging_active = true;
         ctx.flag_transaction_active = true;
         ctx.flag_authorized = true;
+        ctx.flag_ev_plugged_in = true;
+        ctx.connector_enabled = true;
+        ctx.session_active = true;
         charger->get_hlc_use_5percent_current_session() = true;
     }
 };
@@ -907,7 +1572,6 @@ TEST_F(ChargerDlinkErrorTest, MatchingRestartDuringActiveSession) {
 
     EXPECT_EQ(observed_cp_state_commands, std::vector<std::string>{"X1"});
     EXPECT_FALSE(charger->get_shared_context().pwm_running);
-    EXPECT_FALSE(charger->get_shared_context().reinit_requested);
     EXPECT_EQ(charger->current_state(), Charger::EvseState::T_step_X1);
     const auto& internal = charger->get_internal_context();
     EXPECT_TRUE(internal.t_step_X1_until_unmatched);
@@ -921,6 +1585,80 @@ TEST_F(ChargerDlinkErrorTest, MatchingRestartDuringActiveSession) {
     EXPECT_EQ(slac_resets, 1);
 }
 
+TEST_F(ChargerDlinkErrorTest, DcLinkErrorStopsPowerBeforeReinitStopWait) {
+    setup_hlc_session_in(Charger::EvseState::Charging);
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    int dc_supply_off_calls = 0;
+    int hlc_stop_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { ++dc_supply_off_calls; });
+    charger->signal_hlc_stop_charging.connect([&] { ++hlc_stop_calls; });
+
+    charger->dlink_error();
+
+    EXPECT_EQ(dc_supply_off_calls, 1);
+    EXPECT_EQ(hlc_stop_calls, 0);
+    EXPECT_FALSE(charger->get_shared_context().hlc_charging_active);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(charger->get_shared_context().stopping_charging_target_state, Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerDlinkErrorTest, DcLinkErrorDuringPauseDoesNotStopOverDeadHlcLink) {
+    setup_hlc_session_in(Charger::EvseState::ChargingPausedEV);
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    int dc_supply_off_calls = 0;
+    int hlc_stop_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { ++dc_supply_off_calls; });
+    charger->signal_hlc_stop_charging.connect([&] { ++hlc_stop_calls; });
+
+    charger->dlink_error();
+
+    EXPECT_EQ(dc_supply_off_calls, 0);
+    EXPECT_EQ(hlc_stop_calls, 0);
+    EXPECT_FALSE(charger->get_shared_context().hlc_charging_active);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(charger->get_shared_context().stopping_charging_target_state, Charger::EvseState::Reinit);
+}
+
+TEST_F(ChargerDlinkErrorTest, DcLinkErrorDuringResumableStopCutsPowerWithoutExtendingTimeout) {
+    setup_hlc_session_in(Charger::EvseState::StoppingCharging);
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    auto& context = charger->get_shared_context();
+    context.flag_paused_by_evse = true;
+    int dc_supply_off_calls = 0;
+    int hlc_stop_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { ++dc_supply_off_calls; });
+    charger->signal_hlc_stop_charging.connect([&] { ++hlc_stop_calls; });
+    auto& internal = charger->get_internal_context();
+    internal.stopping_charging_timeout_ms = 10000;
+    internal.current_state_started = std::chrono::system_clock::now() - std::chrono::seconds(1);
+    const auto stop_started = internal.current_state_started;
+
+    charger->dlink_error();
+
+    EXPECT_EQ(dc_supply_off_calls, 1);
+    EXPECT_EQ(hlc_stop_calls, 0);
+    EXPECT_FALSE(context.hlc_charging_active);
+    EXPECT_EQ(context.stopping_charging_target_state, Charger::EvseState::Reinit);
+    EXPECT_EQ(internal.stopping_charging_timeout_ms, 10000);
+    EXPECT_EQ(internal.current_state_started, stop_started);
+}
+
+TEST_F(ChargerDlinkErrorTest, DcLinkErrorEndsSessionWhenConfiguredReinitIsUnsupported) {
+    setup_hlc_session_in(Charger::EvseState::Charging);
+    charger->configure_reinit(Charger::ChargeMode::DC, 100);
+    charger->get_config_context().reinit_method = ReinitStateEnum::CPStateE;
+    charger->set_supports_cp_state_E(false);
+    int dc_supply_off_calls = 0;
+    charger->signal_dc_supply_off.connect([&] { ++dc_supply_off_calls; });
+
+    charger->dlink_error();
+
+    EXPECT_EQ(dc_supply_off_calls, 1);
+    EXPECT_FALSE(charger->get_shared_context().hlc_charging_active);
+    EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(charger->get_shared_context().stopping_charging_target_state, Charger::EvseState::Finished);
+}
+
 TEST_F(ChargerDlinkErrorTest, MatchingRestartWhileWaitingForAuthentication) {
     // Same sequence when the HLC session fails before the charger left WaitingForAuthentication.
     setup_hlc_session_in(Charger::EvseState::WaitingForAuthentication);
@@ -928,7 +1666,6 @@ TEST_F(ChargerDlinkErrorTest, MatchingRestartWhileWaitingForAuthentication) {
     charger->dlink_error();
 
     EXPECT_EQ(observed_cp_state_commands, std::vector<std::string>{"X1"});
-    EXPECT_FALSE(charger->get_shared_context().reinit_requested);
     EXPECT_EQ(charger->current_state(), Charger::EvseState::T_step_X1);
     EXPECT_TRUE(charger->get_internal_context().t_step_X1_until_unmatched);
     EXPECT_EQ(charger->get_internal_context().t_step_EF_return_state, Charger::EvseState::WaitingForAuthentication);
@@ -938,8 +1675,10 @@ TEST_F(ChargerDlinkErrorTest, MatchingRestartWhenStoppingToPause) {
     // StoppingCharging is also a transit state for EVSE-initiated pause: the session
     // continues afterwards, so the error recovery must still restart matching
     setup_hlc_session_in(Charger::EvseState::StoppingCharging);
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
     auto& ctx = charger->get_shared_context();
     ctx.flag_paused_by_evse = true;
+    ctx.contactor_open = true;
 
     charger->dlink_error();
 
@@ -948,8 +1687,8 @@ TEST_F(ChargerDlinkErrorTest, MatchingRestartWhenStoppingToPause) {
     // the session setup states).
     EXPECT_EQ(observed_cp_state_commands, std::vector<std::string>{"X1"});
     EXPECT_FALSE(ctx.pwm_running);
-    EXPECT_TRUE(ctx.reinit_requested);
     EXPECT_EQ(charger->current_state(), Charger::EvseState::StoppingCharging);
+    EXPECT_EQ(ctx.stopping_charging_target_state, Charger::EvseState::Reinit);
 
     charger->run_state_machine();
 
@@ -1178,7 +1917,6 @@ TEST_F(ChargerPncWithoutChargingLoopTest, DlinkErrorFallsBackToNominalThroughX1A
     EXPECT_FALSE(charger->get_hlc_use_5percent_current_session());
     EXPECT_TRUE(ctx.flag_authorized) << "the PnC authorization is kept";
     EXPECT_TRUE(ctx.flag_transaction_active);
-    EXPECT_FALSE(ctx.reinit_requested) << "SLAC is reset in X1 [V2G3-M07-06], not by the reinit sequence";
 }
 
 TEST_F(ChargerPncWithoutChargingLoopTest, TerminateFallsBackToNominalThroughEF) {
@@ -1194,7 +1932,6 @@ TEST_F(ChargerPncWithoutChargingLoopTest, TerminateFallsBackToNominalThroughEF) 
     EXPECT_EQ(ictx.t_step_EF_return_pwm, 0.) << "nominal PWM is enabled by PrepareCharging";
     EXPECT_FALSE(charger->get_hlc_use_5percent_current_session());
     EXPECT_TRUE(ctx.flag_authorized) << "the PnC authorization is kept";
-    EXPECT_FALSE(ctx.reinit_requested);
 }
 
 // Outside the PnC fallback, a D-LINK_ERROR on 5 percent during session setup runs the generic -3 sequence and returns
@@ -1213,7 +1950,6 @@ TEST_F(ChargerPncWithoutChargingLoopTest, DlinkErrorAfterChargingLoopRunsGeneric
     EXPECT_TRUE(ictx.t_step_X1_until_unmatched) << "[V2G3-M07-06], [V2G3-M07-07]";
     EXPECT_EQ(ictx.t_step_EF_return_state, Charger::EvseState::WaitingForAuthentication)
         << "the charging loop started: no PnC fallback to PrepareCharging";
-    EXPECT_FALSE(ctx.reinit_requested) << "the reinit sequence skips Unmatched and T_step_EF";
 }
 
 TEST_F(ChargerPncWithoutChargingLoopTest, EimDlinkErrorRunsGenericX1AndEF) {
@@ -1228,7 +1964,6 @@ TEST_F(ChargerPncWithoutChargingLoopTest, EimDlinkErrorRunsGenericX1AndEF) {
     EXPECT_TRUE(ictx.t_step_X1_until_unmatched) << "[V2G3-M07-06], [V2G3-M07-07]";
     EXPECT_EQ(ictx.t_step_EF_return_state, Charger::EvseState::WaitingForAuthentication)
         << "EIM: no PnC fallback to PrepareCharging";
-    EXPECT_FALSE(ctx.reinit_requested) << "the reinit sequence skips Unmatched and T_step_EF";
 }
 
 // A PnC authorization in WaitingForAuthentication before the EV started the charging loop
@@ -1301,7 +2036,6 @@ TEST_F(ChargerPncAuthorizationTest, X1StartDlinkErrorFallsBackToNominalThroughEF
     EXPECT_EQ(ictx.t_step_EF_return_state, Charger::EvseState::PrepareCharging);
     EXPECT_EQ(ictx.t_step_EF_return_pwm, 0.);
     EXPECT_TRUE(charger->get_shared_context().flag_authorized);
-    EXPECT_FALSE(charger->get_shared_context().reinit_requested);
 }
 
 TEST_F(ChargerPncAuthorizationTest, X1StartTerminateFallsBackToNominal) {
@@ -1606,6 +2340,7 @@ TEST_F(ChargerValidationToggleTest, StateCWithoutMatchingStartsChargingAtOnce) {
 // replaces T_step_X1 without running its exit. The next ordinary T_step_X1 must not inherit the link-loss handling.
 TEST_F(ChargerDlinkErrorTest, LinkLossX1DoesNotOutliveReinit) {
     setup_hlc_session_in(Charger::EvseState::WaitingForAuthentication);
+    charger->configure_reinit(Charger::ChargeMode::AC, 100);
     charger->set_dlink_ready(true);
     charger->request_error_sequence();
     ASSERT_EQ(charger->current_state(), Charger::EvseState::T_step_X1);
@@ -1845,7 +2580,7 @@ TEST_F(ChargerMinX1Test, CpStateFArmsTheTimer) {
     auto& ctx = charger->get_shared_context();
     ctx.pwm_running = true;
     charger->get_internal_context().update_pwm_last_duty_cycle = 0.27;
-    ctx.reinit_config = Charger::ReinitConfiguration{"CPStateF", 3000};
+    ctx.reinit_configuration = {ReinitStateEnum::CPStateF, 3000};
     charger->current_state(Charger::EvseState::Reinit);
     charger->run_state_machine();
     EXPECT_EQ(observed_cp_state_commands, std::vector<std::string>{"F"});
@@ -1853,7 +2588,7 @@ TEST_F(ChargerMinX1Test, CpStateFArmsTheTimer) {
     EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
     ASSERT_TRUE(charger->get_internal_context().pwm_switched_off_at.has_value());
 
-    // Reinit ends 2 s later with X1: the original switch-off time is kept
+    // Reinit ends after its configured pulse duration with X1: the original switch-off time is kept
     pwm_off_since(std::chrono::milliseconds(2000));
     const auto backdated = charger->get_internal_context().pwm_switched_off_at.value();
     charger->get_internal_context().reinit_deadline = std::chrono::steady_clock::now();
@@ -1869,7 +2604,7 @@ TEST_F(ChargerMinX1Test, CpStateEArmsTheTimer) {
     ctx.pwm_running = true;
     charger->get_internal_context().update_pwm_last_duty_cycle = 0.27;
     charger->set_supports_cp_state_E(true);
-    ctx.reinit_config = Charger::ReinitConfiguration{"CPStateE", 3000};
+    ctx.reinit_configuration = {ReinitStateEnum::CPStateE, 3000};
     charger->current_state(Charger::EvseState::Reinit);
     charger->run_state_machine();
     EXPECT_EQ(observed_cp_state_commands, std::vector<std::string>{"E"});
@@ -1877,7 +2612,7 @@ TEST_F(ChargerMinX1Test, CpStateEArmsTheTimer) {
     EXPECT_EQ(charger->current_state(), Charger::EvseState::Reinit);
     ASSERT_TRUE(charger->get_internal_context().pwm_switched_off_at.has_value());
 
-    // Reinit ends 2 s later with X1: the original switch-off time is kept
+    // Reinit ends after its configured pulse duration with X1: the original switch-off time is kept
     pwm_off_since(std::chrono::milliseconds(2000));
     const auto backdated = charger->get_internal_context().pwm_switched_off_at.value();
     charger->get_internal_context().reinit_deadline = std::chrono::steady_clock::now();

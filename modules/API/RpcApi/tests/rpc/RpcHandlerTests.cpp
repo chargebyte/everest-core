@@ -862,7 +862,23 @@ TEST_F(RpcHandlerTest, EvseReinitChargingSessionReq) {
     const nlohmann::json reinit_with_configuration = create_json_rpc_request(
         "EVSE.ReinitChargingSession",
         {{"evse_index", 1}, {"reinit_configuration", {{"state_transition", "CPStateE"}, {"duration", 4000}}}}, 2);
+    const nlohmann::json reinit_with_invalid_transition =
+        create_json_rpc_request("EVSE.ReinitChargingSession",
+                                {{"evse_index", 1}, {"reinit_configuration", {{"state_transition", "invalid"}}}}, 3);
+    const nlohmann::json reinit_with_invalid_duration = create_json_rpc_request(
+        "EVSE.ReinitChargingSession", {{"evse_index", 1}, {"reinit_configuration", {{"duration", "4000"}}}}, 4);
+    const nlohmann::json reinit_with_invalid_configuration =
+        create_json_rpc_request("EVSE.ReinitChargingSession", {{"evse_index", 1}, {"reinit_configuration", 5}}, 5);
+    const nlohmann::json reinit_with_negative_duration = create_json_rpc_request(
+        "EVSE.ReinitChargingSession", {{"evse_index", 1}, {"reinit_configuration", {{"duration", -1}}}}, 6);
+    const nlohmann::json reinit_with_large_duration = create_json_rpc_request(
+        "EVSE.ReinitChargingSession", {{"evse_index", 1}, {"reinit_configuration", {{"duration", 2147483648ULL}}}}, 7);
+    const nlohmann::json reinit_with_float_duration = create_json_rpc_request(
+        "EVSE.ReinitChargingSession", {{"evse_index", 1}, {"reinit_configuration", {{"duration", 4.5}}}}, 8);
+    const nlohmann::json reinit_with_unknown_configuration_key = create_json_rpc_request(
+        "EVSE.ReinitChargingSession", {{"evse_index", 1}, {"reinit_configuration", {{"unknown", 1}}}}, 9);
     const types::json_rpc_api::ErrorResObj result{RPCDataTypes::ResponseErrorEnum::NoError};
+    const types::json_rpc_api::ErrorResObj invalid_parameter{RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
 
     client.send_api_hello_req();
     client.wait_for_data(std::chrono::seconds(1));
@@ -876,6 +892,42 @@ TEST_F(RpcHandlerTest, EvseReinitChargingSessionReq) {
     EXPECT_EQ(*RequestHandlerDummy::last_reinit_configuration.state_transition,
               types::evse_manager::ReinitStateEnum::CPStateE);
     EXPECT_EQ(RequestHandlerDummy::last_reinit_configuration.duration, 4000);
+    RequestHandlerDummy::last_reinit_configuration = {types::evse_manager::ReinitStateEnum::CPStateF, 123};
+
+    send_req_and_validate_res(client, reinit_with_invalid_transition, create_json_rpc_response(invalid_parameter, 3));
+    send_req_and_validate_res(client, reinit_with_invalid_duration, create_json_rpc_response(invalid_parameter, 4));
+    send_req_and_validate_res(client, reinit_with_invalid_configuration,
+                              create_json_rpc_response(invalid_parameter, 5));
+    send_req_and_validate_res(client, reinit_with_negative_duration, create_json_rpc_response(invalid_parameter, 6));
+    send_req_and_validate_res(client, reinit_with_large_duration, create_json_rpc_response(invalid_parameter, 7));
+    send_req_and_validate_res(client, reinit_with_float_duration, create_json_rpc_response(invalid_parameter, 8));
+    send_req_and_validate_res(client, reinit_with_unknown_configuration_key,
+                              create_json_rpc_response(invalid_parameter, 9));
+    EXPECT_EQ(RequestHandlerDummy::last_reinit_configuration.state_transition,
+              types::evse_manager::ReinitStateEnum::CPStateF);
+    EXPECT_EQ(RequestHandlerDummy::last_reinit_configuration.duration, 123);
+}
+
+TEST_F(RpcHandlerTest, EvseReinitChargingSessionReqInBatchWithOmittedConfiguration) {
+    RequestHandlerDummy::last_reinit_configuration = {};
+    WebSocketTestClient client("localhost", test_port);
+    ASSERT_TRUE(client.connect());
+    ASSERT_TRUE(client.wait_until_connected(std::chrono::milliseconds(100)));
+    client.send_api_hello_req();
+    ASSERT_FALSE(client.wait_for_data(std::chrono::seconds(1)).empty());
+
+    const nlohmann::json request =
+        nlohmann::json::array({create_json_rpc_request("EVSE.ReinitChargingSession", {{"evse_index", 1}}, 1)});
+    client.send(request.dump());
+    const auto response_text = client.wait_for_data(std::chrono::seconds(1));
+    ASSERT_FALSE(response_text.empty());
+    const auto response = nlohmann::json::parse(response_text);
+    ASSERT_TRUE(response.is_array());
+    ASSERT_EQ(response.size(), 1);
+    EXPECT_EQ(response[0],
+              create_json_rpc_response(types::json_rpc_api::ErrorResObj{RPCDataTypes::ResponseErrorEnum::NoError}, 1));
+    EXPECT_FALSE(RequestHandlerDummy::last_reinit_configuration.state_transition.has_value());
+    EXPECT_FALSE(RequestHandlerDummy::last_reinit_configuration.duration.has_value());
 }
 
 // Test: Connect to WebSocket server and send invalid request

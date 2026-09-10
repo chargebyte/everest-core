@@ -452,6 +452,43 @@ Returns an error parameter to show if the configuration of the charging current 
      "error": "$ResponseErrorEnum"
    }
 
+EVSE.ReinitChargingSession
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+Requests a temporary reinitialization of a connected AC or DC charging session without normally
+ending its transaction. If the EV does not stop or protocol matching cannot be safely restarted,
+EvseManager may end the session to leave the EVSE in a safe state. The request is accepted only when
+EvseManager can safely stop and restart the session.
+
+``reinit_configuration`` is optional; omitting it or passing ``null`` uses the EvseManager defaults.
+Its optional ``state_transition`` accepts ``CPStateE`` (when the BSP supports it), ``CPStateF`` or
+``CPStateX1``. Its optional non-negative integer ``duration`` is in milliseconds; zero is valid.
+Omitted properties use the EvseManager defaults ``reinit_method`` and ``reinit_duration_ms``. Unknown
+properties and invalid values return ``ErrorInvalidParameter``.
+
+**Request:**
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "reinit_configuration": {
+       "state_transition": "CPStateX1",
+       "duration": 4000
+     }
+   }
+
+**Response:**
+
+Returns an error parameter; ``NoError`` means the request was accepted. Invalid configuration returns
+``ErrorInvalidParameter``, an unknown EVSE index returns ``ErrorInvalidEVSEIndex``, and a request rejected
+by EvseManager returns ``ErrorValuesNotApplied``.
+
+.. code-block:: json
+
+   {
+     "error": "$ResponseErrorEnum"
+   }
+
 Notifications
 ~~~~~~~~~~~~~
 

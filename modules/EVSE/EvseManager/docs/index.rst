@@ -169,6 +169,30 @@ transaction blocks the LEM DCBM 400/600 for seconds while it signs the OCMF reco
 publishes no voltage, so EvseManager delays the ``stop_transaction`` until the welding detection phase
 has ended (or the EV unplugged). An EV-initiated stop keeps the transaction open until unplug anyway.
 
+Session reinitialization
+========================
+
+The ``reinit_charging_session`` command requests a temporary control-pilot transition without ending the
+charging transaction. If an HLC session is active and not already stopped or paused, EvseManager requests
+HLC stop; otherwise it switches the control pilot to X1 unless the CP oscillator-retain timer is still
+running. Reinit waits for the contactors to open, for active SLAC matching to end, and for any CP
+oscillator-retain timer to expire. If the EV does not stop in time, EvseManager forces the power path off.
+If SLAC does not become unmatched within the additional stop timeout, the session finishes instead of
+remaining in the stopping state indefinitely. The extra timeout is 20 s after the initial stop timeout,
+so this failure path can take up to about 40 s. When a stop is needed, a successful request emits
+``StoppingCharging``, ``Reinit`` and ``AuthRequired`` while preserving the active transaction.
+
+The optional ``ReinitConfiguration`` properties override the module defaults:
+
+* ``state_transition``: ``CPStateE`` (requires BSP support), ``CPStateF``, or ``CPStateX1``.
+* ``duration``: transition duration in milliseconds; zero is allowed.
+
+The defaults are configured with ``reinit_method`` and ``reinit_duration_ms``. A connected EV can also
+be reinitialized from ``Finished`` when no transaction is active. The command is rejected if the EVSE is
+disabled or unplugged, a transaction is still active in ``Finished``, a stop is already terminal or has
+no active authorized transaction, charging is cancelled, a fatal error is active, another reinitialization
+is in progress, or the selected transition is unsupported by the BSP.
+
 Published variables
 ===================
 

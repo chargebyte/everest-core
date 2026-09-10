@@ -306,6 +306,7 @@ private:
     bool bcb_toggle_detected();
     bool evse_pause_resumable() const;
     void resume_evse_pause_marker();
+    bool start_reinit_locked(const types::evse_manager::ReinitConfiguration& configuration);
 
     void clear_errors_on_unplug();
 
@@ -322,7 +323,6 @@ private:
     void cp_state_X1();
     void cp_state_E();
     void cp_state_F();
-    void process_pending_reinit_request();
 
     void process_cp_events_independent(CPEvent cp_event);
     void process_cp_events_state(CPEvent cp_event);
@@ -436,9 +436,9 @@ private:
         bool contactor_welded{false};
         bool switch_3ph1ph_threephase{false};
         bool switch_3ph1ph_threephase_ongoing{false};
-        bool reinit_requested{false};
-        bool reinit_running{false};
-        types::evse_manager::ReinitConfiguration reinit_config{types::evse_manager::ReinitStateEnum::CPStateF, 3000};
+        std::optional<EvseState> stopping_charging_target_state;
+        types::evse_manager::ReinitConfiguration reinit_configuration{types::evse_manager::ReinitStateEnum::CPStateX1,
+                                                                      0};
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;
@@ -528,6 +528,7 @@ private:
 
         ShutdownType last_shutdown_type{ShutdownType::None};
         std::chrono::system_clock::time_point current_state_started;
+        std::optional<std::chrono::steady_clock::time_point> reinit_deadline;
         EvseState last_state_detect_state_change;
         EvseState last_state;
 
@@ -558,8 +559,8 @@ private:
         std::chrono::time_point<std::chrono::steady_clock> fatal_error_became_active;
         bool fatal_error_timer_running{false};
         bool dc_statistics_printed{false};
-        bool reinit_timer_active{false};
-        std::chrono::time_point<std::chrono::steady_clock> reinit_deadline;
+        bool stopping_charging_timeout_handled{false};
+        bool reinit_slac_reset_requested{false};
 
         types::evse_manager::ChargingPausedEVSEReasons last_charging_paused_evse_reasons;
 
@@ -570,6 +571,8 @@ private:
         // StoppingCharging was entered for a user pause (flag_paused_by_evse), even if resume_charging() has
         // cleared that flag since.
         bool stopping_for_evse_pause{false};
+        bool stopping_hlc_stop_requested{false};
+        bool d20_pause_cancelled_for_stop{false};
         // How long StoppingCharging waits for the EV before the hard stop; chosen when the state is entered.
         int stopping_charging_timeout_ms{STOPPING_CHARGING_TIMEOUT_MS};
 

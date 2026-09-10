@@ -336,9 +336,26 @@ void RpcHandler::process_client_requests() {
                     // json-rpc-cxx requires every registered named parameter to be present, even when its C++ type is
                     // optional. Normalize the optional reinitialization configuration to null so omitted properties
                     // use the configured defaults.
-                    if (request_for_dispatch.value("method", "") == methods::METHOD_EVSE_REINIT_CHARGING_SESSION &&
-                        request_for_dispatch.contains("params") && request_for_dispatch["params"].is_object()) {
-                        request_for_dispatch["params"].emplace("reinit_configuration", nullptr);
+                    const auto normalize_reinit_configuration = [](nlohmann::json& request_item) {
+                        if (not request_item.is_object()) {
+                            return;
+                        }
+                        const auto method = request_item.find("method");
+                        if (method == request_item.end() || not method->is_string() ||
+                            method->get<std::string>() != methods::METHOD_EVSE_REINIT_CHARGING_SESSION) {
+                            return;
+                        }
+                        const auto params = request_item.find("params");
+                        if (params != request_item.end() && params->is_object()) {
+                            params->emplace("reinit_configuration", nullptr);
+                        }
+                    };
+                    if (request_for_dispatch.is_array()) {
+                        for (auto& request_item : request_for_dispatch) {
+                            normalize_reinit_configuration(request_item);
+                        }
+                    } else {
+                        normalize_reinit_configuration(request_for_dispatch);
                     }
 
                     // Call the RPC server with the request

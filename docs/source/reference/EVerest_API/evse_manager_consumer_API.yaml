@@ -2679,6 +2679,7 @@ components:
         - PluginTimeout: Signaled when an EV has been Plugged in but no authorization is present within specified ConnectionTimeout
         - SwitchingPhases: Signals that 1ph/3ph switching was started on AC charging
         - SessionResumed: Signaled when a session is resumed at startup (e.g. because of previous powerloss)
+        - Reinit: Signaled when a charging session reinitialization sequence has started
       type: string
       enum:
         - Authorized
@@ -2701,6 +2702,7 @@ components:
         - PluginTimeout
         - SwitchingPhases
         - SessionResumed
+        - Reinit
     SessionFinished:
       description: Data for the SessionFinished event
       type: object

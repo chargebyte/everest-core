@@ -89,9 +89,11 @@ cmds:
   reinit_charging_session:
     description: >-
       Performs a reinitialization sequence on an active AC or DC charging session
-      without ending its session or transaction. The reinitialization configuration
-      determines the requested state transition and duration. Omitted properties use
-      the configured defaults.
+      without normally ending its session or transaction. The reinitialization
+      configuration determines the requested state transition and duration. Omitted
+      properties use the configured defaults. The request can still end the session
+      if the EVSE must abort because the EV does not stop or protocol matching cannot
+      be safely restarted.
     arguments:
       reinit_configuration:
         description: Configuration for the reinitialization of a charging session. Both properties are optional.
