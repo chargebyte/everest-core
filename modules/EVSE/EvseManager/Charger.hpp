@@ -274,7 +274,6 @@ private:
     void cp_state_X1();
     void cp_state_E();
     void cp_state_F();
-    void process_pending_reinit_request();
 
     void process_cp_events_independent(CPEvent cp_event);
     void process_cp_events_state(CPEvent cp_event);
@@ -376,9 +375,9 @@ private:
         bool contactor_welded{false};
         bool switch_3ph1ph_threephase{false};
         bool switch_3ph1ph_threephase_ongoing{false};
-        bool reinit_requested{false};
-        bool reinit_running{false};
-        types::evse_manager::ReinitConfiguration reinit_config{types::evse_manager::ReinitStateEnum::CPStateF, 3000};
+        std::optional<EvseState> stopping_charging_target_state;
+        types::evse_manager::ReinitConfiguration reinit_configuration{types::evse_manager::ReinitStateEnum::CPStateX1,
+                                                                      0};
 
         std::optional<types::units_signed::SignedMeterValue> stop_signed_meter_value;
         std::optional<types::units_signed::SignedMeterValue> start_signed_meter_value;

@@ -102,6 +102,7 @@ config:
   reinit_duration_ms:
     description: Duration in milliseconds of the reinit state before going back to normal operation
     type: integer
+    minimum: 0
     default: 3000
   reinit_method:
     description: >-

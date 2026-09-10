@@ -38,6 +38,7 @@ ResolvedReinitConfiguration resolve_reinit_configuration(const types::evse_manag
     return {configuration.state_transition.value_or(default_state_transition),
             configuration.duration.value_or(default_duration)};
 }
+
 } // namespace
 
 Charger::Charger(const std::unique_ptr<IECStateMachine>& bsp, const std::unique_ptr<ErrorHandling>& error_handling,
@@ -180,7 +181,6 @@ void Charger::run_state_machine() {
     // run over state machine loop until current_state does not change anymore
     do {
         mainloop_runs++;
-        process_pending_reinit_request();
         // If a state change happened or an error recovered during a state we reinitialize the state
         bool initialize_state = (internal_context.last_state_detect_state_change not_eq shared_context.current_state) or
                                 (internal_context.last_shutdown_type not_eq shared_context.shutdown_type);
@@ -697,16 +697,23 @@ void Charger::run_state_machine() {
             break;
 
         case EvseState::Reinit:
+            if (not shared_context.flag_ev_plugged_in || shared_context.flag_disable_requested ||
+                stop_charging_on_fatal_error_internal() || shared_context.flag_externally_cancelled) {
+                shared_context.stopping_charging_target_state = EvseState::Finished;
+                set_state(EvseState::StoppingCharging);
+                break;
+            }
             if (initialize_state) {
                 session_log.evse(false, fmt::format("Reinit sequence started (method: {}, duration: {} ms)",
                                                     types::evse_manager::reinit_state_enum_to_string(
-                                                        shared_context.reinit_config.state_transition.value()),
-                                                    shared_context.reinit_config.duration.value()));
-                shared_context.reinit_running = true;
+                                                        shared_context.reinit_configuration.state_transition.value()),
+                                                    shared_context.reinit_configuration.duration.value()));
                 signal_simple_event(types::evse_manager::SessionEventEnum::Reinit);
-                shared_context.iec_allow_close_contactor = false;
+                shared_context.hlc_charging_active = false;
                 shared_context.hlc_allow_close_contactor = false;
-                switch (shared_context.reinit_config.state_transition.value()) {
+                shared_context.iec_allow_close_contactor = false;
+
+                switch (shared_context.reinit_configuration.state_transition.value()) {
                 case types::evse_manager::ReinitStateEnum::CPStateE:
                     cp_state_E();
                     break;
@@ -717,23 +724,15 @@ void Charger::run_state_machine() {
                     cp_state_X1();
                     break;
                 }
-                if (shared_context.reinit_config.duration.value() > 0) {
-                    internal_context.reinit_timer_active = true;
-                    internal_context.reinit_deadline =
-                        std::chrono::steady_clock::now() +
-                        std::chrono::milliseconds(shared_context.reinit_config.duration.value());
-                } else {
-                    internal_context.reinit_timer_active = false;
-                }
             }
-
-            if (!internal_context.reinit_timer_active or
-                std::chrono::steady_clock::now() >= internal_context.reinit_deadline) {
-                session_log.evse(false, "Exit reinit");
-                shared_context.reinit_running = false;
-                internal_context.reinit_timer_active = false;
+            if (time_in_current_state >= shared_context.reinit_configuration.duration.value()) {
+                session_log.evse(false, "Restarting charging negotiation after reinitialization");
                 cp_state_X1();
-                shared_context.current_state = EvseState::WaitingForAuthentication;
+                if (shared_context.reinit_configuration.state_transition ==
+                    types::evse_manager::ReinitStateEnum::CPStateX1) {
+                    signal_slac_start();
+                }
+                set_state(EvseState::WaitingForAuthentication);
             }
             break;
 
@@ -1064,12 +1063,14 @@ void Charger::run_state_machine() {
             - switch to this state to stop charging gracefully
             - DC/AC ISO: Sends a stop request via ISO first.
             - DC/AC ISO: Sends a pause request via ISO first if the user paused the session.
+            - Session reinitialization: Stops the HLC session gracefully and waits for the contactors to open and,
+              for AC, SLAC to become unmatched before continuing with Reinit.
             - BC: Disables PWM
             - After that trigger to stop the charging, it waits for the EV to go to state B (it tracks if the relays
             open up).
             - If they don't after a timeout, it performs a hard stop (open relays, stop DC power supplies)
-            - after charging is stopped, it switches to PausedEVSE/PausedEV or Finished depending on whether it may
-            restart or not (only a short transitional state)
+            - after charging is stopped, it switches to Reinit, PausedEVSE/PausedEV, or Finished depending on the
+            requested target state (only a short transitional state)
             */
         case EvseState::StoppingCharging:
             if (initialize_state) {
@@ -1077,9 +1078,30 @@ void Charger::run_state_machine() {
                 shared_context.legacy_wakeup_done = false;
 
                 signal_simple_event(types::evse_manager::SessionEventEnum::StoppingCharging);
+                if (shared_context.stopping_charging_target_state == EvseState::Reinit) {
+                    session_log.evse(false, "Stopping charging for session reinitialization");
+                }
 
-                if (shared_context.hlc_charging_active) {
-                    if (shared_context.hlc_d20_active and shared_context.flag_paused_by_evse) {
+                if (shared_context.stopping_charging_target_state == EvseState::Finished) {
+                    signal_dc_supply_off();
+                    bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+                    cp_state_X1();
+                } else if (shared_context.stopping_charging_target_state == EvseState::Reinit &&
+                           !shared_context.hlc_charging_active) {
+                    if (config_context.charge_mode == ChargeMode::DC) {
+                        signal_dc_supply_off();
+                    }
+                    bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+                    cp_state_X1();
+                } else if (shared_context.stopping_charging_target_state == EvseState::Reinit &&
+                           shared_context.hlc_charging_terminate_pause == HlcTerminatePause::Terminate) {
+                    bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+                    cp_state_X1();
+                } else if (shared_context.hlc_charging_active) {
+                    if (shared_context.stopping_charging_target_state == EvseState::Reinit) {
+                        // Request a graceful HLC stop before starting the reinitialization sequence.
+                        signal_hlc_stop_charging();
+                    } else if (shared_context.hlc_d20_active and shared_context.flag_paused_by_evse) {
                         // Request pause via ISO protocol, EV is expected to stop the charging process
                         signal_hlc_pause_charging();
                     } else {
@@ -1091,16 +1113,48 @@ void Charger::run_state_machine() {
                 }
             }
 
+            if (shared_context.stopping_charging_target_state == EvseState::Reinit &&
+                (not shared_context.flag_ev_plugged_in || shared_context.flag_disable_requested ||
+                 shared_context.flag_externally_cancelled || stop_charging_on_fatal_error_internal())) {
+                shared_context.stopping_charging_target_state = EvseState::Finished;
+                signal_dc_supply_off();
+                bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+                cp_state_X1();
+            }
+
             // Now the EV is informed and we need to wait until the relays open or a timeout occurs.
             if (time_in_current_state > STOPPING_CHARGING_TIMEOUT_MS) {
                 EVLOG_warning << "StoppingCharging: EV did not stop within timeout, forcing hard stop.";
                 // Perform hard stop
                 signal_dc_supply_off();
                 bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+                cp_state_X1();
+                if (shared_context.stopping_charging_target_state.has_value()) {
+                    shared_context.stopping_charging_target_state = EvseState::Finished;
+                }
             }
 
             // Relays still closed? Wait here.
             if (not shared_context.contactor_open) {
+                break;
+            }
+
+            if (shared_context.stopping_charging_target_state == EvseState::Finished) {
+                shared_context.stopping_charging_target_state.reset();
+                set_state(EvseState::Finished);
+                break;
+            }
+
+            if (shared_context.stopping_charging_target_state == EvseState::Reinit) {
+                const bool reinit_hlc_stopped =
+                    !shared_context.hlc_charging_active ||
+                    shared_context.hlc_charging_terminate_pause == HlcTerminatePause::Terminate;
+
+                if (reinit_hlc_stopped &&
+                    (config_context.charge_mode == ChargeMode::DC || not shared_context.matching_started)) {
+                    shared_context.stopping_charging_target_state.reset();
+                    set_state(EvseState::Reinit);
+                }
                 break;
             }
 
@@ -1643,56 +1697,53 @@ bool Charger::start_reinit() {
 bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& configuration) {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
 
-    if (shared_context.current_state == EvseState::Disabled or shared_context.current_state == EvseState::Idle) {
-        EVLOG_warning << "Rejecting reinit request: no EV plugged in or connector disabled";
-        return false;
-    }
-
     const auto resolved_configuration =
         resolve_reinit_configuration(configuration, config_context.reinit_method, config_context.reinit_duration_ms);
-    const auto state_transition = resolved_configuration.state_transition;
-    const auto duration = resolved_configuration.duration;
-    if (duration < 0) {
-        EVLOG_warning << "Reinit requested with a negative duration.";
-        return false;
-    }
-    if (state_transition == types::evse_manager::ReinitStateEnum::CPStateE and !supports_cp_state_E) {
-        EVLOG_warning << "Reinit requested with CP state E but BSP does not support CP state E.";
+
+    if (resolved_configuration.duration < 0) {
+        EVLOG_warning << "Rejecting charging-session reinitialization: duration must not be negative";
         return false;
     }
 
-    if (shared_context.reinit_running) {
-        EVLOG_warning << "Skip reinit request. Reinit process already running";
+    if (!shared_context.connector_enabled || !shared_context.flag_ev_plugged_in ||
+        shared_context.current_state == EvseState::Idle || shared_context.current_state == EvseState::Disabled) {
+        EVLOG_warning << "Rejecting charging-session reinitialization: no enabled charging session";
         return false;
     }
 
-    shared_context.reinit_config = {state_transition, duration};
-    shared_context.reinit_requested = true;
-    EVLOG_info << fmt::format("Reinit requested (method: {}, duration: {} ms)",
-                              types::evse_manager::reinit_state_enum_to_string(state_transition), duration);
+    if (shared_context.flag_externally_cancelled || stop_charging_on_fatal_error_internal()) {
+        EVLOG_warning << "Rejecting charging-session reinitialization: charging is cancelled or has a fatal error";
+        return false;
+    }
+
+    if (shared_context.current_state == EvseState::Reinit ||
+        (shared_context.current_state == EvseState::StoppingCharging &&
+         shared_context.stopping_charging_target_state == EvseState::Reinit)) {
+        EVLOG_warning << "Rejecting charging-session reinitialization: reinitialization is already in progress";
+        return false;
+    }
+
+    if (resolved_configuration.state_transition == types::evse_manager::ReinitStateEnum::CPStateE &&
+        !supports_cp_state_E) {
+        EVLOG_warning << "Rejecting charging-session reinitialization: CP state E is not supported";
+        return false;
+    }
+
+    shared_context.reinit_configuration = {resolved_configuration.state_transition, resolved_configuration.duration};
+    if (config_context.charge_mode == ChargeMode::AC && shared_context.matching_started &&
+        (!shared_context.hlc_charging_active ||
+         shared_context.hlc_charging_terminate_pause == HlcTerminatePause::Terminate)) {
+        signal_slac_reset();
+    }
+    if (shared_context.current_state == EvseState::Charging ||
+        shared_context.current_state == EvseState::ChargingPausedEV ||
+        shared_context.current_state == EvseState::ChargingPausedEVSE) {
+        shared_context.stopping_charging_target_state = EvseState::Reinit;
+        set_state(EvseState::StoppingCharging);
+    } else {
+        set_state(EvseState::Reinit);
+    }
     return true;
-}
-
-void Charger::process_pending_reinit_request() {
-    if (!shared_context.reinit_requested) {
-        return;
-    }
-
-    if (shared_context.current_state == EvseState::Charging) {
-        shared_context.current_state = EvseState::StoppingCharging;
-    }
-
-    if (shared_context.slac_matched) {
-        if (!shared_context.reinit_running) {
-            shared_context.reinit_running = true;
-            signal_hlc_stop_charging();
-        }
-        return;
-    }
-
-    shared_context.reinit_requested = false;
-    shared_context.reinit_running = true;
-    shared_context.current_state = EvseState::Reinit;
 }
 
 void Charger::setup(const SetupConfig& config) {
@@ -1712,7 +1763,7 @@ void Charger::setup(const SetupConfig& config) {
     soft_over_current_measurement_noise_A = config.soft_over_current_measurement_noise_A;
 
     config_context.switch_3ph1ph_delay_s = config.switch_3ph1ph_delay_s;
-    config_context.switch_3ph1ph_cp_state = config.switch_3ph1ph_cp_state;
+    config_context.switch_3ph1ph_cp_state_F = config.switch_3ph1ph_cp_state == "F";
 
     config_context.state_F_after_fault_ms = config.state_F_after_fault_ms;
     config_context.reinit_duration_ms = config.reinit_duration_ms;
@@ -2226,14 +2277,30 @@ void Charger::dlink_terminate() {
     shared_context.hlc_allow_close_contactor = false;
     cp_state_X1();
     shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Terminate;
+    if (shared_context.current_state == EvseState::StoppingCharging &&
+        shared_context.stopping_charging_target_state == EvseState::Reinit) {
+        bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+    }
 }
 
 void Charger::dlink_error() {
     {
         Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_dlink_error);
 
-        if (shared_context.reinit_requested or shared_context.reinit_running) {
-            EVLOG_debug << "Ignoring D-LINK_ERROR.req because reinit is active";
+        if (shared_context.current_state == EvseState::Reinit) {
+            EVLOG_debug << "Ignoring D-LINK_ERROR.req because charging-session reinitialization is active";
+            return;
+        }
+
+        if (shared_context.current_state == EvseState::StoppingCharging &&
+            shared_context.stopping_charging_target_state == EvseState::Reinit) {
+            EVLOG_debug << "Treating D-LINK_ERROR.req as HLC stopped during charging-session reinitialization";
+            shared_context.hlc_charging_active = false;
+            if (config_context.charge_mode == ChargeMode::DC) {
+                signal_dc_supply_off();
+            }
+            bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
+            cp_state_X1();
             return;
         }
 
