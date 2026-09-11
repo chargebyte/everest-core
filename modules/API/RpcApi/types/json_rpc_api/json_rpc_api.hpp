@@ -632,6 +632,10 @@ inline std::string energy_transfer_mode_enum_to_string(const EnergyTransferModeE
         return "AC_BPT_DER";
     case EnergyTransferModeEnum::AC_DER:
         return "AC_DER";
+    case EnergyTransferModeEnum::AC_DER_IEC:
+        return "AC_DER_IEC";
+    case EnergyTransferModeEnum::AC_DER_SAE:
+        return "AC_DER_SAE";
     case EnergyTransferModeEnum::DC_BPT:
         return "DC_BPT";
     case EnergyTransferModeEnum::DC_ACDP:
