@@ -76,6 +76,7 @@ struct Callbacks {
     std::function<void(float)> dc_pre_charge_target_voltage;
     std::function<void(const DcChargeLoopReq&)> dc_charge_loop_req;
     std::function<void(const DcMaximumLimits&)> dc_max_limits;
+    std::function<void(const d20::DcTransferLimits&)> dc_evse_adjusted_limits;
     std::function<void(const AcChargeLoopReq&)> ac_charge_loop_req;
     std::function<void(const message_20::Type&)> v2g_message;
     std::function<void(const std::string&)> evccid;
@@ -91,6 +92,7 @@ struct Callbacks {
     std::function<void(const dt::VasSelectedServiceList&)> selected_vas_services;
     std::function<void(const AcLimits&)> ac_limits;
     std::function<void(const std::string&, const std::string&)> ev_termination;
+    std::function<void(const iso15118::message_20::datatypes::ResponseCode&)> response_code;
 };
 
 } // namespace feedback
@@ -103,6 +105,7 @@ public:
     void dc_pre_charge_target_voltage(float) const;
     void dc_charge_loop_req(const feedback::DcChargeLoopReq&) const;
     void dc_max_limits(const feedback::DcMaximumLimits&) const;
+    void dc_evse_adjusted_limits(const d20::DcTransferLimits&) const;
     void ac_charge_loop_req(const feedback::AcChargeLoopReq&) const;
     void v2g_message(const message_20::Type&) const;
     void evcc_id(const std::string&) const;
@@ -119,6 +122,7 @@ public:
     void selected_vas_services(const dt::VasSelectedServiceList&) const;
     void ac_limits(const feedback::AcLimits&) const;
     void ev_termination(const std::string&, const std::string&) const;
+    void response_code(const iso15118::message_20::datatypes::ResponseCode&) const;
 
 private:
     feedback::Callbacks callbacks;
