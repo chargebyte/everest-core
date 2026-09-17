@@ -131,6 +131,16 @@ inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::Res
     return os;
 }
 
+/// \brief Conversion from a given ResponseErrorEnum \p e to a given json object \p j
+inline void to_json(json& j, const ResponseErrorEnum& e) {
+    j = types::json_rpc_api::response_error_enum_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given ResponseErrorEnum \p e
+inline void from_json(const json& j, ResponseErrorEnum& e) {
+    e = types::json_rpc_api::string_to_response_error_enum(j.get<std::string>());
+}
+
 } // namespace json_rpc_api
 } // namespace types
 
@@ -209,6 +219,16 @@ inline ChargeProtocolEnum string_to_charge_protocol_enum(const std::string& s) {
 inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::ChargeProtocolEnum& charge_protocol_enum) {
     os << types::json_rpc_api::charge_protocol_enum_to_string(charge_protocol_enum);
     return os;
+}
+
+/// \brief Conversion from a given ChargeProtocolEnum \p e to a given json object \p j
+inline void to_json(json& j, const ChargeProtocolEnum& e) {
+    j = types::json_rpc_api::charge_protocol_enum_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given ChargeProtocolEnum \p e
+inline void from_json(const json& j, ChargeProtocolEnum& e) {
+    e = types::json_rpc_api::string_to_charge_protocol_enum(j.get<std::string>());
 }
 
 } // namespace json_rpc_api
@@ -361,6 +381,16 @@ inline EVSEStateEnum string_to_evsestate_enum(const std::string& s) {
 inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::EVSEStateEnum& evsestate_enum) {
     os << types::json_rpc_api::evsestate_enum_to_string(evsestate_enum);
     return os;
+}
+
+/// \brief Conversion from a given EVSEStateEnum \p e to a given json object \p j
+inline void to_json(json& j, const EVSEStateEnum& e) {
+    j = types::json_rpc_api::evsestate_enum_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given EVSEStateEnum \p e
+inline void from_json(const json& j, EVSEStateEnum& e) {
+    e = types::json_rpc_api::string_to_evsestate_enum(j.get<std::string>());
 }
 
 } // namespace json_rpc_api
@@ -579,6 +609,16 @@ inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::Con
     return os;
 }
 
+/// \brief Conversion from a given ConnectorTypeEnum \p e to a given json object \p j
+inline void to_json(json& j, const ConnectorTypeEnum& e) {
+    j = types::json_rpc_api::connector_type_enum_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given ConnectorTypeEnum \p e
+inline void from_json(const json& j, ConnectorTypeEnum& e) {
+    e = types::json_rpc_api::string_to_connector_type_enum(j.get<std::string>());
+}
+
 } // namespace json_rpc_api
 } // namespace types
 
@@ -632,6 +672,10 @@ inline std::string energy_transfer_mode_enum_to_string(const EnergyTransferModeE
         return "AC_BPT_DER";
     case EnergyTransferModeEnum::AC_DER:
         return "AC_DER";
+    case EnergyTransferModeEnum::AC_DER_IEC:
+        return "AC_DER_IEC";
+    case EnergyTransferModeEnum::AC_DER_SAE:
+        return "AC_DER_SAE";
     case EnergyTransferModeEnum::DC_BPT:
         return "DC_BPT";
     case EnergyTransferModeEnum::DC_ACDP:
@@ -768,6 +812,16 @@ inline std::ostream& operator<<(std::ostream& os,
     return os;
 }
 
+/// \brief Conversion from a given EnergyTransferModeEnum \p e to a given json object \p j
+inline void to_json(json& j, const EnergyTransferModeEnum& e) {
+    j = types::json_rpc_api::energy_transfer_mode_enum_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given EnergyTransferModeEnum \p e
+inline void from_json(const json& j, EnergyTransferModeEnum& e) {
+    e = types::json_rpc_api::string_to_energy_transfer_mode_enum(j.get<std::string>());
+}
+
 } // namespace json_rpc_api
 } // namespace types
 
@@ -830,6 +884,16 @@ inline Severity string_to_severity(const std::string& s) {
 inline std::ostream& operator<<(std::ostream& os, const types::json_rpc_api::Severity& severity) {
     os << types::json_rpc_api::severity_to_string(severity);
     return os;
+}
+
+/// \brief Conversion from a given Severity \p e to a given json object \p j
+inline void to_json(json& j, const Severity& e) {
+    j = types::json_rpc_api::severity_to_string_view(e);
+}
+
+/// \brief Conversion from a given json object \p j to a given Severity \p e
+inline void from_json(const json& j, Severity& e) {
+    e = types::json_rpc_api::string_to_severity(j.get<std::string>());
 }
 
 } // namespace json_rpc_api
