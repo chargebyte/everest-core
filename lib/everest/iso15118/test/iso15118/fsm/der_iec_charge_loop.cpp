@@ -2,9 +2,8 @@
 // Copyright 2026 Pionix GmbH and Contributors to EVerest
 #include <catch2/catch_test_macros.hpp>
 
-#include <cstdint>
-
 #include <algorithm>
+#include <cstdint>
 #include <vector>
 
 #include "helper.hpp"
