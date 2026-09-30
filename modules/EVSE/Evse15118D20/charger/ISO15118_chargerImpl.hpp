@@ -15,6 +15,7 @@
 // ev@75ac1216-19eb-4182-a85c-820f1fc2c091:v1
 #include <bitset>
 #include <mutex>
+#include <optional>
 
 #include "der_relay.hpp"
 #include "grid_event.hpp"
@@ -105,6 +106,9 @@ private:
 
     std::vector<iso15118::d20::SupportedVASs> supported_vas_services_per_provider;
     std::mutex vas_mutex;
+    std::mutex published_dc_values_mutex;
+    std::optional<types::iso15118::DcEvTargetValues> last_published_dc_ev_target_values;
+    std::optional<types::iso15118::DcEvMaximumLimits> last_published_dc_ev_maximum_limits;
 
     void update_supported_vas_services();
     std::optional<size_t> get_vas_provider_index(uint16_t service_id);
@@ -121,6 +125,9 @@ private:
     // concurrent applies and leave a mixed DER-function map. Outermost lock; acquired before GEL.
     std::mutex der_apply_mutex;
     void apply_active_der_directives();
+    void reset_published_value_cache();
+    void publish_dc_ev_target_voltage_current_if_changed(const types::iso15118::DcEvTargetValues& values);
+    void publish_dc_ev_maximum_limits_if_changed(const types::iso15118::DcEvMaximumLimits& limits);
 
     /// Builds the base SSLConfig: backend, V2G/MO trust-anchor paths, and the module-level
     /// TLS flags. Carries no certificate chains. Does not depend on leaf-certificate
