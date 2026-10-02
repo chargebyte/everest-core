@@ -60,9 +60,9 @@ MessageWithQOS::MessageWithQOS(const std::string& topic, const std::string& payl
 }
 
 MQTTAbstractionImpl::MQTTAbstractionImpl(const MQTTSettings& mqtt_settings) :
+    running(true),
     mqtt_everest_prefix(mqtt_settings.everest_prefix),
-    mqtt_external_prefix(mqtt_settings.external_prefix),
-    running(true) {
+    mqtt_external_prefix(mqtt_settings.external_prefix) {
     BOOST_LOG_FUNCTION();
 
     EVLOG_debug << "Initializing MQTT abstraction layer...";
@@ -251,7 +251,7 @@ void MQTTAbstractionImpl::subscribe(const std::string& topic, QOS qos) {
     handle->subscribed_topics.insert(topic);
 
     this->ev_handler.add_action([this, topic, max_qos_level]() {
-        const auto result = this->mqtt_client->subscribe(
+        [[maybe_unused]] const auto result = this->mqtt_client->subscribe(
             topic,
             [this, topic]([[maybe_unused]] everest::lib::io::mqtt::mosquitto_cpp& client,
                           everest::lib::io::mqtt::mosquitto_cpp::message const& message) {
