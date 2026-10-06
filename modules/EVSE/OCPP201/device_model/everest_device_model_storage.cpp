@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <everest/logging.hpp>
 
+#include <conversions.hpp>
 #include <device_model/definitions.hpp>
 #include <device_model/everest_device_model_storage.hpp>
 #include <ocpp/v2/init_device_model_db.hpp>
@@ -300,11 +301,19 @@ build_everest_config_variables(const everest::config::ModuleConfigurationParamet
     return component_config;
 }
 
-std::string supported_energy_transfer_modes_vector_to_string(
-    const std::vector<types::iso15118::EnergyTransferMode>& evse_supported_energy_transfers) {
+std::string
+supported_energy_transfer_modes_vector_to_string(const std::vector<types::iso15118::EnergyTransferMode>& modes) {
+    std::vector<ocpp::v2::EnergyTransferModeEnum> ocpp_modes;
+    for (const auto mode : modes) {
+        const auto ocpp_mode = module::conversions::to_ocpp_energy_transfer_mode(mode);
+        if (std::find(ocpp_modes.cbegin(), ocpp_modes.cend(), ocpp_mode) == ocpp_modes.cend()) {
+            ocpp_modes.push_back(ocpp_mode);
+        }
+    }
+
     std::string supported_string{};
-    for (const auto& supported_transfer : evse_supported_energy_transfers) {
-        supported_string += types::iso15118::energy_transfer_mode_to_string(supported_transfer) + ",";
+    for (const auto ocpp_mode : ocpp_modes) {
+        supported_string += ocpp::v2::conversions::energy_transfer_mode_enum_to_string(ocpp_mode) + ",";
     }
     if (!supported_string.empty()) {
         supported_string.pop_back();
