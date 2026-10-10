@@ -2,9 +2,9 @@
 // Copyright 2023 Pionix GmbH and Contributors to EVerest
 #pragma once
 
-#include <optional>
-
 #include "../states.hpp"
+
+#include <optional>
 
 namespace iso15118::d20::state {
 

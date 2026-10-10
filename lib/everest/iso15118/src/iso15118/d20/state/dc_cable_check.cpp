@@ -38,6 +38,9 @@ void DC_CableCheck::enter() {
 Result DC_CableCheck::feed(Event ev) {
 
     if (ev == Event::CONTROL_MESSAGE) {
+        if (const auto stop = m_ctx.get_control_event<StopCharging>(); stop and *stop) {
+            m_ctx.request_shutdown();
+        }
         const auto control_data = m_ctx.get_control_event<CableCheckFinished>();
         if (not control_data) {
             // Ignore control message
@@ -56,12 +59,21 @@ Result DC_CableCheck::feed(Event ev) {
     const auto variant = m_ctx.pull_request();
 
     if (const auto req = variant->get_if<message_20::DC_CableCheckRequest>()) {
+        auto res = handle_request(*req, m_ctx.session, cable_check_success);
+        if (m_ctx.shutdown_requested() or cable_check_success == false) {
+            if (res.response_code != dt::ResponseCode::FAILED_UnknownSession) {
+                set_response_code(res, dt::ResponseCode::FAILED_SequenceError);
+                res.processing = dt::Processing::Finished;
+            }
+            m_ctx.respond_and_publish_response_code(res);
+            m_ctx.session_stopped = true;
+            return {};
+        }
+
         if (not cable_check_initiated) {
             m_ctx.feedback.signal(session::feedback::Signal::START_CABLE_CHECK);
             cable_check_initiated = true;
         }
-
-        const auto res = handle_request(*req, m_ctx.session, cable_check_success);
 
         const auto response_code = m_ctx.respond_and_publish_response_code(res);
 
