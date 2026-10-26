@@ -15,6 +15,8 @@ target_sources(${MODULE_NAME}
     serial_device.cpp
     ast_app_layer.cpp
     diagnostics.cpp
+    transport.cpp
+    meter.cpp
 )
 
 target_compile_features(${MODULE_NAME} PUBLIC cxx_std_17)
@@ -23,6 +25,7 @@ target_compile_features(${MODULE_NAME} PUBLIC cxx_std_17)
 target_sources(${MODULE_NAME}
     PRIVATE
         "main/powermeterImpl.cpp"
+        "temperature/temperature_sensorImpl.cpp"
 )
 
 # ev@c55432ab-152c-45a9-9d2e-7281d50c69c3:v1
@@ -31,4 +34,8 @@ target_link_libraries(${MODULE_NAME} PRIVATE
     everest::framework
     everest::crc
 )
+
+if(EVEREST_CORE_BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 # ev@c55432ab-152c-45a9-9d2e-7281d50c69c3:v1

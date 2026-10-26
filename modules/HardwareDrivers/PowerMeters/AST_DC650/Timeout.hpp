@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
+// Copyright Pionix GmbH and Contributors to EVerest
 
-#ifndef TIMEOUT_HPP
-#define TIMEOUT_HPP
-
+#pragma one
 #include <chrono>
 using namespace std::chrono;
 
 /*
- Simple helper class for a timeout
-*/
+ * Simple helper class for a timeout
+ */
 
 class Timeout {
 public:
@@ -24,5 +22,3 @@ private:
     milliseconds t;
     time_point<steady_clock> start;
 };
-
-#endif

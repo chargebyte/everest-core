@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
+// Copyright Pionix GmbH and Contributors to EVerest
 
 #ifndef AST_DC650_HPP
 #define AST_DC650_HPP
@@ -13,6 +13,7 @@
 
 // headers for provided interface implementations
 #include <generated/interfaces/powermeter/Implementation.hpp>
+#include <generated/interfaces/temperature_sensor/Implementation.hpp>
 
 // ev@4bf81b14-a215-475c-a1d3-0a484ae48918:v1
 // insert your custom include headers here
@@ -26,10 +27,15 @@ class AST_DC650 : public Everest::ModuleBase {
 public:
     AST_DC650() = delete;
     AST_DC650(const ModuleInfo& info, Everest::MqttProvider& mqtt_provider, std::unique_ptr<powermeterImplBase> p_main,
-              Conf& config) :
-        ModuleBase(info), mqtt(mqtt_provider), p_main(std::move(p_main)), config(config){};
+              std::unique_ptr<temperature_sensorImplBase> p_temperature, Conf& config) :
+        ModuleBase(info),
+        mqtt(mqtt_provider),
+        p_temperature(std::move(p_temperature)),
+        p_main(std::move(p_main)),
+        config(config){};
 
     Everest::MqttProvider& mqtt;
+    const std::unique_ptr<temperature_sensorImplBase> p_temperature;
     const std::unique_ptr<powermeterImplBase> p_main;
     const Conf& config;
 

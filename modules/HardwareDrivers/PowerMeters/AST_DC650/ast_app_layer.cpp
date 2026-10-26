@@ -1,375 +1,254 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
-
+// Copyright Pionix GmbH and Contributors to EVerest
 #include "ast_app_layer.hpp"
 
-#include <cstring>
-#include <endian.h>
-#include <errno.h>
-#include <everest/logging.hpp>
-#include <fcntl.h>
-#include <iostream>
-#include <string>
-#include <unistd.h>
-
-#include <sys/select.h>
-#include <sys/time.h>
-
-#include <fmt/core.h>
+#include <algorithm>
+#include <cctype>
+#include <limits>
+#include <nlohmann/json.hpp>
 
 namespace ast_app_layer {
 
-uint32_t timepoint_to_uint32(date::utc_clock::time_point timepoint) {
-    return static_cast<uint32_t>(
-        std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count());
-}
+namespace {
 
-void insert_u16_as_u8s(std::vector<std::uint8_t>& vec, std::uint16_t u16) {
-    std::uint8_t upper = static_cast<std::uint8_t>((u16 >> 8) & 0x00FF);
-    std::uint8_t lower = static_cast<std::uint8_t>(u16 & 0x00FF);
-    vec.push_back(lower);
-    vec.push_back(upper);
-}
-
-void insert_u32_as_u8s(std::vector<std::uint8_t>& vec, std::uint32_t u32) {
-    vec.push_back(static_cast<std::uint8_t>(u32 & 0x000000FF));
-    vec.push_back(static_cast<std::uint8_t>((u32 >> 8) & 0x000000FF));
-    vec.push_back(static_cast<std::uint8_t>((u32 >> 16) & 0x000000FF));
-    vec.push_back(static_cast<std::uint8_t>((u32 >> 24) & 0x000000FF));
-}
-
-std::vector<std::uint8_t> AstAppLayer::create_command(ast_app_layer::Command cmd) {
-    std::vector<std::uint8_t> command_data{};
-
-    insert_u16_as_u8s(command_data, static_cast<std::uint16_t>(cmd.type));
-    insert_u16_as_u8s(command_data, static_cast<std::uint16_t>(cmd.length));
-    command_data.push_back((uint8_t)ast_app_layer::CommandStatus::OK);
-
-    for (uint16_t i = 0; i < cmd.data.size(); i++) {
-        command_data.push_back(cmd.data[i]);
+void append(Bytes& bytes, std::uint64_t value, std::size_t width) {
+    for (std::size_t i = 0; i < width; ++i) {
+        bytes.push_back(value & 0xff);
+        value >>= 8;
     }
-    return command_data;
 }
 
-std::vector<std::uint8_t> AstAppLayer::create_simple_command(ast_app_layer::CommandType cmd_type) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = cmd_type;
-    cmd.length = 0x0005;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    return create_command(cmd);
+void check_text(const std::string& text, std::size_t maximum, const char* field) {
+    if (text.size() > maximum ||
+        std::any_of(text.begin(), text.end(), [](unsigned char c) { return c < 32 || c > 126; })) {
+        throw std::invalid_argument(std::string(field) + ": expected printable ASCII, maximum " +
+                                    std::to_string(maximum) + " bytes");
+    }
 }
 
-int8_t AstAppLayer::get_utc_offset_in_quarter_hours(
-    const std::chrono::time_point<std::chrono::system_clock>& timepoint_system_clock) {
-    std::stringstream offset;
-    std::int8_t offset_quarterhours = 0;
+UserIdType identification_type(types::powermeter::OCMFIdentificationType type) {
+    using T = types::powermeter::OCMFIdentificationType;
+    switch (type) {
+    case T::NONE:
+        return UserIdType::NONE;
+    case T::DENIED:
+        return UserIdType::DENIED;
+    case T::UNDEFINED:
+        return UserIdType::UNDEFINED;
+    case T::ISO14443:
+        return UserIdType::ISO14443;
+    case T::ISO15693:
+        return UserIdType::ISO15693;
+    case T::EMAID:
+        return UserIdType::EMAID;
+    case T::EVCCID:
+        return UserIdType::EVCCID;
+    case T::EVCOID:
+        return UserIdType::EVCOID;
+    case T::ISO7812:
+        return UserIdType::ISO7812;
+    case T::CARD_TXN_NR:
+        return UserIdType::CAR_TXN_NR;
+    case T::CENTRAL:
+        return UserIdType::CENTRAL;
+    case T::CENTRAL_1:
+        return UserIdType::CENTRAL_1;
+    case T::CENTRAL_2:
+        return UserIdType::CENTRAL_2;
+    case T::LOCAL:
+        return UserIdType::LOCAL;
+    case T::LOCAL_1:
+        return UserIdType::LOCAL_1;
+    case T::LOCAL_2:
+        return UserIdType::LOCAL_2;
+    case T::PHONE_NUMBER:
+        return UserIdType::PHONE_NUMBER;
+    case T::KEY_CODE:
+        return UserIdType::KEY_CODE;
+    }
+    throw std::invalid_argument("Unknown identification type");
+}
 
-    auto tm = std::chrono::system_clock::to_time_t(timepoint_system_clock);
-    offset << std::put_time(std::localtime(&tm), "%z");
-    int offset_int = std::stoi(offset.str());
+} // namespace
 
-    int offset_h = offset_int / 100;
-    int offset_remaining = offset_int % 100; // in case of timezones that are not full-hour offsets of UTC
-    if (offset_remaining != 0) {
-        std::int8_t offset_remaining_extra_hour = offset_remaining / 60;
-        if (offset_remaining_extra_hour != 0) {
-            offset_quarterhours += offset_remaining_extra_hour * 4; // can be positive or negative
-            offset_remaining -= offset_remaining_extra_hour * 4;
+std::uint64_t unsigned_le(const Bytes& data, std::size_t offset, std::size_t width) {
+    if (width == 0 || width > 8 || offset > data.size() || width > data.size() - offset) {
+        throw std::runtime_error("Invalid AST numeric field length");
+    }
+    std::uint64_t value = 0;
+    for (std::size_t i = 0; i < width; ++i) {
+        value |= static_cast<std::uint64_t>(data[offset + i]) << (8 * i);
+    }
+    return value;
+}
+
+std::int64_t signed_le(const Bytes& data, std::size_t offset, std::size_t width) {
+    const auto value = unsigned_le(data, offset, width);
+    const auto sign = std::uint64_t{1} << (width * 8 - 1);
+    if ((value & sign) == 0) {
+        return static_cast<std::int64_t>(value);
+    }
+    // Avoid implementation-defined unsigned-to-signed conversion, including INT64_MIN.
+    const auto mask = width == 8 ? std::numeric_limits<std::uint64_t>::max() : (sign * 2 - 1);
+    return -1 - static_cast<std::int64_t>((~value) & mask);
+}
+
+Bytes command(CommandType type, const Bytes& data) {
+    if (data.size() > 4995) {
+        throw std::invalid_argument("AST command exceeds maximum length");
+    }
+    Bytes bytes;
+    append(bytes, static_cast<std::uint16_t>(type), 2);
+    append(bytes, data.size() + 5, 2);
+    bytes.push_back(0);
+    bytes.insert(bytes.end(), data.begin(), data.end());
+    return bytes;
+}
+
+std::vector<Response> parse_responses(const Bytes& frame, std::uint8_t address) {
+    if (frame.empty() || frame.front() != address) {
+        throw std::runtime_error("Unexpected AST response address");
+    }
+    std::vector<Response> responses;
+    for (std::size_t offset = 1; offset < frame.size();) {
+        if (frame.size() - offset < 5) {
+            throw std::runtime_error("Truncated AST response header");
         }
-        std::int8_t offset_remaining_quarterhours = offset_remaining / 15;
-        offset_quarterhours += offset_remaining_quarterhours;
+        const auto length = unsigned_le(frame, offset + 2, 2);
+        if (length < 5 || length > 5000 || length > frame.size() - offset || frame[offset + 4] > 9) {
+            throw std::runtime_error("Invalid AST response length or status");
+        }
+        responses.push_back({static_cast<CommandType>(unsigned_le(frame, offset, 2)),
+                             static_cast<CommandResult>(frame[offset + 4]),
+                             Bytes(frame.begin() + offset + 5, frame.begin() + offset + length)});
+        offset += length;
+        if (responses.size() > 10) {
+            throw std::runtime_error("Too many AST responses in one frame");
+        }
     }
-    offset_quarterhours += offset_h * 4;
-
-    return offset_quarterhours;
-}
-
-void AstAppLayer::create_command_start_transaction(ast_app_layer::UserIdStatus user_id_status,
-                                                   ast_app_layer::UserIdType user_id_type,
-                                                   const std::string& user_id_data,
-                                                   std::int8_t gmt_offset_quarter_hours,
-                                                   std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::START_TRANSACTION;
-    cmd.length = 0x0034;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    insert_u32_as_u8s(cmd.data, (timepoint_to_uint32(date::utc_clock::now())));
-    cmd.data.push_back(
-        static_cast<std::uint8_t>(gmt_offset_quarter_hours)); // GMT offset in quarters of an hour, e.g. 0x08 = +2h
-    cmd.data.push_back(static_cast<std::uint8_t>(user_id_status));
-    cmd.data.push_back(static_cast<std::uint8_t>(user_id_type));
-
-    std::uint8_t byte_count = 0;
-    for (std::uint8_t databyte : user_id_data) { // push up to 40 characters of user id name into command
-        cmd.data.push_back(databyte);
-        byte_count++;
-        if (byte_count >= 40)
-            break;
+    if (responses.empty()) {
+        throw std::runtime_error("Empty AST response");
     }
-    while (byte_count < 40) { // fill remaining user id name characters with zeros
-        cmd.data.push_back(0x00);
-        byte_count++;
+    return responses;
+}
+
+ProtocolVariant detect_variant(const Bytes& data) {
+    if (data.size() == 14) {
+        return ProtocolVariant::dc_meter_v4_9;
     }
-
-    command_data = create_command(cmd);
-}
-
-void AstAppLayer::create_command_stop_transaction(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::STOP_TRANSACTION);
-}
-
-void AstAppLayer::create_command_get_time(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::TIME);
-}
-
-void AstAppLayer::create_command_set_time(date::utc_clock::time_point timepoint,
-                                          std::int8_t gmt_offset_quarters_of_an_hour,
-                                          std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::TIME;
-    cmd.length = 0x000A;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    insert_u32_as_u8s(cmd.data, timepoint_to_uint32(timepoint));
-    cmd.data.push_back(gmt_offset_quarters_of_an_hour);
-
-    command_data = create_command(cmd);
-}
-
-void AstAppLayer::create_command_get_voltage(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_VOLTAGE_L1);
-}
-
-void AstAppLayer::create_command_get_current(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_CURRENT_L1);
-}
-
-void AstAppLayer::create_command_get_import_power(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_IMPORT_DEV_POWER);
-}
-
-void AstAppLayer::create_command_get_export_power(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_EXPORT_DEV_POWER);
-}
-
-void AstAppLayer::create_command_get_total_dev_import_energy(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_IMPORT_DEV_ENERGY);
-}
-
-void AstAppLayer::create_command_get_total_dev_export_energy(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_EXPORT_DEV_ENERGY);
-}
-
-void AstAppLayer::create_command_get_total_power(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_DEV_POWER);
-}
-
-void AstAppLayer::create_command_get_total_start_import_energy(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_START_IMPORT_DEV_ENERGY);
-}
-
-void AstAppLayer::create_command_get_total_stop_import_energy(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_STOP_IMPORT_DEV_ENERGY);
-}
-
-void AstAppLayer::create_command_get_total_start_export_energy(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_START_EXPORT_DEV_ENERGY);
-}
-
-void AstAppLayer::create_command_get_total_stop_export_energy(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TOTAL_STOP_EXPORT_DEV_ENERGY);
-}
-
-void AstAppLayer::create_command_get_total_transaction_duration(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_TRANSACT_TOTAL_DURATION);
-}
-
-void AstAppLayer::create_command_get_pubkey_str16(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_PUBKEY_STR16);
-}
-
-void AstAppLayer::create_command_get_pubkey_asn1(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_PUBKEY_ASN1);
-}
-
-void AstAppLayer::create_command_get_meter_pubkey(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::REQUEST_METER_PUBKEY);
-}
-
-void AstAppLayer::create_command_get_ocmf_stats(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::OCMF_STATS);
-}
-
-/* OCMF ID: 1..235000
-    OCMF data from specified transaction will be at minimum import energy of transaction
-*/
-void AstAppLayer::create_command_get_transaction_ocmf(uint32_t ocmf_id, std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::GET_OCMF;
-    cmd.length = 0x0009;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    insert_u32_as_u8s(cmd.data, ocmf_id);
-
-    command_data = create_command(cmd);
-}
-
-void AstAppLayer::create_command_get_last_transaction_ocmf(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_LAST_OCMF);
-}
-
-void AstAppLayer::create_command_get_ocmf_info(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::OCMF_INFO);
-}
-
-void AstAppLayer::create_command_get_ocmf_config(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::OCMF_CONFIG);
-}
-
-void AstAppLayer::create_command_get_charge_point_id(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::CHARGE_POINT_ID);
-}
-
-/* only works in "assembly mode" */
-void AstAppLayer::create_command_set_charge_point_id(ast_app_layer::UserIdType id_type, std::string id_data,
-                                                     std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::CHARGE_POINT_ID;
-    cmd.length = 0x0013;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    cmd.data.push_back((uint8_t)id_type);
-
-    std::uint8_t byte_count = 0;
-    for (std::uint8_t databyte : id_data) { // push up to 13 characters of id data into command
-        cmd.data.push_back(databyte);
-        byte_count++;
-        if (byte_count >= 13)
-            break;
+    if (data.size() == 38) {
+        return ProtocolVariant::detached_display_v6_5;
     }
-    while (byte_count < 13) { // fill remaining user id name characters with zeros
-        cmd.data.push_back(0x00);
-        byte_count++;
+    throw std::runtime_error(
+        "Cannot detect AST protocol from charge point ID length; configure protocol_variant explicitly");
+}
+
+std::string string(const Bytes& data) {
+    const auto end = std::find(data.begin(), data.end(), 0);
+    if (std::any_of(end, data.end(), [](auto byte) { return byte != 0; })) {
+        throw std::runtime_error("Unexpected data after AST string terminator");
     }
-
-    command_data = create_command(cmd);
+    return std::string(data.begin(), end);
 }
 
-void AstAppLayer::create_command_get_errors(ast_app_layer::ErrorCategory category, ast_app_layer::ErrorSource src,
-                                            std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::GET_ERRORS;
-    cmd.length = 0x0007;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    cmd.data.push_back((uint8_t)category);
-    cmd.data.push_back((uint8_t)src);
-
-    command_data = create_command(cmd);
+std::string public_key(const Bytes& data) {
+    const auto key = string(data);
+    if (key.size() != 130 || key.substr(0, 2) != "04" || !std::all_of(key.begin(), key.end(), [](unsigned char c) {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        })) {
+        throw std::runtime_error("Expected uncompressed 65-byte AST public key in hexadecimal ASCII");
+    }
+    return key;
 }
 
-void AstAppLayer::create_command_get_log_stats(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_LOG_STATS);
+Bytes start_command(const types::powermeter::TransactionReq& request, ProtocolVariant variant, std::int8_t offset,
+                    std::uint32_t unix_seconds) {
+    const auto user = request.identification_data.value_or("");
+    auto tariff = request.tariff_text.value_or("");
+    check_text(user, 40, "Identification data");
+    check_text(request.transaction_id, 36, "Transaction ID");
+    if (request.transaction_id.empty() || request.transaction_id.find("<=>") != std::string::npos) {
+        throw std::invalid_argument("Transaction ID is empty or contains reserved <=> marker");
+    }
+    if (tariff.find("#TT#") != std::string::npos || tariff.find("<=>") != std::string::npos) {
+        throw std::invalid_argument("Tariff contains reserved marker");
+    }
+    if (variant == ProtocolVariant::dc_meter_v4_9) {
+        tariff += "<=>" + request.transaction_id;
+    }
+    check_text(tariff, 250, "Tariff text");
+    Bytes data;
+    append(data, unix_seconds, 4);
+    data.push_back(static_cast<std::uint8_t>(offset));
+    data.push_back(request.identification_status == types::powermeter::OCMFUserIdentificationStatus::ASSIGNED ? 1 : 0);
+    data.push_back(static_cast<std::uint8_t>(identification_type(request.identification_type)));
+    data.insert(data.end(), user.begin(), user.end());
+    data.resize(47, 0);
+    const std::string marker = "#TT#";
+    data.insert(data.end(), marker.begin(), marker.end());
+    data.insert(data.end(), tariff.begin(), tariff.end());
+    if (variant == ProtocolVariant::detached_display_v6_5) {
+        data.push_back(0);
+    }
+    data.insert(data.end(), marker.begin(), marker.end());
+    if (variant == ProtocolVariant::detached_display_v6_5) {
+        data.insert(data.end(), request.transaction_id.begin(), request.transaction_id.end());
+        data.push_back(0);
+    }
+    return command(CommandType::START_TRANSACTION, data);
 }
 
-/* log entry ids: 1..2500 */
-void AstAppLayer::create_command_get_log_entry(uint32_t log_entry_id, std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::GET_LOG_ENTRY;
-    cmd.length = 0x0009;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    insert_u32_as_u8s(cmd.data, log_entry_id);
-
-    command_data = create_command(cmd);
-}
-
-void AstAppLayer::create_command_get_last_log_entry(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::GET_LAST_LOG_ENTRY);
-}
-
-/* log entry ids: 1..2500
-   thus: if 20 log entries and log_entry_id == 2, then log entry 18 will be returned
-*/
-void AstAppLayer::create_command_get_log_entry_reverse(uint32_t log_entry_id, std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::GET_LOG_ENTRY_REVERSE;
-    cmd.length = 0x0009;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    insert_u32_as_u8s(cmd.data, log_entry_id);
-
-    command_data = create_command(cmd);
-}
-
-void AstAppLayer::create_command_get_application_board_mode(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_MODE_SET);
-}
-
-void AstAppLayer::create_command_set_application_board_mode(ast_app_layer::ApplicationBoardMode mode,
-                                                            std::vector<std::uint8_t>& command_data) {
-    ast_app_layer::Command cmd{};
-
-    cmd.type = ast_app_layer::CommandType::AB_MODE_SET;
-    cmd.length = 0x0006;
-    cmd.status = ast_app_layer::CommandStatus::OK;
-
-    cmd.data.push_back((uint8_t)mode);
-
-    command_data = create_command(cmd);
-}
-
-// diagnostics
-
-void AstAppLayer::create_command_get_hardware_version(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_HW_VERSION);
-}
-
-void AstAppLayer::create_command_get_application_board_server_id(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_SERVER_ID);
-}
-
-void AstAppLayer::create_command_get_application_board_serial_number(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_SERIAL_NR);
-}
-
-void AstAppLayer::create_command_get_application_board_software_version(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_SW_VERSION);
-}
-
-void AstAppLayer::create_command_get_application_board_fw_checksum(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_FW_CHECKSUM);
-}
-
-void AstAppLayer::create_command_get_application_board_fw_hash(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_FW_HASH);
-}
-
-void AstAppLayer::create_command_get_application_board_status(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_STATUS);
-}
-
-void AstAppLayer::create_command_get_metering_board_software_version(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::MB_SW_VERSION);
-}
-
-void AstAppLayer::create_command_get_metering_board_fw_checksum(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::MB_FW_CHECKSUM);
-}
-
-/* doubles as OCMF "meter model name" */
-void AstAppLayer::create_command_get_device_type(std::vector<std::uint8_t>& command_data) {
-    command_data = create_simple_command(ast_app_layer::CommandType::AB_DEVICE_TYPE);
+OcmfRecord validate_ocmf(const Bytes& data, const std::string& transaction_id, bool associated_by_request) {
+    const auto text = string(data);
+    if (text.compare(0, 5, "OCMF|") != 0) {
+        throw std::runtime_error("Missing OCMF header");
+    }
+    // Parse JSON boundaries rather than splitting at '|', which is legal inside JSON strings.
+    std::size_t position = 5;
+    const auto parse_object = [&]() {
+        const auto begin = position;
+        bool quoted = false, escaped = false;
+        int depth = 0;
+        for (; position < text.size(); ++position) {
+            const auto c = text[position];
+            if (quoted) {
+                if (escaped)
+                    escaped = false;
+                else if (c == '\\')
+                    escaped = true;
+                else if (c == '"')
+                    quoted = false;
+            } else if (c == '"')
+                quoted = true;
+            else if (c == '{')
+                ++depth;
+            else if (c == '}' && --depth == 0) {
+                ++position;
+                return nlohmann::json::parse(text.substr(begin, position - begin));
+            }
+        }
+        throw std::runtime_error("Truncated OCMF JSON");
+    };
+    const auto values = parse_object();
+    if (position >= text.size() || text[position++] != '|') {
+        throw std::runtime_error("Missing OCMF signature separator");
+    }
+    const auto signature = parse_object();
+    const auto sd = signature.value("SD", std::string{});
+    if (position != text.size() || !values.contains("RD") || !values["RD"].is_array() || values["RD"].empty() ||
+        signature.value("SA", std::string{}).empty() || sd.empty() || sd.size() % 2 != 0 ||
+        !std::all_of(sd.begin(), sd.end(), [](unsigned char c) { return std::isxdigit(c); })) {
+        throw std::runtime_error("Incomplete OCMF readings or signature");
+    }
+    if (!associated_by_request) {
+        const auto tariff = values.value("TT", std::string{});
+        const auto suffix = "<=>" + transaction_id;
+        if (transaction_id.empty() || tariff.size() < suffix.size() ||
+            tariff.compare(tariff.size() - suffix.size(), suffix.size(), suffix) != 0) {
+            throw std::runtime_error("OCMF transaction ID does not match requested transaction");
+        }
+    }
+    return {text, signature.at("SA").get<std::string>()};
 }
 
 } // namespace ast_app_layer

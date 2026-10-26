@@ -4,6 +4,11 @@ provides:
     description: Implementation of the driver functionality
     interface: powermeter
     config:
+      protocol_variant:
+        description: Protocol layout; auto detects it from the charge point identification response.
+        type: string
+        enum: [auto, dc_meter_v4_9, detached_display_v6_5]
+        default: auto
       powermeter_device_id:
         description: The powermeter's address on the serial bus
         type: integer
@@ -37,8 +42,8 @@ provides:
       gmt_offset_quarter_hours:
         description: GMT offset in quarters of an hour, e.g. 8 = +2h
         type: integer
-        minimum: -47
-        maximum: 47
+        minimum: -48
+        maximum: 56
         default: 0
       publish_device_data:
         description: Regularly publish device data not covered by the "powermeter" interface (for debugging purposes).
@@ -48,6 +53,9 @@ provides:
         description: Regularly publish device diagnostics (e.g. log messages, errors, SW/HW revisions; for debugging purposes).
         type: boolean
         default: false
+  temperature:
+    description: Internal DC meter temperature, sampled together with the power meter values.
+    interface: temperature_sensor
 enable_external_mqtt: true
 metadata:
   license: https://opensource.org/licenses/Apache-2.0

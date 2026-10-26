@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
+// Copyright Pionix GmbH and Contributors to EVerest
 
-#ifndef DIAGNOSTICS_HPP
-#define DIAGNOSTICS_HPP
-
+#pragma once
 #include "ast_app_layer.hpp"
 #include <bitset>
 #include <cstdint>
@@ -30,18 +28,18 @@ struct OcmfInfo {
 
 struct DeviceData {
     std::uint32_t utc_time_s{};
-    std::uint8_t gmt_offset_quarterhours{};
-    std::uint64_t total_start_import_energy_Wh{}; // meter value needs to be divided by 10 for Wh
-    std::uint64_t total_stop_import_energy_Wh{};  // meter value needs to be divided by 10 for Wh
-    std::uint64_t total_start_export_energy_Wh{}; // meter value needs to be divided by 10 for Wh
-    std::uint64_t total_stop_export_energy_Wh{};  // meter value needs to be divided by 10 for Wh
+    std::int8_t gmt_offset_quarterhours{};
+    double total_start_import_energy_Wh{};
+    double total_stop_import_energy_Wh{};
+    double total_start_export_energy_Wh{};
+    double total_stop_export_energy_Wh{};
     std::uint32_t total_transaction_duration_s{}; // must be less than 27 days in total
     OcmfStats ocmf_stats;
     std::string last_ocmf_transaction;
     std::string requested_ocmf;
     OcmfInfo ocmf_info;
-    std::uint64_t total_dev_import_energy_Wh{}; // meter value needs to be divided by 10 for Wh
-    std::uint64_t total_dev_export_energy_Wh{}; // meter value needs to be divided by 10 for Wh
+    double total_dev_import_energy_Wh{};
+    double total_dev_export_energy_Wh{};
     std::uint64_t ab_status{};
 };
 
@@ -138,6 +136,5 @@ std::string get_string(const std::vector<std::uint8_t>& vec);
 std::string u32_epoch_to_rfc3339(std::uint32_t epoch_time);
 
 } // namespace conversions
-} // namespace module
 
-#endif // DIAGNOSTICS_HPP
+} // namespace module

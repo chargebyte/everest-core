@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
+// Copyright Pionix GmbH and Contributors to EVerest
 
 #include <diagnostics.hpp>
 
@@ -181,9 +181,9 @@ std::string hexdump(const std::vector<std::uint8_t>& msg, std::uint8_t start, st
     if ((start + number_of_chars) > msg.size())
         return std::string{};
     std::stringstream ss;
-    for (std::uint8_t n = start; n < (start + number_of_chars); n++) {
+    for (std::size_t n = start; n < (static_cast<std::size_t>(start) + number_of_chars); n++) {
         ss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)msg.at(n);
-        if (n < (start + number_of_chars - 1))
+        if (n + 1 < static_cast<std::size_t>(start) + number_of_chars)
             ss << " ";
     }
     return ss.str();
@@ -210,15 +210,16 @@ std::string get_string(const std::vector<std::uint8_t>& vec) {
             str += vec[n];
         }
     }
-    return std::move(str);
+    return str;
 }
 
 std::string u32_epoch_to_rfc3339(std::uint32_t epoch_time) {
     auto tt = static_cast<time_t>(epoch_time);
-    std::tm tm = *std::gmtime(&tt);
+    std::tm tm{};
+    gmtime_r(&tt, &tm);
     std::stringstream ss;
     ss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S.000Z");
-    return std::move(ss.str());
+    return ss.str();
 }
 
 } // namespace conversions

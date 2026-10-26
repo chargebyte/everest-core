@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
+// Copyright Pionix GmbH and Contributors to EVerest
 
 /*
- This is an implementation for the AST powermeter application layer
-*/
-#ifndef AST_APP_LAYER
-#define AST_APP_LAYER
-
-#include "ld-ev.hpp"
+ *This is an implementation for the AST powermeter application layer
+ */
+#pragma once
 #include <chrono>
 #include <cstdint>
-#include <everest/logging.hpp>
+#include <date/date.h>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 #include <generated/types/powermeter.hpp>
 
 namespace ast_app_layer {
 
-enum class CommandType : std::uint16_t {
+enum class CommandType : std::uint16_t
+{
     RESET_DC_METER = 0x4101,                          // reset the DC meter
     AB_MODE_SET = 0x4102,                             // get or set the mode of application board
     AB_SERVER_ID = 0x4110,                            // get or set the server ID of application board
@@ -100,10 +102,12 @@ enum class CommandType : std::uint16_t {
     GET_ERRORS = 0xA004,                              // get errors
     AB_DMC = 0xA006,                                  // get or set the DMC application board
     AB_PROD_DATE = 0xA00B,                            // get or set the production date of application board
-    SET_REQUEST_CHALLENGE = 0xA00C                    // enable/disable the request challenge
+    FIND_TRANSACTION_OCMF = 0xA102,
+    SET_REQUEST_CHALLENGE = 0xA00C // enable/disable the request challenge
 };
 
-enum class CommandStatus : std::uint8_t {
+enum class CommandStatus : std::uint8_t
+{
     OK = 0,                        // no error
     GENERAL_ERROR = 1,             // internal process has an error
     OUT_OF_RANGE = 2,              // data is out of range
@@ -116,18 +120,20 @@ enum class CommandStatus : std::uint8_t {
     PUBKEY_MISSING = 9             // public key is not stored in internal memory
 };
 
-enum class CommandResult : std::uint8_t {
+enum class CommandResult : std::uint8_t
+{
     OK = 0,
     GENERAL_ERROR = 1,          // read ERROR register (read with GET_ERRORS[0xA004]) for more information
     OUT_OF_RANGE = 2,           //
     SECURITY_ACCESS_DENIED = 3, // application board is not in production mode
     REJECTED = 4,               // metering board is not responding
+    LOGICAL_ADDRESS_NOT_FOUND = 5,
     FORMAT_INVALID = 6,         // payload is not empty
     NOT_AVAILABLE = 7,          // data could not be read
     BUSY = 8,                   // transaction ongoing, metering board unavailable
     PUBLIC_KEY_MISSING = 9,     //
     PROTOCOL_ERROR = 250,       // error on reception at host: protocol error (SLIP protocol)
-    TIMEOUT = 251,              // no response during at least 1100 ms
+    TIMEOUT = 251,              // response deadline expired
     COMMUNICATION_FAILED = 254, // error on communication between PM and host device
     PENDING = 255               // special state for transaction commands
 };
@@ -144,6 +150,8 @@ inline std::string command_result_to_string(CommandResult res) {
         return "Security Access Denied";
     case CommandResult::REJECTED:
         return "Rejected";
+    case CommandResult::LOGICAL_ADDRESS_NOT_FOUND:
+        return "Command not implemented";
     case CommandResult::FORMAT_INVALID:
         return "Format Invalid";
     case CommandResult::NOT_AVAILABLE:
@@ -161,15 +169,17 @@ inline std::string command_result_to_string(CommandResult res) {
     case CommandResult::PENDING:
         return "Pending";
     }
-    throw std::out_of_range("No known string conversion for provided enum of type CommandResult");
+    return "Unknown status " + std::to_string(static_cast<unsigned>(res));
 }
 
-enum class UserIdStatus : std::uint8_t {
+enum class UserIdStatus : std::uint8_t
+{
     USER_NOT_ASSIGNED = 0x00,
     USER_ASSIGNED = 0x01
 };
 
-enum class UserIdType : std::uint8_t {
+enum class UserIdType : std::uint8_t
+{
     NONE = 0,          // not available
     DENIED = 1,        // not retrievable (e.g. two-factor-auth)
     UNDEFINED = 2,     // type unknown / other
@@ -190,25 +200,29 @@ enum class UserIdType : std::uint8_t {
     KEY_CODE = 90      // private user key (no fixed format)
 };
 
-enum class ErrorCategory : std::uint8_t {
+enum class ErrorCategory : std::uint8_t
+{
     LAST = 0,
     LAST_CRITICAL = 1,
     FIRST = 2,
     FIRST_CRITICAL = 3
 };
 
-enum class ErrorSource : std::uint8_t {
+enum class ErrorSource : std::uint8_t
+{
     SYSTEM = 0,
     COMMUNICATION = 1
 };
 
-enum class ApplicationBoardMode : std::uint8_t {
+enum class ApplicationBoardMode : std::uint8_t
+{
     APPLICATION = 0,
     ASSEMBLY = 1,
     // PRODUCTION = 2
 };
 
-enum class LogType : std::uint8_t {
+enum class LogType : std::uint8_t
+{
     NONE = 0,
     LINE_LOSS_MEASUREMENT_MODE = 1,
     IMPEDANCE_CHANGED = 2,
@@ -256,12 +270,12 @@ inline std::string log_type_to_string(LogType log) {
     case LogType::PULSE_LED_SOURCE_CHANGED:
         return "Pulse LED source changed";
     }
-    throw std::out_of_range("No known string conversion for provided enum of type LogType");
+    return "Unknown log type " + std::to_string(static_cast<unsigned>(log));
 }
 
 class LogEntry {
 public:
-    ast_app_layer::LogType type;
+    ast_app_layer::LogType type{LogType::NONE};
     std::uint32_t second_index{};
     std::uint32_t utc_time{};
     std::uint8_t utc_offset{};
@@ -271,91 +285,35 @@ public:
     std::vector<uint8_t> signature; // 64 elements
 };
 
-class Command {
-public:
-    ast_app_layer::CommandType type;
-    std::uint16_t length;
-    ast_app_layer::CommandStatus status;
-    std::vector<std::uint8_t> data;
+enum class ProtocolVariant
+{
+    dc_meter_v4_9,
+    detached_display_v6_5
 };
 
-static constexpr std::uint16_t PM_AST_MAX_RX_LENGTH = 1000;
-static constexpr std::uint16_t PM_AST_SERIAL_RX_INITIAL_TIMEOUT_MS = 1100;
-static constexpr std::uint16_t PM_AST_SERIAL_RX_WITHIN_MESSAGE_TIMEOUT_MS = 100;
+using Bytes = std::vector<std::uint8_t>;
 
-class AstAppLayer {
-
-public:
-    void create_command_start_transaction(ast_app_layer::UserIdStatus user_id_status,
-                                          ast_app_layer::UserIdType user_id_type, const std::string& user_id_data,
-                                          std::int8_t gmt_offset_quarter_hours,
-                                          std::vector<std::uint8_t>& command_data);
-    void create_command_stop_transaction(std::vector<uint8_t>& command_data);
-
-    void create_command_get_time(std::vector<std::uint8_t>& command_data);
-    void create_command_set_time(date::utc_clock::time_point timepoint, int8_t gmt_offset_quarters_of_an_hour,
-                                 std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_voltage(std::vector<std::uint8_t>& command_data);
-    void create_command_get_current(std::vector<std::uint8_t>& command_data);
-    void create_command_get_import_power(std::vector<std::uint8_t>& command_data);
-    void create_command_get_export_power(std::vector<std::uint8_t>& command_data);
-    void create_command_get_total_power(std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_total_start_import_energy(std::vector<std::uint8_t>& command_data);
-    void create_command_get_total_stop_import_energy(std::vector<std::uint8_t>& command_data);
-    void create_command_get_total_start_export_energy(std::vector<std::uint8_t>& command_data);
-    void create_command_get_total_stop_export_energy(std::vector<std::uint8_t>& command_data);
-    void create_command_get_total_dev_import_energy(std::vector<std::uint8_t>& command_data);
-    void create_command_get_total_dev_export_energy(std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_total_transaction_duration(std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_pubkey_str16(std::vector<std::uint8_t>& command_data);
-    void create_command_get_pubkey_asn1(std::vector<std::uint8_t>& command_data);
-    void create_command_get_meter_pubkey(std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_ocmf_stats(std::vector<std::uint8_t>& command_data);
-    void create_command_get_transaction_ocmf(std::uint32_t ocmf_id, std::vector<std::uint8_t>& command_data);
-    void create_command_get_last_transaction_ocmf(std::vector<std::uint8_t>& command_data);
-    void create_command_get_ocmf_info(std::vector<std::uint8_t>& command_data);
-    void create_command_get_ocmf_config(std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_charge_point_id(std::vector<std::uint8_t>& command_data);
-    void create_command_set_charge_point_id(ast_app_layer::UserIdType id_type, std::string id_data,
-                                            std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_errors(ast_app_layer::ErrorCategory category, ast_app_layer::ErrorSource src,
-                                   std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_log_stats(std::vector<std::uint8_t>& command_data);
-    void create_command_get_log_entry(uint32_t log_entry_id, std::vector<std::uint8_t>& command_data);
-    void create_command_get_last_log_entry(std::vector<std::uint8_t>& command_data);
-    void create_command_get_log_entry_reverse(uint32_t log_entry_id, std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_application_board_mode(std::vector<std::uint8_t>& command_data);
-    void create_command_set_application_board_mode(ast_app_layer::ApplicationBoardMode mode,
-                                                   std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_hardware_version(std::vector<std::uint8_t>& command_data);
-    void create_command_get_application_board_server_id(std::vector<std::uint8_t>& command_data);
-    void create_command_get_application_board_serial_number(std::vector<std::uint8_t>& command_data);
-    void create_command_get_application_board_software_version(std::vector<std::uint8_t>& command_data);
-    void create_command_get_application_board_fw_checksum(std::vector<std::uint8_t>& command_data);
-    void create_command_get_application_board_fw_hash(std::vector<std::uint8_t>& command_data);
-    void create_command_get_application_board_status(std::vector<std::uint8_t>& command_data);
-    void create_command_get_metering_board_software_version(std::vector<std::uint8_t>& command_data);
-    void create_command_get_metering_board_fw_checksum(std::vector<std::uint8_t>& command_data);
-
-    void create_command_get_device_type(std::vector<std::uint8_t>& command_data);
-
-    int8_t
-    get_utc_offset_in_quarter_hours(const std::chrono::time_point<std::chrono::system_clock>& timepoint_system_clock);
-
-private:
-    std::vector<uint8_t> create_command(ast_app_layer::Command cmd);
-    std::vector<uint8_t> create_simple_command(ast_app_layer::CommandType cmd_type);
+struct Response {
+    CommandType command;
+    CommandResult status;
+    Bytes data;
 };
+
+Bytes command(CommandType type, const Bytes& data = {});
+std::vector<Response> parse_responses(const Bytes& frame, std::uint8_t address);
+ProtocolVariant detect_variant(const Bytes& charge_point_id);
+std::uint64_t unsigned_le(const Bytes& data, std::size_t offset, std::size_t width);
+std::int64_t signed_le(const Bytes& data, std::size_t offset, std::size_t width);
+std::string string(const Bytes& data);
+std::string public_key(const Bytes& data);
+Bytes start_command(const types::powermeter::TransactionReq& request, ProtocolVariant variant, std::int8_t offset,
+                    std::uint32_t unix_seconds);
+
+struct OcmfRecord {
+    std::string text;
+    std::string signing_method;
+};
+
+OcmfRecord validate_ocmf(const Bytes& data, const std::string& transaction_id, bool associated_by_request);
 
 } // namespace ast_app_layer
-#endif // AST_APP_LAYER

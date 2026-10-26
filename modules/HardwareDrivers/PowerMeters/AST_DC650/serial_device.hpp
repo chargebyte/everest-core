@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
+// Copyright Pionix GmbH and Contributors to EVerest
 
 /*
- This is an implementation for custom serial communications
-*/
-#ifndef SERIAL_DEVICE
-#define SERIAL_DEVICE
-
+ * This is an implementation for custom serial communications
+ */
+#pragma once
 #include <mutex>
 #include <optional>
 #include <string>
@@ -27,18 +25,17 @@ public:
     SerialDevice& operator=(SerialDevice&&) = delete;
     ~SerialDevice();
 
-    bool open_device(const std::string& device, int baud, bool ignore_echo);
+    bool open_device(const std::string& device, int baud, bool ignore_echo, int parity = 0);
+    void discard_input();
     void tx(const std::vector<std::uint8_t>& request);
     int rx(std::vector<std::uint8_t>& rxbuf, std::optional<int> initial_timeout_ms,
            std::optional<int> in_msg_timeout_ms);
 
 private:
     // Serial interface
-    int fd{0};
-    bool ignore_echo{false};
+    int fd{-1};
 
     std::mutex serial_mutex;
 };
 
 } // namespace serial_device
-#endif // SERIAL_DEVICE
