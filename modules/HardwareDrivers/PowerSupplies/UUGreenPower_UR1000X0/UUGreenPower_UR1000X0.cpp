@@ -2,6 +2,7 @@
 // Copyright 2020 - 2025 Pionix GmbH and Contributors to EVerest
 
 #include "UUGreenPower_UR1000X0.hpp"
+#include <algorithm>
 #include <regex>
 
 namespace module {
@@ -23,21 +24,24 @@ static std::vector<uint8_t> parse_module_addresses(const std::string a) {
 
 void UUGreenPower_UR1000X0::init() {
 
-    // open DCDC CAN device
+    // Install the address filter before opening CAN and enabling communication.
+    auto module_addresses = parse_module_addresses(config.module_addresses);
+    acdc.set_module_address(module_addresses, config.can_device);
+    const bool broadcast =
+        std::find(module_addresses.begin(), module_addresses.end(), UU::ADDR_BROADCAST) != module_addresses.end();
+    EVLOG_info << "UUGreen [" << config.can_device << "]: module addresses: " << config.module_addresses
+               << ", mode: " << (broadcast ? "broadcast" : "individual addresses");
+
+    // Connect measurement and identification handlers before any CAN replies can arrive.
+    invoke_init(*p_main);
+
     if (!acdc.open_device(config.can_device.c_str())) {
         EVLOG_AND_THROW(EVEXCEPTION(Everest::EverestConfigError, "Could not open CAN interface ", config.can_device));
     }
 
-    // configure module address
-    auto module_addresses = parse_module_addresses(config.module_addresses);
-    EVLOG_info << "Amount of modules: " << module_addresses.size();
-    acdc.set_module_address(module_addresses);
-
     acdc.set_voltage_mode(config.voltage_mode);
 
     acdc.switch_on(false);
-
-    invoke_init(*p_main);
 
     acdc.request_module_info();
 }

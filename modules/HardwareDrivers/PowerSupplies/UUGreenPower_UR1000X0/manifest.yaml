@@ -1,4 +1,4 @@
-description: Driver for UUGreenPower_UR1000X0 ACDC power supply. Currently supports only one module.
+description: Driver for UUGreenPower_UR1000X0 ACDC power supplies.
 config:
   can_device:
     description: CAN interface name
@@ -28,7 +28,6 @@ provides:
   main:
     description: Main interface
     interface: power_supply_DC
-    config: {}
 metadata:
   license: https://opensource.org/licenses/Apache-2.0
   authors:

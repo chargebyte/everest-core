@@ -37,7 +37,7 @@ void power_supply_DCImpl::init() {
     });
 
     mod->acdc.signal_serial_number.connect([this](int module_id, const std::string& serial_number) {
-        EVLOG_info << "Module ID " << module_id << ": " << serial_number;
+        EVLOG_info << "UUGreen [" << mod->config.can_device << "]: module " << module_id << ": " << serial_number;
     });
 }
 
@@ -78,7 +78,8 @@ void power_supply_DCImpl::handle_setExportVoltageCurrent(double& voltage, double
     export_voltage = voltage;
     export_current_limit = current;
 
-    EVLOG_info << "Updating voltage/current via CAN: " << export_voltage << "V / " << export_current_limit << "A";
+    EVLOG_debug << "UUGreen [" << mod->config.can_device << "]: updating voltage/current via CAN: " << export_voltage
+                << "V / " << export_current_limit << "A";
     mod->acdc.set_voltage_current(export_voltage, export_current_limit);
 };
 

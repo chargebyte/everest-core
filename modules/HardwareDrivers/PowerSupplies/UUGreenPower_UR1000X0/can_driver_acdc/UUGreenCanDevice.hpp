@@ -9,6 +9,7 @@
 #include <linux/can.h>
 #include <map>
 #include <mutex>
+#include <set>
 #include <sigslot/signal.hpp>
 #include <thread>
 
@@ -24,8 +25,10 @@ public:
 
     ~UUGreenCanDevice();
 
-    void set_module_address(const std::vector<uint8_t>& _module_addresses) {
+    void set_module_address(const std::vector<uint8_t>& _module_addresses, const std::string& interface = "") {
+        std::lock_guard<std::mutex> lock(module_addresses_mutex);
         module_addresses = _module_addresses;
+        can_interface = interface;
     };
 
     // Commands
@@ -33,7 +36,8 @@ public:
     bool switch_on(bool on);
     bool set_voltage_current(float voltage, float current);
 
-    enum class VoltageMode : uint32_t {
+    enum class VoltageMode : uint32_t
+    {
         Automatic = 0,
         High = 1,
         Low = 2,
@@ -49,7 +53,7 @@ public:
     }
 
     int get_number_of_modules() {
-        return module_addresses.size();
+        return configured_addresses().size();
     }
 
     void request_module_info();
@@ -93,7 +97,18 @@ private:
 
     bool tx(const uint8_t module_address, const std::vector<uint8_t>& payload);
 
-    std::vector<uint8_t> module_addresses{UU::ADDR_BROADCAST};
+    std::vector<uint8_t> configured_addresses() {
+        std::lock_guard<std::mutex> lock(module_addresses_mutex);
+        return module_addresses;
+    }
+
+    std::mutex module_addresses_mutex;
+    // Stay silent until the caller installs the configured addresses.
+    std::vector<uint8_t> module_addresses;
+    std::string can_interface;
+    std::set<uint8_t> ignored_addresses;
+    std::map<uint8_t, std::string> module_identifications;
+    void report_identification(uint8_t address, uint16_t type_codes, uint32_t serial);
 
     bool switch_on_nolock(bool on);
     bool internal_update_voltage_mode();

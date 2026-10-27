@@ -3,6 +3,7 @@
 
 #include "UUGreenCanDevice.hpp"
 #include "CanPackets.hpp"
+#include <algorithm>
 #include <iostream>
 #include <unistd.h>
 
@@ -11,6 +12,10 @@
 UUGreenCanDevice::~UUGreenCanDevice() {
     exit_tx_thread = true;
     exit_cmd_thread = true;
+    if (tx_thread_handle.joinable())
+        tx_thread_handle.join();
+    if (cmd_thread_handle.joinable())
+        cmd_thread_handle.join();
 }
 
 bool UUGreenCanDevice::switch_on(bool on) {
@@ -28,7 +33,7 @@ bool UUGreenCanDevice::switch_on_nolock(bool on) {
 
     bool success = true;
 
-    for (auto module_address : module_addresses) {
+    for (auto module_address : configured_addresses()) {
         if (not tx(module_address, UU::Packet(UU::MessageType::SetData, UU::CommandType::ShutdownDCDC, data))) {
             success = false;
         } else {
@@ -67,7 +72,8 @@ bool UUGreenCanDevice::set_voltage_current_nolock(float voltage, float current) 
 
     internal_update_voltage_mode();
 
-    for (auto module_address : module_addresses) {
+    const auto addresses = configured_addresses();
+    for (auto module_address : addresses) {
         if (not tx(module_address, UU::Packet(UU::MessageType::SetData, UU::CommandType::VoutReference,
                                               static_cast<uint32_t>(voltage * 1000)))) {
             success = false;
@@ -75,7 +81,7 @@ bool UUGreenCanDevice::set_voltage_current_nolock(float voltage, float current) 
 
         // Split current equally between modules
         if (not tx(module_address, UU::Packet(UU::MessageType::SetData, UU::CommandType::IoutLimit,
-                                              static_cast<uint32_t>(current * 1000 / module_addresses.size())))) {
+                                              static_cast<uint32_t>(current * 1000 / addresses.size())))) {
             success = false;
         }
     }
@@ -96,7 +102,7 @@ bool UUGreenCanDevice::internal_update_voltage_mode() {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-        for (auto module_address : module_addresses) {
+        for (auto module_address : configured_addresses()) {
             // We need to change hi/lo voltage mode, so power it off, change mode, and power it on again if it was
             // powered on before
             if (not tx(module_address,
@@ -125,28 +131,49 @@ static std::string to_serial_number(uint16_t a, uint32_t b) {
     return ser;
 }
 
+void UUGreenCanDevice::report_identification(uint8_t address, uint16_t type_codes, uint32_t serial) {
+    const auto identification = to_serial_number(type_codes, serial);
+    auto previous = module_identifications.find(address);
+    if (previous == module_identifications.end() || previous->second != identification) {
+        module_identifications[address] = identification;
+        signal_serial_number(address, identification);
+    }
+}
+
 void UUGreenCanDevice::rx_handler(uint32_t can_id, const std::vector<uint8_t>& payload) {
     // We only use extended frames here
     if (!(can_id & CAN_EFF_FLAG)) {
         return;
     }
 
-    EVLOG_debug << "UUGreen: CAN frame received. ID: 0x" << std::hex << can_id;
-
     // is it for us?
 
     auto monitor_address = UU::monitor_adress_from_can_id(can_id);
 
     if (not(monitor_address == UU::ADDR_BROADCAST or monitor_address == 0x01)) {
-        EVLOG_debug << "UU: Not for us: ";
         return;
     }
 
+    const auto source_address = UU::module_address_from_can_id(can_id);
+    const auto addresses = configured_addresses();
+    if (std::find(addresses.begin(), addresses.end(), UU::ADDR_BROADCAST) == addresses.end() &&
+        std::find(addresses.begin(), addresses.end(), source_address) == addresses.end()) {
+        if (ignored_addresses.insert(source_address).second) {
+            EVLOG_debug << "UUGreen [" << can_interface << "]: ignoring unconfigured module "
+                        << static_cast<unsigned>(source_address) << ", CAN ID: 0x" << std::hex << can_id;
+        }
+        return;
+    }
+
+    // Packet decoding requires all eight payload bytes.
+    if (payload.size() != 8) {
+        return;
+    }
     // parse packet
     auto packet = UU::Packet(payload);
 
-    uint8_t source_address = UU::module_address_from_can_id(can_id);
-    EVLOG_debug << "RX packet: " << packet;
+    EVLOG_debug << "UUGreen [" << can_interface << "]: module " << static_cast<unsigned>(source_address)
+                << ", CAN ID: 0x" << std::hex << can_id << std::dec << ": " << packet;
 
     if (packet.message_type == UU::MessageType::ReadDataResponse) {
         switch (packet.command_type) {
@@ -176,7 +203,7 @@ void UUGreenCanDevice::rx_handler(uint32_t can_id, const std::vector<uint8_t>& p
 
         case UU::CommandType::ReadSN: {
             // print serial number information
-            signal_serial_number(source_address, to_serial_number(packet.bytes23, packet.data));
+            report_identification(source_address, packet.bytes23, packet.data);
 
         } break;
         }
@@ -184,14 +211,14 @@ void UUGreenCanDevice::rx_handler(uint32_t can_id, const std::vector<uint8_t>& p
 
     if (packet.message_type == UU::MessageType::ReadSerialNumberResponse) {
         // print serial number information
-        signal_serial_number(source_address, to_serial_number(packet.bytes23, packet.data));
+        report_identification(source_address, packet.bytes23, packet.data);
     }
 }
 
 void UUGreenCanDevice::request_module_info() {
 
     // Request information about modules once
-    for (auto module_address : module_addresses) {
+    for (auto module_address : configured_addresses()) {
         // request serial number
         tx(module_address, UU::Packet(UU::MessageType::ReadData, UU::CommandType::ReadSN));
     }
@@ -201,7 +228,7 @@ void UUGreenCanDevice::tx_thread() {
 
     while (!exit_tx_thread) {
         {
-            for (auto module_address : module_addresses) {
+            for (auto module_address : configured_addresses()) {
                 // request current system DC voltage. Answer will be processed by RX thread.
                 tx(module_address, UU::Packet(UU::MessageType::ReadData, UU::CommandType::Vout));
 

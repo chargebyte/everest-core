@@ -10,6 +10,7 @@
 int main(int argc, char** argv) {
     UUGreenCanDevice can;
 
+    can.set_module_address({UU::ADDR_BROADCAST}, "can0");
     if (!can.open_device("can0")) {
         return 1;
     }
