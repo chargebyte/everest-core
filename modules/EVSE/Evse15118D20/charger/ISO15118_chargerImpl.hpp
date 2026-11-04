@@ -96,11 +96,9 @@ private:
 
     std::vector<iso15118::d20::SupportedVASs> supported_vas_services_per_provider;
     std::mutex vas_mutex;
-    std::optional<types::iso15118::DcEvseMaximumLimits> last_published_dc_evse_adjusted_maximum_limits;
 
     void update_supported_vas_services();
     std::optional<size_t> get_vas_provider_index(uint16_t service_id);
-    void publish_dc_evse_adjusted_maximum_limits_if_changed(const types::iso15118::DcEvseMaximumLimits& limits);
     // ev@3370e4dd-95f4-47a9-aaec-ea76f34a66c9:v1
 };
 

@@ -22,15 +22,6 @@ namespace dt = iso15118::message_20::datatypes;
 
 namespace {
 
-bool dc_evse_maximum_limits_equal(const types::iso15118::DcEvseMaximumLimits& lhs,
-                                  const types::iso15118::DcEvseMaximumLimits& rhs) {
-    return almost_eq(lhs.evse_maximum_current_limit, rhs.evse_maximum_current_limit) &&
-           almost_eq(lhs.evse_maximum_power_limit, rhs.evse_maximum_power_limit) &&
-           almost_eq(lhs.evse_maximum_voltage_limit, rhs.evse_maximum_voltage_limit) &&
-           optional_limit_equal(lhs.evse_maximum_discharge_current_limit, rhs.evse_maximum_discharge_current_limit) &&
-           optional_limit_equal(lhs.evse_maximum_discharge_power_limit, rhs.evse_maximum_discharge_power_limit);
-}
-
 iso15118::config::TlsNegotiationStrategy convert_tls_negotiation_strategy(const std::string& strategy) {
     using Strategy = iso15118::config::TlsNegotiationStrategy;
     if (strategy == "ACCEPT_CLIENT_OFFER") {
@@ -140,20 +131,6 @@ types::iso15118::DcEvseMaximumLimits to_adjusted_evse_maximum_limits(const iso15
 }
 
 } // namespace
-
-void ISO15118_chargerImpl::publish_dc_evse_adjusted_maximum_limits_if_changed(
-    const types::iso15118::DcEvseMaximumLimits& limits) {
-    {
-        std::scoped_lock lock(published_dc_values_mutex);
-        if (last_published_dc_evse_adjusted_maximum_limits.has_value() &&
-            dc_evse_maximum_limits_equal(last_published_dc_evse_adjusted_maximum_limits.value(), limits)) {
-            return;
-        }
-        last_published_dc_evse_adjusted_maximum_limits = limits;
-    }
-
-    publish_dc_evse_adjusted_maximum_limits(limits);
-}
 
 void ISO15118_chargerImpl::init() {
 
@@ -470,7 +447,7 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
     };
 
     callbacks.dc_evse_adjusted_limits = [this](const iso15118::d20::DcTransferLimits& adjusted_limits) {
-        publish_dc_evse_adjusted_maximum_limits_if_changed(to_adjusted_evse_maximum_limits(adjusted_limits));
+        publish_dc_evse_adjusted_maximum_limits(to_adjusted_evse_maximum_limits(adjusted_limits));
     };
 
     callbacks.ac_limits = [this](const feedback::AcLimits& limits) {
