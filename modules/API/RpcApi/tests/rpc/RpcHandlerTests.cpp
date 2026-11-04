@@ -90,6 +90,27 @@ protected:
     std::unique_ptr<request_interface::RequestHandlerInterface> request_handler;
 };
 
+TEST_F(RpcHandlerTest, InvalidPositionalParameterCount) {
+    WebSocketTestClient client("localhost", test_port);
+    ASSERT_TRUE(client.connect());
+    ASSERT_TRUE(client.wait_until_connected(std::chrono::milliseconds(100)));
+    client.send_api_hello_req();
+    ASSERT_FALSE(client.wait_for_data(std::chrono::seconds(1)).empty());
+
+    const std::vector<nlohmann::json> requests = {
+        create_json_rpc_request("EVSE.GetInfo", nlohmann::json::array(), 1),
+        create_json_rpc_request("EVSE.GetInfo", nlohmann::json::array({1, 2}), 2),
+    };
+    for (const auto& request : requests) {
+        client.send(request.dump());
+        const auto raw_response = client.wait_for_data(std::chrono::seconds(1), false);
+        ASSERT_FALSE(raw_response.empty());
+        const auto response = nlohmann::json::parse(raw_response);
+        ASSERT_EQ(response.at("id"), request.at("id"));
+        ASSERT_EQ(response.at("error").at("code"), -32602);
+    }
+}
+
 // Test: Connect to WebSocket server and check if API.Hello timeout occurs
 TEST_F(RpcHandlerTest, ApiHelloTimeout) {
     WebSocketTestClient client("localhost", test_port);

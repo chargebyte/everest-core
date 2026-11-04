@@ -129,6 +129,11 @@ The JSON API is generated from the json_rpc_api.yaml specification. This YAML fi
 reference for all available methods and notifications. It also defines which parameters are required
 and which are optional.
 
+JSON-RPC parameter errors
+^^^^^^^^^^^^^^^^^^^^^^^^^
+An incorrect number of positional parameters returns JSON-RPC ``-32602`` (invalid parameters) for all
+methods. Earlier releases returned ``-32603`` (internal error) in this case.
+
 Hierarchy of methods & notifications
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

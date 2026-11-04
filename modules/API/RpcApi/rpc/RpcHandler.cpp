@@ -75,12 +75,12 @@ template <typename T, typename ReturnType, typename... ParamTypes>
 MethodHandle get_handle(ReturnType (T::*method)(ParamTypes...), T& instance, int precision = 3) {
     return [&instance, method, precision](const json& params) -> json {
         if (!params.is_array()) {
-            throw std::runtime_error("params must be array");
+            throw JsonRpcException(invalid_params, "params must be array");
         }
 
         constexpr size_t expected = sizeof...(ParamTypes);
         if (params.size() != expected) {
-            throw std::runtime_error("invalid number of parameters");
+            throw JsonRpcException(invalid_params, "invalid number of parameters");
         }
 
         auto result = invoke_with_params<T, decltype(method), ParamTypes...>(instance, method, params);
