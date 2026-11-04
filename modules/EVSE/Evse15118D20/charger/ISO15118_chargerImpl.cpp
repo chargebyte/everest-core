@@ -21,30 +21,6 @@ std::mutex GEL; // Global EVerest Lock
 namespace dt = iso15118::message_20::datatypes;
 
 namespace {
-bool almost_eq(double a, double b) {
-    constexpr auto eps = 1e-6;
-    return std::fabs(a - b) <= eps;
-}
-
-bool dc_ev_target_values_equal(const types::iso15118::DcEvTargetValues& lhs,
-                               const types::iso15118::DcEvTargetValues& rhs) {
-    return almost_eq(lhs.dc_ev_target_voltage, rhs.dc_ev_target_voltage) &&
-           almost_eq(lhs.dc_ev_target_current, rhs.dc_ev_target_current);
-}
-
-bool optional_limit_equal(const std::optional<float>& lhs, const std::optional<float>& rhs) {
-    if (lhs.has_value() != rhs.has_value()) {
-        return false;
-    }
-    return not lhs.has_value() or almost_eq(lhs.value(), rhs.value());
-}
-
-bool dc_ev_maximum_limits_equal(const types::iso15118::DcEvMaximumLimits& lhs,
-                                const types::iso15118::DcEvMaximumLimits& rhs) {
-    return optional_limit_equal(lhs.dc_ev_maximum_current_limit, rhs.dc_ev_maximum_current_limit) &&
-           optional_limit_equal(lhs.dc_ev_maximum_power_limit, rhs.dc_ev_maximum_power_limit) &&
-           optional_limit_equal(lhs.dc_ev_maximum_voltage_limit, rhs.dc_ev_maximum_voltage_limit);
-}
 
 bool dc_evse_maximum_limits_equal(const types::iso15118::DcEvseMaximumLimits& lhs,
                                   const types::iso15118::DcEvseMaximumLimits& rhs) {
@@ -164,40 +140,6 @@ types::iso15118::DcEvseMaximumLimits to_adjusted_evse_maximum_limits(const iso15
 }
 
 } // namespace
-
-void ISO15118_chargerImpl::publish_dc_ev_target_voltage_current_if_changed(
-    const types::iso15118::DcEvTargetValues& values) {
-    {
-        std::scoped_lock lock(published_dc_values_mutex);
-        if (last_published_dc_ev_target_values.has_value() &&
-            dc_ev_target_values_equal(last_published_dc_ev_target_values.value(), values)) {
-            return;
-        }
-        last_published_dc_ev_target_values = values;
-    }
-
-    publish_dc_ev_target_voltage_current(values);
-}
-
-void ISO15118_chargerImpl::reset_published_value_cache() {
-    std::scoped_lock lock(published_dc_values_mutex);
-    last_published_dc_ev_target_values.reset();
-    last_published_dc_ev_maximum_limits.reset();
-    last_published_dc_evse_adjusted_maximum_limits.reset();
-}
-
-void ISO15118_chargerImpl::publish_dc_ev_maximum_limits_if_changed(const types::iso15118::DcEvMaximumLimits& limits) {
-    {
-        std::scoped_lock lock(published_dc_values_mutex);
-        if (last_published_dc_ev_maximum_limits.has_value() &&
-            dc_ev_maximum_limits_equal(last_published_dc_ev_maximum_limits.value(), limits)) {
-            return;
-        }
-        last_published_dc_ev_maximum_limits = limits;
-    }
-
-    publish_dc_ev_maximum_limits(limits);
-}
 
 void ISO15118_chargerImpl::publish_dc_evse_adjusted_maximum_limits_if_changed(
     const types::iso15118::DcEvseMaximumLimits& limits) {
@@ -401,7 +343,7 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
     feedback::Callbacks callbacks;
 
     callbacks.dc_pre_charge_target_voltage = [this](float target_voltage) {
-        publish_dc_ev_target_voltage_current_if_changed({target_voltage, 0});
+        publish_dc_ev_target_voltage_current({target_voltage, 0});
     };
 
     callbacks.notify_ev_charging_needs =
@@ -482,27 +424,27 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
                 const auto target_voltage = dt::from_RationalNumber(scheduled_mode->target_voltage);
                 const auto target_current = dt::from_RationalNumber(scheduled_mode->target_current);
 
-                publish_dc_ev_target_voltage_current_if_changed({target_voltage, target_current});
+                publish_dc_ev_target_voltage_current({target_voltage, target_current});
 
                 if (scheduled_mode->max_charge_current and scheduled_mode->max_voltage and
                     scheduled_mode->max_charge_power) {
                     const auto max_current = dt::from_RationalNumber(scheduled_mode->max_charge_current.value());
                     const auto max_voltage = dt::from_RationalNumber(scheduled_mode->max_voltage.value());
                     const auto max_power = dt::from_RationalNumber(scheduled_mode->max_charge_power.value());
-                    publish_dc_ev_maximum_limits_if_changed({max_current, max_power, max_voltage});
+                    publish_dc_ev_maximum_limits({max_current, max_power, max_voltage});
                 }
 
             } else if (const auto* bpt_scheduled_mode = std::get_if<BPT_ScheduleReqControlModeDC>(dc_control_mode)) {
                 const auto target_voltage = dt::from_RationalNumber(bpt_scheduled_mode->target_voltage);
                 const auto target_current = dt::from_RationalNumber(bpt_scheduled_mode->target_current);
-                publish_dc_ev_target_voltage_current_if_changed({target_voltage, target_current});
+                publish_dc_ev_target_voltage_current({target_voltage, target_current});
 
                 if (bpt_scheduled_mode->max_charge_current and bpt_scheduled_mode->max_voltage and
                     bpt_scheduled_mode->max_charge_power) {
                     const auto max_current = dt::from_RationalNumber(bpt_scheduled_mode->max_charge_current.value());
                     const auto max_voltage = dt::from_RationalNumber(bpt_scheduled_mode->max_voltage.value());
                     const auto max_power = dt::from_RationalNumber(bpt_scheduled_mode->max_charge_power.value());
-                    publish_dc_ev_maximum_limits_if_changed({max_current, max_power, max_voltage});
+                    publish_dc_ev_maximum_limits({max_current, max_power, max_voltage});
                 }
 
                 // publish_dc_ev_maximum_limits({max_limits.current, max_limits.power, max_limits.voltage});
@@ -524,7 +466,7 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
     };
 
     callbacks.dc_max_limits = [this](const feedback::DcMaximumLimits& max_limits) {
-        publish_dc_ev_maximum_limits_if_changed({max_limits.current, max_limits.power, max_limits.voltage});
+        publish_dc_ev_maximum_limits({max_limits.current, max_limits.power, max_limits.voltage});
     };
 
     callbacks.dc_evse_adjusted_limits = [this](const iso15118::d20::DcTransferLimits& adjusted_limits) {
@@ -617,15 +559,12 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
             break;
         case Signal::DLINK_TERMINATE:
             publish_dlink_terminate(nullptr);
-            reset_published_value_cache();
             break;
         case Signal::DLINK_PAUSE:
             publish_dlink_pause(nullptr);
-            reset_published_value_cache();
             break;
         case Signal::DLINK_ERROR:
             publish_dlink_error(nullptr);
-            reset_published_value_cache();
             break;
         }
     };
