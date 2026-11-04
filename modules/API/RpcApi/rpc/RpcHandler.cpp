@@ -105,9 +105,10 @@ RpcHandler::RpcHandler(std::vector<std::shared_ptr<server::TransportInterface>> 
                        std::unique_ptr<request_interface::RequestHandlerInterface> request_handler, int precision) :
     m_transport_interfaces(std::move(transport_interfaces)),
     m_data_store(dataobj),
+    m_request_handler(std::move(request_handler)),
     m_methods_api(dataobj),
-    m_methods_chargepoint(dataobj),
-    m_methods_evse(dataobj, std::move(request_handler)),
+    m_methods_chargepoint(dataobj, m_request_handler),
+    m_methods_evse(dataobj, m_request_handler),
     m_conn(m_transport_interfaces, m_api_hello_received, m_mtx),
     m_precision(precision) {
     init_rpc_api();
@@ -126,6 +127,9 @@ void RpcHandler::init_rpc_api() {
                       get_handle(&methods::ChargePoint::getEVSEInfos, m_methods_chargepoint, m_precision), {});
     m_rpc_server->Add(methods::METHOD_CHARGEPOINT_GET_ACTIVE_ERRORS,
                       get_handle(&methods::ChargePoint::getActiveErrors, m_methods_chargepoint, m_precision), {});
+    m_rpc_server->Add(methods::METHOD_CHARGEPOINT_SET_HMI_INDICATION,
+                      get_handle(&methods::ChargePoint::set_hmi_indication, m_methods_chargepoint, m_precision),
+                      {"indication"});
     m_rpc_server->Add(methods::METHOD_EVSE_GET_INFO, get_handle(&methods::Evse::get_info, m_methods_evse, m_precision),
                       {"evse_index"});
     m_rpc_server->Add(methods::METHOD_EVSE_GET_STATUS,

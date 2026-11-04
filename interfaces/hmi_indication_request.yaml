@@ -1,0 +1,7 @@
+description: >-
+  Presentation-only HMI requests. Requests do not authorize or otherwise control charging.
+vars:
+  indication:
+    description: A presentation event. Every publication is significant, including repeated values.
+    type: object
+    $ref: /hmi_indication_request#/Request

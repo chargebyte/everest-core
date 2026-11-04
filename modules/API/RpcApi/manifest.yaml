@@ -30,6 +30,10 @@ config:
     type: integer
     default: 2
     minimum: 0
+provides:
+  hmi_indication_request:
+    interface: hmi_indication_request
+    description: Publishes presentation-only requests received through the RPC API.
 requires:
   evse_manager:
     interface: evse_manager

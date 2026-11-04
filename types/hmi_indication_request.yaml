@@ -1,0 +1,20 @@
+description: Presentation-only HMI indication requests.
+types:
+  Indication:
+    description: An HMI event independent of charging control and authorization.
+    type: string
+    enum:
+      - TagEnrollmentActive
+      - TagEnrollmentInactive
+      - AuthAccepted
+      - AuthRejected
+  Request:
+    description: A presentation request delivered to connected consumers.
+    type: object
+    additionalProperties: false
+    properties:
+      indication:
+        description: The indication to display.
+        $ref: /hmi_indication_request#/Indication
+    required:
+      - indication

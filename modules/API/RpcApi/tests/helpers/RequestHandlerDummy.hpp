@@ -6,13 +6,18 @@
 #include "../data/DataStore.hpp"
 
 #include <../rpc/RequestHandlerInterface.hpp>
+#include <mutex>
 #include <types/json_rpc_api/json_rpc_api.hpp>
+#include <vector>
 
 class RequestHandlerDummy : public request_interface::RequestHandlerInterface {
 public:
     RequestHandlerDummy() = delete;
     explicit RequestHandlerDummy(data::DataStoreCharger& data_store);
     ~RequestHandlerDummy() override = default;
+
+    types::json_rpc_api::ErrorResObj set_hmi_indication(const std::string& indication) override;
+    std::vector<std::string> get_hmi_indications();
 
     types::json_rpc_api::ErrorResObj set_charging_allowed(const int32_t evse_index, bool charging_allowed) override;
     types::json_rpc_api::ErrorResObj set_ac_charging(const int32_t evse_index, bool charging_allowed, bool max_current,
@@ -27,6 +32,8 @@ public:
 
 private:
     data::DataStoreCharger& data_store;
+    std::mutex hmi_mutex;
+    std::vector<std::string> hmi_indications;
 };
 
 #endif // REQUESTHANDLERDUMMY_HPP

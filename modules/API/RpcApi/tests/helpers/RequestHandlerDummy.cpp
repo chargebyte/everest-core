@@ -5,6 +5,17 @@
 
 using namespace types::json_rpc_api;
 
+ErrorResObj RequestHandlerDummy::set_hmi_indication(const std::string& indication) {
+    std::lock_guard<std::mutex> lock(hmi_mutex);
+    hmi_indications.push_back(indication);
+    return {ResponseErrorEnum::NoError};
+}
+
+std::vector<std::string> RequestHandlerDummy::get_hmi_indications() {
+    std::lock_guard<std::mutex> lock(hmi_mutex);
+    return hmi_indications;
+}
+
 RequestHandlerDummy::RequestHandlerDummy(data::DataStoreCharger& dataobj) : data_store(dataobj) {
 }
 

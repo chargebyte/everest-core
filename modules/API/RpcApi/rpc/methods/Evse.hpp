@@ -31,7 +31,7 @@ public:
     // Constructor and Destructor
     // Deleting the default constructor to ensure the class is always initialized with a DataStoreCharger object
     Evse() = delete;
-    Evse(data::DataStoreCharger& dataobj, std::unique_ptr<request_interface::RequestHandlerInterface> req_handler) :
+    Evse(data::DataStoreCharger& dataobj, std::shared_ptr<request_interface::RequestHandlerInterface> req_handler) :
         m_dataobj(dataobj), m_request_handler_ptr(std::move(req_handler)) {
     }
 
@@ -57,7 +57,7 @@ private:
     // hardware capabilities, and meter data, ensuring consistent access to the underlying data store.
     data::DataStoreCharger& m_dataobj;
     // Reference to the RequestHandlerInterface object for handling requests
-    std::unique_ptr<request_interface::RequestHandlerInterface> m_request_handler_ptr;
+    std::shared_ptr<request_interface::RequestHandlerInterface> m_request_handler_ptr;
 };
 
 } // namespace methods

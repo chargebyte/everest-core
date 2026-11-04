@@ -10,6 +10,9 @@
 
 #include "ld-ev.hpp"
 
+// headers for provided interface implementations
+#include <generated/interfaces/hmi_indication_request/Implementation.hpp>
+
 // headers for required interface implementations
 #include <generated/interfaces/charger_information/Interface.hpp>
 #include <generated/interfaces/evse_manager/Interface.hpp>
@@ -39,15 +42,18 @@ struct Conf {
 class RpcApi : public Everest::ModuleBase {
 public:
     RpcApi() = delete;
-    RpcApi(const ModuleInfo& info, std::vector<std::unique_ptr<evse_managerIntf>> r_evse_manager,
+    RpcApi(const ModuleInfo& info, std::unique_ptr<hmi_indication_requestImplBase> p_hmi_indication_request,
+           std::vector<std::unique_ptr<evse_managerIntf>> r_evse_manager,
            std::vector<std::unique_ptr<external_energy_limitsIntf>> r_evse_energy_sink,
            std::vector<std::unique_ptr<charger_informationIntf>> r_charger_information, Conf& config) :
         ModuleBase(info),
+        p_hmi_indication_request(std::move(p_hmi_indication_request)),
         r_evse_manager(std::move(r_evse_manager)),
         r_evse_energy_sink(std::move(r_evse_energy_sink)),
         r_charger_information(std::move(r_charger_information)),
         config(config){};
 
+    const std::unique_ptr<hmi_indication_requestImplBase> p_hmi_indication_request;
     const std::vector<std::unique_ptr<evse_managerIntf>> r_evse_manager;
     const std::vector<std::unique_ptr<external_energy_limitsIntf>> r_evse_energy_sink;
     const std::vector<std::unique_ptr<charger_informationIntf>> r_charger_information;

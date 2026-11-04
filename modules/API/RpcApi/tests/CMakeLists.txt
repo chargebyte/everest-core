@@ -13,6 +13,7 @@ set(TEST_SOURCES
     ../rpc/notifications/Evse.cpp
     ../rpc/notifications/ChargePoint.cpp
     ../server/WebsocketServer.cpp
+    ../RpcApiRequestHandler.cpp
     server/WebsocketServerTests.cpp
     rpc/RpcHandlerTests.cpp
 )
@@ -70,6 +71,7 @@ target_link_libraries(${TEST_TARGET_NAME}
         everest::framework
         everest::log
         everest::helpers
+        everest::external_energy_limits
         nlohmann_json::nlohmann_json
         websockets_shared
 )

@@ -7,6 +7,10 @@
 
 namespace methods {
 
+RPCDataTypes::ErrorResObj ChargePoint::set_hmi_indication(const std::string& indication) {
+    return m_request_handler->set_hmi_indication(indication);
+}
+
 RPCDataTypes::ChargePointGetEVSEInfosResObj ChargePoint::getEVSEInfos() {
     RPCDataTypes::ChargePointGetEVSEInfosResObj res{};
     // Iterate over all EVSEs and add the EVSEInfo objects to the response

@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 
+#include "../../RpcApiRequestHandler.hpp"
 #include "../data/DataStore.hpp"
 #include "../helpers/ErrorHandler.hpp"
 #include "../helpers/JsonRpcUtils.hpp"
@@ -27,6 +28,7 @@ protected:
         // Create RpcHandler instance. Move the transport interfaces and request handler to the RpcHandler
         std::vector<std::shared_ptr<server::TransportInterface>> transport_interfaces;
         request_handler = std::make_unique<RequestHandlerDummy>(data_store);
+        hmi_request_handler = static_cast<RequestHandlerDummy*>(request_handler.get());
         transport_interfaces.push_back(std::shared_ptr<server::TransportInterface>(std::move(m_websocket_server)));
         m_rpc_handler =
             std::make_unique<RpcHandler>(std::move(transport_interfaces), data_store, std::move(request_handler));
@@ -88,7 +90,83 @@ protected:
     data::DataStoreCharger data_store;
     // Dummy request handler. Needed to create the responses of synchronous requests
     std::unique_ptr<request_interface::RequestHandlerInterface> request_handler;
+    RequestHandlerDummy* hmi_request_handler = nullptr;
 };
+
+TEST_F(RpcHandlerTest, ChargePointSetHmiIndication) {
+    WebSocketTestClient client("localhost", test_port);
+    ASSERT_TRUE(client.connect());
+    ASSERT_TRUE(client.wait_until_connected(std::chrono::milliseconds(100)));
+    client.send_api_hello_req();
+    ASSERT_FALSE(client.wait_for_data(std::chrono::seconds(1)).empty());
+
+    const std::vector<std::string> indications = {"TagEnrollmentActive", "TagEnrollmentInactive", "AuthAccepted",
+                                                  "AuthRejected", "AuthRejected"};
+    for (const auto& indication : indications) {
+        const auto request = create_json_rpc_request("ChargePoint.SetHmiIndication", {{"indication", indication}}, 1);
+        const nlohmann::json response = {
+            {"jsonrpc", JSON_RPC_SPEC_VERSION}, {"result", {{"error", "NoError"}}}, {"id", 1}};
+        send_req_and_validate_res(client, request, response);
+    }
+    EXPECT_EQ(hmi_request_handler->get_hmi_indications(), indications);
+}
+
+TEST_F(RpcHandlerTest, ChargePointSetHmiIndicationInvalidParameters) {
+    WebSocketTestClient client("localhost", test_port);
+    ASSERT_TRUE(client.connect());
+    ASSERT_TRUE(client.wait_until_connected(std::chrono::milliseconds(100)));
+    client.send_api_hello_req();
+    ASSERT_FALSE(client.wait_for_data(std::chrono::seconds(1)).empty());
+
+    std::vector<nlohmann::json> requests = {
+        create_json_rpc_request("ChargePoint.SetHmiIndication", nlohmann::json::object(), 1),
+        create_json_rpc_request("ChargePoint.SetHmiIndication", nlohmann::json::array(), 2),
+        create_json_rpc_request("ChargePoint.SetHmiIndication", {{"indication", 123}}, 3),
+        create_json_rpc_request("ChargePoint.SetHmiIndication", nlohmann::json::array({"AuthAccepted", "extra"}), 4),
+    };
+    requests.push_back({{"jsonrpc", JSON_RPC_SPEC_VERSION}, {"method", "ChargePoint.SetHmiIndication"}, {"id", 5}});
+    for (const auto& request : requests) {
+        client.send(request.dump());
+        const auto raw_response = client.wait_for_data(std::chrono::seconds(1), false);
+        ASSERT_FALSE(raw_response.empty());
+        const auto response = nlohmann::json::parse(raw_response);
+        ASSERT_EQ(response.at("id"), request.at("id"));
+        ASSERT_EQ(response.at("error").at("code"), -32602);
+    }
+    EXPECT_TRUE(hmi_request_handler->get_hmi_indications().empty());
+}
+
+TEST(RpcApiRequestHandlerTest, PublishesTypedHmiRequests) {
+    data::DataStoreCharger data_store;
+    std::vector<std::unique_ptr<evse_managerIntf>> evse_managers;
+    std::vector<std::unique_ptr<external_energy_limitsIntf>> energy_sinks;
+    std::vector<types::hmi_indication_request::Request> published_requests;
+    auto handler = std::make_shared<RpcApiRequestHandler>(
+        data_store, evse_managers, energy_sinks,
+        [&published_requests](const types::hmi_indication_request::Request& request) {
+            published_requests.push_back(request);
+        });
+    methods::ChargePoint charge_point(data_store, handler);
+    const std::vector<std::string> indications = {"TagEnrollmentActive", "TagEnrollmentInactive", "AuthAccepted",
+                                                  "AuthRejected", "AuthRejected"};
+    for (const auto& indication : indications) {
+        EXPECT_EQ(charge_point.set_hmi_indication(indication).error, RPCDataTypes::ResponseErrorEnum::NoError);
+    }
+    ASSERT_EQ(published_requests.size(), indications.size());
+    for (std::size_t index = 0; index < indications.size(); ++index) {
+        EXPECT_EQ(types::hmi_indication_request::indication_to_string(published_requests[index].indication),
+                  indications[index]);
+    }
+    EXPECT_EQ(charge_point.set_hmi_indication("invalid").error, RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter);
+    EXPECT_EQ(published_requests.size(), indications.size());
+}
+
+TEST(RpcApiRequestHandlerTest, RejectsEmptyHmiPublisher) {
+    data::DataStoreCharger data_store;
+    std::vector<std::unique_ptr<evse_managerIntf>> evse_managers;
+    std::vector<std::unique_ptr<external_energy_limitsIntf>> energy_sinks;
+    EXPECT_THROW(RpcApiRequestHandler(data_store, evse_managers, energy_sinks, {}), std::invalid_argument);
+}
 
 TEST_F(RpcHandlerTest, InvalidPositionalParameterCount) {
     WebSocketTestClient client("localhost", test_port);

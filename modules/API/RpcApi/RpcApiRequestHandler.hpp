@@ -3,9 +3,11 @@
 #ifndef RPCAPIREQUESTHANDLER_HPP
 #define RPCAPIREQUESTHANDLER_HPP
 
+#include <functional>
 #include <generated/interfaces/error_history/Interface.hpp>
 #include <generated/interfaces/evse_manager/Interface.hpp>
 #include <generated/interfaces/external_energy_limits/Interface.hpp>
+#include <generated/types/hmi_indication_request.hpp>
 
 #include "data/DataStore.hpp"
 #include "rpc/RequestHandlerInterface.hpp"
@@ -16,8 +18,10 @@ public:
     RpcApiRequestHandler() = delete;
     RpcApiRequestHandler(data::DataStoreCharger& data_store,
                          const std::vector<std::unique_ptr<evse_managerIntf>>& r_evse_managers,
-                         const std::vector<std::unique_ptr<external_energy_limitsIntf>>& r_evse_energy_sink);
+                         const std::vector<std::unique_ptr<external_energy_limitsIntf>>& r_evse_energy_sink,
+                         std::function<void(const types::hmi_indication_request::Request&)> publish_hmi_indication);
 
+    types::json_rpc_api::ErrorResObj set_hmi_indication(const std::string& indication) override;
     types::json_rpc_api::ErrorResObj set_charging_allowed(const int32_t evse_index, bool charging_allowed) override;
     types::json_rpc_api::ErrorResObj set_ac_charging(const int32_t evse_index, bool charging_allowed, bool max_current,
                                                      std::optional<int> phase_count) override;
@@ -32,6 +36,7 @@ public:
 private:
     // Add any private member variables or methods here
     data::DataStoreCharger& data_store;
+    std::function<void(const types::hmi_indication_request::Request&)> publish_hmi_indication;
     types::json_rpc_api::ErrorResObj check_active_phases_and_set_limits(const int32_t evse_index, const float phy_value,
                                                                         const bool is_power);
     template <typename T>

@@ -248,6 +248,28 @@ It is intended for diagnostic purposes and remote monitoring.
      "error": "$ResponseErrorEnum"
    }
 
+ChargePoint.SetHmiIndication
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Requests a charge-point-wide HMI indication without changing authorization or charging behavior.
+Each request is an event, including repeated requests. The available indication values are
+``TagEnrollmentActive``, ``TagEnrollmentInactive``, ``AuthAccepted`` and ``AuthRejected``.
+The method is available through the configured RPC transport interfaces.
+
+**Request:**
+
+.. code-block:: json
+
+   {"indication": "TagEnrollmentActive"}
+
+**Response:**
+
+.. code-block:: json
+
+   {"error": "NoError"}
+
+An unknown indication returns ``ErrorInvalidParameter``. Missing or incorrectly typed JSON-RPC
+parameters are rejected by the JSON-RPC dispatcher.
+
 EVSE.GetInfo
 ^^^^^^^^^^^^
 This method is used to obtain general information about an EVSE.

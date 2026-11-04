@@ -11,7 +11,7 @@ ev_setup_cpp_module()
 # insert your custom targets and additional config variables here
 
 target_compile_definitions(${MODULE_NAME} PRIVATE
-    API_VERSION=\"1.0.0\"
+    API_VERSION=\"1.1.0\"
 )
 
 target_compile_features(${MODULE_NAME} PRIVATE cxx_std_17)
@@ -67,6 +67,11 @@ target_compile_options(${MODULE_NAME}
         -Werror=switch-enum
 )
 # ev@bcc62523-e22b-41d7-ba2f-825b493a3c97:v1
+
+target_sources(${MODULE_NAME}
+    PRIVATE
+        "hmi_indication_request/hmi_indication_requestImpl.cpp"
+)
 
 # ev@c55432ab-152c-45a9-9d2e-7281d50c69c3:v1
 # insert other things like install cmds etc here

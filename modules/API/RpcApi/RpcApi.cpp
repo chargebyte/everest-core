@@ -25,7 +25,10 @@ void RpcApi::init() {
     this->check_evse_mapping();
 
     // Create the request handler
-    m_request_handler = std::make_unique<RpcApiRequestHandler>(data, r_evse_manager, r_evse_energy_sink);
+    m_request_handler = std::make_unique<RpcApiRequestHandler>(
+        data, r_evse_manager, r_evse_energy_sink, [this](const types::hmi_indication_request::Request& request) {
+            p_hmi_indication_request->publish_indication(request);
+        });
 
     std::vector<std::shared_ptr<server::TransportInterface>> transport_interfaces;
 

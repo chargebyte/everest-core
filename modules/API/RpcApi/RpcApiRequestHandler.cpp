@@ -93,8 +93,27 @@ static types::energy::ExternalLimits get_external_limits(float phy_value, bool i
 
 RpcApiRequestHandler::RpcApiRequestHandler(
     data::DataStoreCharger& dataobj, const std::vector<std::unique_ptr<evse_managerIntf>>& r_evse_managers,
-    const std::vector<std::unique_ptr<external_energy_limitsIntf>>& r_evse_energy_sink) :
-    data_store(dataobj), evse_managers(r_evse_managers), evse_energy_sink(r_evse_energy_sink) {
+    const std::vector<std::unique_ptr<external_energy_limitsIntf>>& r_evse_energy_sink,
+    std::function<void(const types::hmi_indication_request::Request&)> publish_hmi_indication) :
+    data_store(dataobj),
+    publish_hmi_indication(std::move(publish_hmi_indication)),
+    evse_managers(r_evse_managers),
+    evse_energy_sink(r_evse_energy_sink) {
+    if (!this->publish_hmi_indication) {
+        throw std::invalid_argument("HMI indication publisher must not be empty");
+    }
+}
+
+ErrorResObj RpcApiRequestHandler::set_hmi_indication(const std::string& indication) {
+    types::hmi_indication_request::Indication parsed_indication;
+    try {
+        parsed_indication = types::hmi_indication_request::string_to_indication(indication);
+    } catch (const std::out_of_range&) {
+        return {ResponseErrorEnum::ErrorInvalidParameter};
+    }
+
+    publish_hmi_indication(types::hmi_indication_request::Request{parsed_indication});
+    return {ResponseErrorEnum::NoError};
 }
 
 ErrorResObj RpcApiRequestHandler::set_charging_allowed(const int32_t evse_index, bool charging_allowed) {

@@ -4,6 +4,7 @@
 #define REQUEST_HANDLER_INTERFACE_HPP
 
 #include <optional>
+#include <string>
 
 #include <types/json_rpc_api/json_rpc_api.hpp>
 
@@ -16,6 +17,7 @@ namespace request_interface {
 class RequestHandlerInterface {
 public:
     virtual ~RequestHandlerInterface() = default;
+    virtual RPCDataTypes::ErrorResObj set_hmi_indication(const std::string& indication) = 0;
     virtual RPCDataTypes::ErrorResObj set_charging_allowed(const int32_t evse_index, bool charging_allowed) = 0;
     virtual RPCDataTypes::ErrorResObj set_ac_charging(const int32_t evse_index, bool charging_allowed, bool max_current,
                                                       std::optional<int> phase_count) = 0;

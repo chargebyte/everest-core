@@ -127,6 +127,7 @@ private:
 
     std::vector<std::shared_ptr<TransportInterface>> m_transport_interfaces;
     DataStoreCharger& m_data_store;
+    std::shared_ptr<request_interface::RequestHandlerInterface> m_request_handler;
     std::mutex m_mtx;
     std::condition_variable m_cv_api_hello;
     std::condition_variable m_cv_data_available;
