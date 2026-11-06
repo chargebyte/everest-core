@@ -100,8 +100,8 @@ TEST_F(RpcHandlerTest, ChargePointSetHmiIndication) {
     client.send_api_hello_req();
     ASSERT_FALSE(client.wait_for_data(std::chrono::seconds(1)).empty());
 
-    const std::vector<std::string> indications = {"TagEnrollmentActive", "TagEnrollmentInactive", "AuthAccepted",
-                                                  "AuthRejected", "AuthRejected"};
+    const std::vector<std::string> indications = {"TagEnrollmentActive", "TagEnrollmentInactive", "AuthRequired",
+                                                  "AuthAccepted",        "AuthRejected",          "AuthRejected"};
     for (const auto& indication : indications) {
         const auto request = create_json_rpc_request("ChargePoint.SetHmiIndication", {{"indication", indication}}, 1);
         const nlohmann::json response = {
@@ -147,8 +147,8 @@ TEST(RpcApiRequestHandlerTest, PublishesTypedHmiRequests) {
             published_requests.push_back(request);
         });
     methods::ChargePoint charge_point(data_store, handler);
-    const std::vector<std::string> indications = {"TagEnrollmentActive", "TagEnrollmentInactive", "AuthAccepted",
-                                                  "AuthRejected", "AuthRejected"};
+    const std::vector<std::string> indications = {"TagEnrollmentActive", "TagEnrollmentInactive", "AuthRequired",
+                                                  "AuthAccepted",        "AuthRejected",          "AuthRejected"};
     for (const auto& indication : indications) {
         EXPECT_EQ(charge_point.set_hmi_indication(indication).error, RPCDataTypes::ResponseErrorEnum::NoError);
     }

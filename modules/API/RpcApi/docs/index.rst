@@ -251,8 +251,16 @@ It is intended for diagnostic purposes and remote monitoring.
 ChargePoint.SetHmiIndication
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Requests a charge-point-wide HMI indication without changing authorization or charging behavior.
-Each request is an event, including repeated requests. The available indication values are
-``TagEnrollmentActive``, ``TagEnrollmentInactive``, ``AuthAccepted`` and ``AuthRejected``.
+Each request is a display event, including repeated requests. ``AuthRequired`` sets a persistent HMI
+display state; ``AuthAccepted`` clears that state. ``AuthRejected`` displays transient feedback and
+preserves the current display state. Other values are ``TagEnrollmentActive`` and
+``TagEnrollmentInactive``.
+
+Consumers such as HmiLed may also clear the display state on EVSE authorization and lifecycle
+events, including an accepted authorization, session completion, or unplugging the vehicle.
+``AuthAccepted`` and ``AuthRejected`` remain independent display events and are shown whenever
+received. The method does not filter stale results, so callers must ensure each result belongs to
+the current token check.
 The method is available through the configured RPC transport interfaces.
 
 **Request:**

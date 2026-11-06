@@ -1,11 +1,14 @@
 description: Presentation-only HMI indication requests.
 types:
   Indication:
-    description: An HMI event independent of charging control and authorization.
+    description: >-
+      A display-only HMI event. It neither authorizes a token nor controls charging. AuthRequired sets a persistent
+      display state; AuthAccepted clears it; AuthRejected is transient and preserves the current display state.
     type: string
     enum:
       - TagEnrollmentActive
       - TagEnrollmentInactive
+      - AuthRequired
       - AuthAccepted
       - AuthRejected
   Request:
