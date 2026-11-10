@@ -252,15 +252,21 @@ ChargePoint.SetHmiIndication
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Requests a charge-point-wide HMI indication without changing authorization or charging behavior.
 Each request is a display event, including repeated requests. ``AuthRequired`` sets a persistent HMI
-display state; ``AuthAccepted`` clears that state. ``AuthRejected`` displays transient feedback and
-preserves the current display state. Other values are ``TagEnrollmentActive`` and
-``TagEnrollmentInactive``.
+display state. When enrollment is inactive, ``AuthAccepted`` and ``AuthRejected`` clear that state
+and display transient feedback. When either result ends an active enrollment, the enrollment result
+is displayed and the persistent state is preserved. ``TagEnrollmentActive`` and
+``TagEnrollmentInactive`` control the enrollment display state.
 
-Consumers such as HmiLed may also clear the display state on EVSE authorization and lifecycle
-events, including an accepted authorization, session completion, or unplugging the vehicle.
-``AuthAccepted`` and ``AuthRejected`` remain independent display events and are shown whenever
-received. The method does not filter stale results, so callers must ensure each result belongs to
-the current token check.
+Consumers such as HmiLed may also clear the persistent display state on lifecycle events, including
+session completion, a disabled EVSE, a plug-in timeout, or unplugging the vehicle. If no external
+indication bridge is connected, ``TransactionStarted`` also clears the state; with the bridge
+connected, this event does not clear bridge-owned ``AuthRequired`` state. The ``Authorized`` event
+alone does not clear it. HmiLed can subscribe to both this bridge and an Auth module: Auth-module
+``Processing`` and validation-result events remain available when both are connected. Auth-module
+acceptance clears the persistent state; rejection does not.
+Auth-module events do not end enrollment or replace an active enrollment-result indication.
+Display priority may temporarily mask transient feedback. The method does not filter stale results,
+so callers must ensure each result belongs to the current token check.
 The method is available through the configured RPC transport interfaces.
 
 **Request:**

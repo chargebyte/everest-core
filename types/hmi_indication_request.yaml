@@ -4,9 +4,9 @@ types:
     description: >-
       A display-only HMI event. It neither authorizes a token nor controls charging. AuthRequired sets a persistent
       display state and is expected only while an EV is physically plugged in. It does not change Auth-module state,
-      including AuthPending. A normal AuthAccepted clears that display state;
-      an AuthAccepted interpreted as an enrollment result does not. AuthRejected is transient and preserves the
-      current display state.
+      including AuthPending. When enrollment is inactive, AuthAccepted and AuthRejected clear the persistent
+      AuthRequired display state and show their transient result. During enrollment, either result ends enrollment
+      and shows the corresponding enrollment result while preserving the persistent AuthRequired display state.
     type: string
     enum:
       - TagEnrollmentActive
