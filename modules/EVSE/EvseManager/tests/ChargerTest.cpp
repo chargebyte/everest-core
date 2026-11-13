@@ -762,6 +762,73 @@ TEST_F(ChargerTest, DisableDuringActiveTransaction) {
     EXPECT_EQ(last_event, SessionEventEnum::Disabled);
 }
 
+TEST_F(ChargerTest, ClearedBasicAcFatalErrorDuringStoppingUsesEvsePause) {
+    auto& ctx = charger->get_shared_context();
+    auto& internal = charger->get_internal_context();
+    ctx.current_state = Charger::EvseState::Charging;
+    ctx.flag_transaction_active = true;
+    ctx.flag_ev_plugged_in = true;
+    ctx.flag_authorized = true;
+    ctx.contactor_open = false;
+    ctx.iec_allow_close_contactor = false;
+    ctx.pwm_running = true;
+    ctx.max_current = 32.f;
+    ctx.max_current_cable = 32.0;
+    ctx.max_current_valid_until = std::chrono::steady_clock::now() + std::chrono::minutes(1);
+    ctx.shutdown_type = ShutdownType::ErrorShutdown;
+
+    charger->run_state_machine();
+    ASSERT_EQ(ctx.current_state, Charger::EvseState::StoppingCharging);
+    ASSERT_TRUE(internal.stopping_for_fatal_error);
+
+    ctx.shutdown_type = ShutdownType::None;
+    ctx.contactor_open = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(ctx.current_state, Charger::EvseState::ChargingPausedEVSE);
+}
+
+TEST_F(ChargerTest, ActiveHlcFatalErrorDuringStoppingUsesEvsePause) {
+    auto& ctx = charger->get_shared_context();
+    ctx.current_state = Charger::EvseState::StoppingCharging;
+    ctx.flag_transaction_active = true;
+    ctx.flag_ev_plugged_in = true;
+    ctx.flag_authorized = true;
+    ctx.contactor_open = true;
+    ctx.hlc_charging_active = true;
+    ctx.shutdown_type = ShutdownType::ErrorShutdown;
+    ctx.max_current = 32.f;
+    ctx.max_current_cable = 32.0;
+    ctx.max_current_valid_until = std::chrono::steady_clock::now() + std::chrono::minutes(1);
+
+    charger->run_state_machine();
+
+    EXPECT_EQ(ctx.current_state, Charger::EvseState::ChargingPausedEVSE);
+}
+
+TEST_F(ChargerTest, ClearedHlcFatalErrorDuringStoppingUsesEvPause) {
+    auto& ctx = charger->get_shared_context();
+    ctx.current_state = Charger::EvseState::StoppingCharging;
+    ctx.flag_transaction_active = true;
+    ctx.flag_ev_plugged_in = true;
+    ctx.flag_authorized = true;
+    ctx.contactor_open = false;
+    ctx.hlc_charging_active = true;
+    ctx.shutdown_type = ShutdownType::ErrorShutdown;
+    ctx.max_current = 32.f;
+    ctx.max_current_cable = 32.0;
+    ctx.max_current_valid_until = std::chrono::steady_clock::now() + std::chrono::minutes(1);
+
+    charger->run_state_machine();
+    ASSERT_EQ(ctx.current_state, Charger::EvseState::StoppingCharging);
+
+    ctx.shutdown_type = ShutdownType::None;
+    ctx.contactor_open = true;
+    charger->run_state_machine();
+
+    EXPECT_EQ(ctx.current_state, Charger::EvseState::ChargingPausedEV);
+}
+
 // Test that disabling while in WaitingForAuthentication (no transaction yet)
 // ends the session and transitions to Disabled without going through StoppingCharging.
 TEST_F(ChargerTest, DisableDuringWaitingForAuthentication) {

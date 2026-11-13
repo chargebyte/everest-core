@@ -575,6 +575,7 @@ private:
         // StoppingCharging was entered for a user pause (flag_paused_by_evse), even if resume_charging() has
         // cleared that flag since.
         bool stopping_for_evse_pause{false};
+        bool stopping_for_fatal_error{false};
         // How long StoppingCharging waits for the EV before the hard stop; chosen when the state is entered.
         int stopping_charging_timeout_ms{STOPPING_CHARGING_TIMEOUT_MS};
 
