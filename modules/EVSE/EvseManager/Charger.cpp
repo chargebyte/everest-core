@@ -1221,6 +1221,15 @@ void Charger::run_state_machine() {
                 internal_context.d20_pause_requested = false;
                 internal_context.d20_pause_confirmed = false;
                 internal_context.stopping_for_evse_pause = evse_pause;
+                const bool fatal_error_now = shared_context.shutdown_type != ShutdownType::None &&
+                                             config_context.charge_mode == ChargeMode::AC &&
+                                             !shared_context.hlc_charging_active && !hlc_use_5percent_current_session;
+                if (internal_context.last_state != EvseState::StoppingCharging) {
+                    internal_context.stopping_for_fatal_error = fatal_error_now;
+                } else {
+                    internal_context.stopping_for_fatal_error =
+                        internal_context.stopping_for_fatal_error || fatal_error_now;
+                }
                 internal_context.stopping_charging_timeout_ms = STOPPING_CHARGING_TIMEOUT_MS;
                 internal_context.d20_pause_ramp_start.reset();
                 internal_context.d20_pause_notified = false;
@@ -1282,7 +1291,8 @@ void Charger::run_state_machine() {
             // Charging is stopped now, move on to paused state. A pause the user lifted while it was still being
             // stopped is still an EVSE pause: ChargingPausedEVSE resumes it, ChargingPausedEV would wait for the EV.
             if (not power_available() or shared_context.flag_paused_by_evse or
-                internal_context.stopping_for_evse_pause or stop_charging_on_fatal_error_internal()) {
+                internal_context.stopping_for_evse_pause or internal_context.stopping_for_fatal_error or
+                stop_charging_on_fatal_error_internal()) {
                 // Paused was initiated by EVSE, continue to PausedEVSE
                 shared_context.hlc_session_paused_by_evse = shared_context.hlc_charging_active;
                 set_state(EvseState::ChargingPausedEVSE);
