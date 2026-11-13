@@ -253,7 +253,11 @@ std::queue<CPEvent> IECStateMachine::state_machine(std::optional<RawCPState> con
             connector_lock();
             // If state D is not supported switch off.
             if (not has_ventilation) {
-                call_allow_power_on_bsp(false);
+                if (last_cp_state != RawCPState::D) {
+                    cp_state_before_d = last_cp_state;
+                    EVLOG_warning << "State D requested but no ventilation available";
+                }
+                power_off_for_state_d();
                 timer_state_C1 = TimerControl::stop;
                 break;
             }
@@ -269,7 +273,8 @@ std::queue<CPEvent> IECStateMachine::state_machine(std::optional<RawCPState> con
                 car_plugged_in = true;
                 EVLOG_info << "Detected simplified mode.";
                 ev_simplified_mode = true;
-            } else if (last_cp_state == RawCPState::B) {
+            } else if (last_cp_state == RawCPState::B ||
+                       (last_cp_state == RawCPState::D && cp_state_before_d == RawCPState::B && !has_ventilation)) {
                 events.push(CPEvent::CarRequestedPower);
             }
 
@@ -303,7 +308,8 @@ std::queue<CPEvent> IECStateMachine::state_machine(std::optional<RawCPState> con
                 // 1) When we come from state B: switch on if we are allowed to
                 // 2) When we are in C2 for a while now and finally get a delayed power_on_allowed: also switch on
 
-                if (power_on_allowed && (!last_power_on_allowed || last_cp_state == RawCPState::B)) {
+                if (power_on_allowed && (!last_power_on_allowed || last_cp_state == RawCPState::B ||
+                                         (last_cp_state == RawCPState::D && !has_ventilation))) {
                     // Table A.6: Sequence 4 EV ready to charge.
                     // Must enable power within 3 seconds.
                     call_allow_power_on_bsp(true);
@@ -365,6 +371,9 @@ std::queue<CPEvent> IECStateMachine::state_machine(std::optional<RawCPState> con
         check_connector_lock();
 
         last_cp_state = cp_state;
+        if (cp_state != RawCPState::D) {
+            cp_state_before_d.reset();
+        }
         last_pwm_running = pwm_running;
         last_power_on_allowed = power_on_allowed;
         // end of mutex protected section
@@ -497,13 +506,21 @@ void IECStateMachine::call_allow_power_on_bsp(bool value) {
         power_on_allowed = false;
         power_on_reason = types::evse_board_support::Reason::PowerOff;
     }
+    forward_power_on_to_bsp(value, power_on_reason);
+}
+
+void IECStateMachine::power_off_for_state_d() {
+    forward_power_on_to_bsp(false, types::evse_board_support::Reason::PowerOff);
+}
+
+void IECStateMachine::forward_power_on_to_bsp(bool value, types::evse_board_support::Reason reason) {
     // Change-gated diagnostic, the counterpart of the one in allow_power_on(): a requested
     // "true" that is never followed by this forward means the state machine swallowed the edge.
     if (value != last_power_on_forwarded) {
         last_power_on_forwarded = value;
         EVLOG_info << "IEC allow_power_on forwarded to BSP: " << (value ? "true" : "false");
     }
-    r_bsp->call_allow_power_on({value, power_on_reason});
+    r_bsp->call_allow_power_on({value, reason});
 }
 
 void IECStateMachine::set_pp_ampacity(types::board_support_common::ProximityPilot const& pp) {

@@ -42,6 +42,20 @@ TODO: AC and DC module graphs and description
 AC Configuration
 ----------------
 
+Ventilation and CP state D
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``has_ventilation`` option declares whether the charging location supports
+ventilation for IEC 61851 state D. With ``has_ventilation: false``, EvseManager
+opens the contactors while state D is present. If the EV returns directly to
+state C with nominal PWM, the charger resumes when its power permission is still
+active; a transition through state B follows the normal stop-and-request-power
+sequence. With ``has_ventilation: true``, state D is handled like state C.
+State D without ventilation is not reported as an EvseManager error. In AC Basic
+Charging, a fatal BSP error that is cleared while stopping is resumed through
+the EVSE-paused path. DC charging and HLC retain their existing fatal-error
+handling; ``has_ventilation`` does not change those modes.
+
 Captive cable mode
 ~~~~~~~~~~~~~~~~~~
 
