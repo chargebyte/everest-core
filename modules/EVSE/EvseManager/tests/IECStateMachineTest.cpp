@@ -3,6 +3,7 @@
 #include "evse_board_supportIntfStub.hpp"
 #include <EventQueue.hpp>
 #include <IECStateMachine.hpp>
+#include <algorithm>
 #include <atomic>
 #include <backtrace.hpp>
 #include <chrono>
@@ -16,6 +17,7 @@ namespace {
 using BspEvent = types::board_support_common::BspEvent;
 using Event = types::board_support_common::Event;
 using Reason = types::evse_board_support::Reason;
+using CPEvent = module::CPEvent;
 
 using namespace std::chrono_literals;
 
@@ -344,6 +346,13 @@ TEST(IECStateMachine, deadlock_fix) {
 struct BspStubRecorder : public BspStub {
     std::vector<std::string> calls;
     std::vector<double> pwm_on_values;
+    std::vector<std::pair<bool, Reason>> allow_power_on_values;
+
+    Result call_allow_power_on(Parameters p) override {
+        const auto value = p.at("value");
+        allow_power_on_values.emplace_back(value.at("allow_power_on").get<bool>(), value.at("reason").get<Reason>());
+        return BspStub::call_allow_power_on(p);
+    }
 
     Result call_cp_state_X1(Parameters p) override {
         calls.push_back("cp_state_X1");
@@ -380,6 +389,144 @@ TEST_F(SetPwmTest, duty_cycle_1_is_cp_state_X1) {
 TEST_F(SetPwmTest, duty_cycle_0_is_cp_state_F) {
     state_machine.set_pwm(0.0);
     EXPECT_EQ(bsp.calls, std::vector<std::string>{"cp_state_F"});
+}
+
+TEST(IECStateMachine, state_d_without_ventilation_c2_d_c2_resumes_power) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(false);
+    state_machine.enable(true);
+
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    state_machine.set_pwm(0.267);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    bsp.raise_event(Event::C);
+    bsp.raise_event(Event::D);
+    bsp.raise_event(Event::C);
+
+    ASSERT_GE(bsp.allow_power_on_values.size(), 4U);
+    EXPECT_EQ(bsp.allow_power_on_values[bsp.allow_power_on_values.size() - 2].first, false);
+    EXPECT_EQ(bsp.allow_power_on_values.back(), std::make_pair(true, Reason::FullPowerCharging));
+}
+
+TEST(IECStateMachine, state_d_without_ventilation_b2_d_c2_requests_power) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(false);
+    state_machine.enable(true);
+    std::vector<CPEvent> events;
+    state_machine.signal_event.connect([&events](CPEvent event) { events.push_back(event); });
+
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    bsp.raise_event(Event::D);
+    bsp.raise_event(Event::C);
+
+    EXPECT_NE(std::find(events.begin(), events.end(), CPEvent::CarRequestedPower), events.end());
+}
+
+TEST(IECStateMachine, state_d_without_ventilation_repeated_d_keeps_previous_state) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(false);
+    state_machine.enable(true);
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    state_machine.set_pwm(0.267);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    std::vector<CPEvent> events;
+    state_machine.signal_event.connect([&events](CPEvent event) { events.push_back(event); });
+    bsp.raise_event(Event::D);
+    ASSERT_FALSE(bsp.allow_power_on_values.back().first);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    ASSERT_FALSE(bsp.allow_power_on_values.back().first);
+    bsp.raise_event(Event::D);
+    bsp.raise_event(Event::C);
+
+    EXPECT_NE(std::find(events.begin(), events.end(), CPEvent::CarRequestedPower), events.end());
+    EXPECT_EQ(bsp.allow_power_on_values.back(), std::make_pair(true, Reason::FullPowerCharging));
+}
+
+TEST(IECStateMachine, state_d_without_ventilation_power_off_in_d_stays_off) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(false);
+    state_machine.enable(true);
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    state_machine.set_pwm(0.267);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    bsp.raise_event(Event::C);
+    bsp.raise_event(Event::D);
+    state_machine.allow_power_on(false, Reason::PowerOff);
+    bsp.raise_event(Event::C);
+
+    EXPECT_FALSE(bsp.allow_power_on_values.back().first);
+}
+
+TEST(IECStateMachine, state_d_with_ventilation_keeps_power) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(true);
+    state_machine.enable(true);
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    state_machine.set_pwm(0.267);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    bsp.raise_event(Event::C);
+    ASSERT_FALSE(bsp.allow_power_on_values.empty());
+    ASSERT_TRUE(bsp.allow_power_on_values.back().first);
+    const auto before_d = bsp.allow_power_on_values.size();
+    bsp.raise_event(Event::D);
+
+    EXPECT_EQ(bsp.allow_power_on_values.size(), before_d);
+}
+
+TEST(IECStateMachine, state_d_without_ventilation_d_b_c_requests_stop_and_power) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(false);
+    state_machine.enable(true);
+    std::vector<CPEvent> events;
+    state_machine.signal_event.connect([&events](CPEvent event) { events.push_back(event); });
+
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    state_machine.set_pwm(0.267);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    bsp.raise_event(Event::C);
+    events.clear();
+    bsp.raise_event(Event::D);
+    bsp.raise_event(Event::B);
+    bsp.raise_event(Event::C);
+
+    EXPECT_NE(std::find(events.begin(), events.end(), CPEvent::CarRequestedStopPower), events.end());
+    EXPECT_NE(std::find(events.begin(), events.end(), CPEvent::CarRequestedPower), events.end());
+}
+
+TEST(IECStateMachine, state_d_without_ventilation_five_percent_pwm_resumes_power) {
+    BspStubRecorder bsp;
+    std::unique_ptr<evse_board_supportIntf> bsp_if = std::make_unique<module::stub::evse_board_supportIntfStub>(bsp);
+    module::IECStateMachine state_machine(bsp_if, true, false, false, 0);
+    state_machine.setup(false);
+    state_machine.enable(true);
+
+    bsp.raise_event(Event::A);
+    bsp.raise_event(Event::B);
+    state_machine.set_pwm(0.05);
+    state_machine.allow_power_on(true, Reason::FullPowerCharging);
+    bsp.raise_event(Event::C);
+    bsp.raise_event(Event::D);
+    bsp.raise_event(Event::C);
+
+    EXPECT_EQ(bsp.allow_power_on_values.back(), std::make_pair(true, Reason::FullPowerCharging));
 }
 
 // ---------------------------------------------------------------------------

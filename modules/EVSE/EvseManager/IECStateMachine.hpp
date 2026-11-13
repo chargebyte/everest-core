@@ -146,6 +146,7 @@ private:
     bool car_plugged_in{false};
 
     RawCPState last_cp_state{RawCPState::Disabled};
+    std::optional<RawCPState> cp_state_before_d;
     // True while the high level state machine wants CP state F. Guards the automatic X1 reset on
     // Disabled/A/E events, which could otherwise undo a concurrently commanded F on the BSP.
     bool cp_state_f_requested{false};
@@ -163,6 +164,8 @@ private:
     std::queue<CPEvent> state_machine(std::optional<RawCPState> const& cp_state_opt);
 
     types::evse_board_support::Reason power_on_reason{types::evse_board_support::Reason::PowerOff};
+    void forward_power_on_to_bsp(bool value, types::evse_board_support::Reason reason);
+    void power_off_for_state_d();
     void call_allow_power_on_bsp(bool value);
 
     // If to pay attention to the authorized flag.
