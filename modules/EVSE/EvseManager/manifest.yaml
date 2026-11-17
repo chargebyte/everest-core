@@ -139,6 +139,12 @@ config:
       the relays may close may be delayed by the self test.
     type: integer
     default: 5
+  cable_check_voltage_timeout_s:
+    description: >-
+      Timeout in seconds to wait for the DC power supply output voltage to reach the requested voltage during CableCheck.
+    type: integer
+    minimum: 1
+    default: 10
   cable_check_wait_below_60V_before_finish:
     description: >-
       Switch off power supply and wait until output voltage drops below 60V before cable check is finished.
