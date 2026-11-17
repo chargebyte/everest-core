@@ -2557,7 +2557,7 @@ void EvseManager::powersupply_DC_off() {
 bool EvseManager::wait_powersupply_DC_voltage_reached(double target_voltage) {
     // wait until the voltage has rised to the target value
     Timeout timeout;
-    timeout.start(10s);
+    timeout.start(30s);
     bool voltage_ok = false;
     while (not timeout.reached()) {
         if (cable_check_should_exit()) {
