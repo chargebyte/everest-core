@@ -46,6 +46,8 @@ SCENARIO("Session teardown primitives") {
     iso15118::Session session{std::move(connection), session_config, callbacks, pause_ctx};
 
     GIVEN("a never-connected session") {
+        REQUIRE(session.awaiting_connection());
+
         WHEN("close() is called") {
             session.close();
 
@@ -57,6 +59,7 @@ SCENARIO("Session teardown primitives") {
 
     GIVEN("a connected session with a peer-closed read") {
         conn->fire(iso15118::io::ConnectionEvent::ACCEPTED);
+        REQUIRE_FALSE(session.awaiting_connection());
         conn->next_read_result = {false, 0, true};
         conn->fire(iso15118::io::ConnectionEvent::NEW_DATA);
 
@@ -76,6 +79,7 @@ SCENARIO("Session teardown primitives") {
         conn->queue_v2gtp_packet(iso15118::io::v2gtp::PayloadType::SAP, sap_req, sizeof(sap_req));
         conn->fire(iso15118::io::ConnectionEvent::NEW_DATA);
         session.poll();
+        REQUIRE_FALSE(session.is_v2g_session_established());
 
         // Second response is generated but held back by the 100 ms rate limiter.
         conn->queue_v2gtp_packet(iso15118::io::v2gtp::PayloadType::Part20Main, session_setup_req,
@@ -83,6 +87,7 @@ SCENARIO("Session teardown primitives") {
         conn->fire(iso15118::io::ConnectionEvent::NEW_DATA);
         session.poll();
 
+        REQUIRE(session.is_v2g_session_established());
         REQUIRE_FALSE(session.is_finished());
 
         WHEN("close() is called with a response still pending") {

@@ -276,6 +276,10 @@ TimePoint const& Session::poll() {
 
         const auto request_msg_type = ctx.peek_request_type();
 
+        if (request_msg_type == message_20::Type::SessionSetupReq) {
+            v2g_session_established = true;
+        }
+
         // There is no sequence timer before SupportedAppProtocol
         if (request_msg_type != message_20::Type::SupportedAppProtocolReq) {
             timeouts.stop_timeout(d20::TimeoutType::SEQUENCE);
@@ -389,6 +393,14 @@ void Session::close() {
     // transport gone; a rate-limiter-deferred response is undeliverable
     [[maybe_unused]] auto res = message_exchange.check_and_clear_response();
     ctx.feedback.signal(session::feedback::Signal::DLINK_TERMINATE);
+    ctx.session_stopped = true;
+}
+
+void Session::abort_communication_setup() {
+    connection->close();
+    // A response deferred by the rate limiter cannot be delivered after the
+    // communication-setup timeout closes the transport.
+    [[maybe_unused]] auto res = message_exchange.check_and_clear_response();
     ctx.session_stopped = true;
 }
 

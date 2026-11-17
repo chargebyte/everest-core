@@ -76,15 +76,6 @@ void TbdController::loop() {
 void TbdController::tick() {
     next_event = offset_time_point_by_ms(get_current_time_point(), POLL_MANAGER_TIMEOUT_MS);
 
-    if (communication_setup_timeout && communication_setup_timeout->is_reached()) {
-        logf_warning("V2G communication setup timeout (18s) expired before session was established");
-        communication_setup_timeout.reset();
-        if (sdp_server) {
-            sdp_server->set_dlink_ready(false);
-        }
-        callbacks.signal(session::feedback::Signal::DLINK_ERROR);
-    }
-
     if (session and shutdown_active.load() and not shutdown_signaled) {
         session->request_shutdown(); // Stopping the session
         shutdown_signaled = true;
@@ -108,9 +99,35 @@ void TbdController::tick() {
             session->close();
         }
 
+        if (communication_setup_timeout && session->is_v2g_session_established()) {
+            communication_setup_timeout.reset();
+            logf_info("V2G session established (SessionSetupReq received); communication setup timeout cancelled");
+        }
+
+        if (communication_setup_timeout && communication_setup_timeout->is_reached()) {
+            logf_warning("V2G communication setup timeout (18s) expired before the V2G session was established");
+            communication_setup_timeout.reset();
+            if (sdp_server) {
+                sdp_server->set_dlink_ready(false);
+            }
+
+            // Close the still-listening or partially connected session before
+            // D-LINK_ERROR makes SLAC leave the logical network.
+            session->abort_communication_setup();
+            callbacks.signal(session::feedback::Signal::DLINK_ERROR);
+        }
+
         if (session->is_finished()) {
             session.reset();
+            sdp_offer.reset();
         }
+    } else if (communication_setup_timeout && communication_setup_timeout->is_reached()) {
+        logf_warning("V2G communication setup timeout (18s) expired before a session was created");
+        communication_setup_timeout.reset();
+        if (sdp_server) {
+            sdp_server->set_dlink_ready(false);
+        }
+        callbacks.signal(session::feedback::Signal::DLINK_ERROR);
     }
 
     if (not session and not shutdown_active.load() and not config.enable_sdp_server) {
@@ -191,6 +208,7 @@ void TbdController::set_dlink_ready(bool ready) {
         logf_info("V2G communication setup timeout started (%u ms)", V2G_COMMUNICATION_SETUP_TIMEOUT_MS);
     } else {
         communication_setup_timeout.reset();
+        sdp_offer.reset();
         terminate_session_requested.store(true);
     }
 }
@@ -208,7 +226,21 @@ void TbdController::handle_sdp_server_input() {
         return;
     }
 
+    if (not request) {
+        return;
+    }
+
     if (session) {
+        // The EV repeats SDP until it receives a usable response. Before it has
+        // connected, resend the same offer because the previous UDP response
+        // may have been lost.
+        if (sdp_offer and session->awaiting_connection() and request.security == sdp_offer->requested) {
+            logf_info("Repeated SDP request before the EV connected; sending the SDP response again");
+            request.security = sdp_offer->offered;
+            sdp_server->send_response(request, sdp_offer->endpoint);
+            return;
+        }
+
         // A reconnect SDP arriving in the same poll cycle as a pending teardown
         // is dropped here; the EVCC retransmits its SDP request (~250 ms) and
         // recovers.
@@ -216,9 +248,7 @@ void TbdController::handle_sdp_server_input() {
         return;
     }
 
-    if (not request) {
-        return;
-    }
+    const auto requested_security = request.security;
 
     switch (config.tls_negotiation_strategy) {
     case config::TlsNegotiationStrategy::ACCEPT_CLIENT_OFFER:
@@ -252,7 +282,7 @@ void TbdController::handle_sdp_server_input() {
     const auto ipv6_endpoint = connection->get_public_endpoint();
 
     session = std::make_unique<Session>(std::move(connection), d20::SessionConfig(evse_setup), callbacks, pause_ctx);
-    communication_setup_timeout.reset();
+    sdp_offer = SdpOffer{requested_security, request.security, ipv6_endpoint};
 
     // Deliberately do not clear terminate_session_requested here. A data-link
     // loss that races this session creation must win: tick() consumes the flag

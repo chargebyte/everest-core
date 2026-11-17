@@ -89,6 +89,13 @@ private:
     static constexpr uint32_t V2G_COMMUNICATION_SETUP_TIMEOUT_MS{18000};
     std::optional<Timeout> communication_setup_timeout;
 
+    struct SdpOffer {
+        io::v2gtp::Security requested;
+        io::v2gtp::Security offered;
+        io::Ipv6EndPoint endpoint;
+    };
+    std::optional<SdpOffer> sdp_offer;
+
     ConnectionFactory connection_factory;
 };
 
