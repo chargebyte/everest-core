@@ -210,12 +210,12 @@ Result DC_ChargeParameterDiscovery::feed(Event ev) {
 
     if (const auto req = variant->get_if<message_20::DC_ChargeParameterDiscoveryRequest>()) {
 
-        auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.powersupply_limits);
+        auto shutdown_res = handle_request(*req, m_ctx.session, m_ctx.session_config.powersupply_limits);
         if (m_ctx.shutdown_requested()) {
-            if (res.response_code != dt::ResponseCode::FAILED_UnknownSession) {
-                set_response_code(res, dt::ResponseCode::FAILED_SequenceError);
+            if (shutdown_res.response_code != dt::ResponseCode::FAILED_UnknownSession) {
+                shutdown_res.response_code = dt::ResponseCode::FAILED_SequenceError;
             }
-            m_ctx.respond_and_publish_response_code(res);
+            m_ctx.respond_and_publish_response_code(shutdown_res);
             m_ctx.session_stopped = true;
             return {};
         }

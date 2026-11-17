@@ -57,7 +57,7 @@ Result DC_PreCharge::feed(Event ev) {
         auto res = handle_request(*req, m_ctx.session, present_voltage);
         if (m_ctx.shutdown_requested()) {
             if (res.response_code != dt::ResponseCode::FAILED_UnknownSession) {
-                set_response_code(res, dt::ResponseCode::FAILED_SequenceError);
+                res.response_code = dt::ResponseCode::FAILED_SequenceError;
             }
             m_ctx.respond_and_publish_response_code(res);
             m_ctx.session_stopped = true;

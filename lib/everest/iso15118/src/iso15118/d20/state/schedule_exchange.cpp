@@ -147,7 +147,7 @@ Result ScheduleExchange::feed(Event ev) {
             auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.dc_limits.charge_limits.power.max,
                                       dynamic_parameters, timeout_ongoing_reached);
             if (res.response_code != dt::ResponseCode::FAILED_UnknownSession) {
-                set_response_code(res, dt::ResponseCode::FAILED_SequenceError);
+                res.response_code = dt::ResponseCode::FAILED_SequenceError;
             }
             m_ctx.respond_and_publish_response_code(res);
             m_ctx.session_stopped = true;
