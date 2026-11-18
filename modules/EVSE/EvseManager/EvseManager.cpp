@@ -188,9 +188,22 @@ void EvseManager::init() {
     if (not slac_enabled)
         hlc_enabled = false;
 
+    // in case of MCS we fake that SLAC is present for the next check...
+    // (it might be easier to maintain this patch this way)
+    if (connector_type.has_value() and connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
+        slac_enabled = true;
+        hlc_enabled = true;
+    }
+
     if (config.charge_mode == "DC" and (not hlc_enabled or not slac_enabled or r_powersupply_DC.empty())) {
         EVLOG_error << "DC mode requires slac, HLC and powersupply DCDC to be connected";
         exit(255);
+    }
+
+    // ...in case of MCS we now reset the SLAC is present fake
+    // (it might be easier to maintain this patch this way)
+    if (connector_type.has_value() and connector_type.value() == types::evse_manager::ConnectorTypeEnum::cMCS) {
+        slac_enabled = false;
     }
 
     if (config.charge_mode == "DC" and r_imd.empty()) {
@@ -437,8 +450,11 @@ void EvseManager::ready() {
             }
             // Inform charger
             charger->dlink_error();
-            // Inform SLAC layer, it will leave the logical network
-            r_slac[0]->call_dlink_error();
+
+            if (slac_enabled) {
+                // Inform SLAC layer, it will leave the logical network
+                r_slac[0]->call_dlink_error();
+            }
         });
 
         r_hlc[0]->subscribe_pause_notified([this] { charger->notify_hlc_pause_notified(); });
@@ -449,7 +465,10 @@ void EvseManager::ready() {
             session_log.evse(true, "D-LINK_PAUSE.req");
             hlc_link_in_use = false;
             charger->dlink_pause();
-            r_slac[0]->call_dlink_pause();
+
+            if (slac_enabled) {
+                r_slac[0]->call_dlink_pause();
+            }
         });
 
         r_hlc[0]->subscribe_dlink_terminate([this] {
@@ -462,9 +481,13 @@ void EvseManager::ready() {
                 if (fake_dc_enabled and config.ac_with_soc) {
                     setup_AC_mode(false);
                 }
-                r_slac[0]->call_dlink_error();
+                if (slac_enabled) {
+                    r_slac[0]->call_dlink_error();
+                }
             } else {
-                r_slac[0]->call_dlink_terminate();
+                if (slac_enabled) {
+                    r_slac[0]->call_dlink_terminate();
+                }
             }
         });
 
@@ -488,10 +511,12 @@ void EvseManager::ready() {
             charger->set_hlc_allow_close_contactor(false);
         });
 
-        // Trigger SLAC restart
-        charger->signal_slac_start.connect([this] { r_slac[0]->call_enter_bcd(); });
-        // Trigger SLAC reset
-        charger->signal_slac_reset.connect([this] { r_slac[0]->call_reset(false); });
+        if (slac_enabled) {
+            // Trigger SLAC restart
+            charger->signal_slac_start.connect([this] { r_slac[0]->call_enter_bcd(); });
+            // Trigger SLAC reset
+            charger->signal_slac_reset.connect([this] { r_slac[0]->call_reset(false); });
+        }
 
         // Ask HLC to stop charging session
         charger->signal_hlc_stop_charging.connect([this] { r_hlc[0]->call_stop_charging(true); });
