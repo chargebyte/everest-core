@@ -61,9 +61,9 @@ Result DC_PreCharge::feed(Event ev) {
 
         m_ctx.feedback.dc_pre_charge_target_voltage(message_20::datatypes::from_RationalNumber(req->target_voltage));
 
-        m_ctx.respond(res);
+        const auto response_code = m_ctx.respond_and_publish_response_code(res);
 
-        if (res.response_code >= dt::ResponseCode::FAILED) {
+        if (response_code >= dt::ResponseCode::FAILED) {
             m_ctx.session_stopped = true;
             return {};
         }
@@ -77,8 +77,8 @@ Result DC_PreCharge::feed(Event ev) {
     } else if (const auto req = variant->get_if<message_20::SessionStopRequest>()) {
         const auto res = handle_request(*req, m_ctx.session);
 
-        m_ctx.respond(res);
-        mark_session_stop_response(m_ctx, *req, res);
+        const auto response_code = m_ctx.respond_and_publish_response_code(res);
+        mark_session_stop_response(m_ctx, *req, response_code);
         m_ctx.session_stopped = true;
 
         return {};

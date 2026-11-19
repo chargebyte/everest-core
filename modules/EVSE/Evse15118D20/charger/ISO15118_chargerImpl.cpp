@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Pionix GmbH and Contributors to EVerest
 #include "ISO15118_chargerImpl.hpp"
+
+#include <cmath>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -42,6 +44,21 @@ namespace {
 // Mirrors the manifest bounds of ac_close_contactor_timeout_ms, for config sources that bypass validation.
 constexpr int MIN_AC_CLOSE_CONTACTOR_TIMEOUT_MS = 100;
 constexpr int MAX_AC_CLOSE_CONTACTOR_TIMEOUT_MS = 10000;
+
+types::iso15118::DcEvseMaximumLimits to_adjusted_evse_maximum_limits(const iso15118::d20::DcTransferLimits& limits) {
+    types::iso15118::DcEvseMaximumLimits out;
+    out.evse_maximum_current_limit = dt::from_RationalNumber(limits.charge_limits.current.max);
+    out.evse_maximum_power_limit = dt::from_RationalNumber(limits.charge_limits.power.max);
+    out.evse_maximum_voltage_limit = dt::from_RationalNumber(limits.voltage.max);
+
+    if (limits.discharge_limits.has_value()) {
+        const auto& discharge_limits = limits.discharge_limits.value();
+        out.evse_maximum_discharge_current_limit = std::fabs(dt::from_RationalNumber(discharge_limits.current.max));
+        out.evse_maximum_discharge_power_limit = std::fabs(dt::from_RationalNumber(discharge_limits.power.max));
+    }
+
+    return out;
+}
 
 iso15118::config::TlsNegotiationStrategy convert_tls_negotiation_strategy(const std::string& strategy) {
     using Strategy = iso15118::config::TlsNegotiationStrategy;
@@ -1180,6 +1197,10 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
         publish_dc_ev_maximum_limits({max_limits.current, max_limits.power, max_limits.voltage});
     };
 
+    callbacks.dc_evse_adjusted_limits = [this](const iso15118::d20::DcTransferLimits& adjusted_limits) {
+        publish_dc_evse_adjusted_maximum_limits(to_adjusted_evse_maximum_limits(adjusted_limits));
+    };
+
     callbacks.ac_limits = [this](const feedback::AcLimits& limits) {
         if (const auto* ac_transfer_mode = std::get_if<dt::AC_CPDReqEnergyTransferMode>(&limits)) {
             publish_ac_ev_power_limits(fill_ac_ev_power_limits(*ac_transfer_mode));
@@ -1595,6 +1616,11 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
                 ? types::iso15118::CertificateActionEnum::Update
                 : types::iso15118::CertificateActionEnum::Install;
         this->mod->p_extensions->publish_iso15118_certificate_request(request);
+    };
+
+    callbacks.response_code = [this](const iso15118::message_20::datatypes::ResponseCode& code) {
+        const auto converted_type = convert_response_code_types(code);
+        this->mod->p_charger->publish_response_code(converted_type);
     };
 
     return callbacks;
@@ -2416,8 +2442,7 @@ void ISO15118_chargerImpl::handle_update_meter_info(types::powermeter::Powermete
 void ISO15118_chargerImpl::handle_send_error(types::iso15118::EvseError& error) {
     // Map the EvseManager error to the library's neutral EVSE error code and forward it as a control
     // event. The SECC engines stamp Malfunction / UtilityInterruptEvent (RCD -> AC RCD flag) into the DC
-    // charge responses so the EV sees the fault, and abort the session on EmergencyShutdown (mirrors
-    // EvseV2G's handle_send_error).
+    // charge responses so the EV sees the fault, and distinguish error shutdown from emergency shutdown.
     auto code = iso15118::d20::EvseErrorCode::None;
     switch (error) {
     case types::iso15118::EvseError::Error_Contactor:
@@ -2433,9 +2458,10 @@ void ISO15118_chargerImpl::handle_send_error(types::iso15118::EvseError& error) 
         code = iso15118::d20::EvseErrorCode::Malfunction;
         break;
     case types::iso15118::EvseError::Error_EmergencyShutdown:
-    case types::iso15118::EvseError::Error_ErrorShutdown:
-        // The C++ stack has no keep-alive error shutdown (see EvseV2G); treat it as an emergency shutdown.
         code = iso15118::d20::EvseErrorCode::EmergencyShutdown;
+        break;
+    case types::iso15118::EvseError::Error_ErrorShutdown:
+        code = iso15118::d20::EvseErrorCode::ErrorShutdown;
         break;
     }
 
