@@ -35,7 +35,7 @@ static constexpr auto PEER_CLOSE_WAIT_MS = 500;
 // long: it makes SLAC leave the logical network, and the FIN must traverse the AVLN first or the
 // peer never observes the close.
 static constexpr auto DLINK_SIGNAL_GRACE_MS = 300;
-static constexpr auto MIN_RESPONSE_INTERVAL_MS = 100; // minimum time between two response messages
+static constexpr auto MIN_RESPONSE_INTERVAL_MS = 200; // minimum time between two response messages
 // ISO 15118-2 / DIN 70121: send each response this long after its request (minus processing time).
 // Some EVs' controllers crash if the SECC answers too fast (EvseV2G MAX_RES_TIME parity).
 static constexpr auto RESPONSE_DELAY_AFTER_REQUEST_MS = 100;
