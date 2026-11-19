@@ -44,6 +44,15 @@ Result DC_PreCharge::feed(Event ev) {
         return {};
     }
 
+    if (ev == Event::TIMEOUT) {
+        const auto timeout = m_ctx.get_active_timeout();
+        if (timeout and *timeout == d20::TimeoutType::DC_PRECHARGE) {
+            m_ctx.log("DC PreCharge customer timeout (40s) exceeded. Stopping the session");
+            m_ctx.session_stopped = true;
+        }
+        return {};
+    }
+
     if (ev != Event::V2GTP_MESSAGE) {
         return {};
     }
@@ -52,6 +61,7 @@ Result DC_PreCharge::feed(Event ev) {
 
     if (const auto req = variant->get_if<message_20::DC_PreChargeRequest>()) {
         if (not pre_charge_initiated) {
+            m_ctx.start_timeout(d20::TimeoutType::DC_PRECHARGE, d20::TIMEOUT_DC_PRECHARGE);
             m_ctx.feedback.signal(session::feedback::Signal::PRE_CHARGE_STARTED);
             pre_charge_initiated = true;
         }
@@ -67,12 +77,14 @@ Result DC_PreCharge::feed(Event ev) {
         }
 
         if (req->processing == dt::Processing::Finished) {
+            m_ctx.stop_timeout(d20::TimeoutType::DC_PRECHARGE);
             return m_ctx.create_state<PowerDelivery>();
         }
 
         return {};
 
     } else if (const auto req = variant->get_if<message_20::SessionStopRequest>()) {
+        m_ctx.stop_timeout(d20::TimeoutType::DC_PRECHARGE);
         const auto res = handle_request(*req, m_ctx.session);
 
         m_ctx.respond_and_publish_response_code(res);
@@ -80,6 +92,7 @@ Result DC_PreCharge::feed(Event ev) {
 
         return {};
     } else {
+        m_ctx.stop_timeout(d20::TimeoutType::DC_PRECHARGE);
         m_ctx.log("expected DC_PreChargeReq! But code type id: %d", variant->get_type());
 
         // Sequence Error
