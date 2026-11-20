@@ -17,6 +17,8 @@ endfunction()
 create_fsm_test_target(session_setup)
 create_fsm_test_target(service_detail)
 create_fsm_test_target(dc_pre_charge)
+create_fsm_test_target(dc_cable_check)
+create_fsm_test_target(dc_preparation_stop)
 
 add_executable(test_d20_transitions d20_transitions.cpp)
 
