@@ -44,7 +44,23 @@ public:
         return (ctx.session_stopped or ctx.session_paused) and not message_exchange.has_response();
     }
 
+    // The communication setup phase ends when SessionSetupReq has been received.
+    // Creating the listening endpoint after SDP is not sufficient: the EV may
+    // never connect to it.
+    bool is_v2g_session_established() const {
+        return v2g_session_established;
+    }
+
+    bool awaiting_connection() const {
+        return not state.connected;
+    }
+
     void close();
+
+    // Abort an incomplete communication setup without reporting a normal
+    // D-LINK_TERMINATE. The controller reports D-LINK_ERROR after the
+    // transport has been closed.
+    void abort_communication_setup();
 
     void request_shutdown();
 
@@ -53,6 +69,7 @@ private:
     session::SessionLogger log;
 
     SessionState state;
+    bool v2g_session_established{false};
     // input buffer
     io::SdpPacket packet;
 
