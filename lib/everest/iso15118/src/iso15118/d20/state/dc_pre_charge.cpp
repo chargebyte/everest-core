@@ -47,6 +47,7 @@ Result DC_PreCharge::feed(Event ev) {
     if (ev == Event::TIMEOUT) {
         const auto timeout = m_ctx.get_active_timeout();
         if (timeout and *timeout == d20::TimeoutType::DC_PRECHARGE) {
+            logf_warning("DC PreCharge customer timeout (40s) exceeded. Stopping the session");
             m_ctx.log("DC PreCharge customer timeout (40s) exceeded. Stopping the session");
             m_ctx.session_stopped = true;
         }
