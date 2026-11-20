@@ -125,6 +125,19 @@ SCENARIO("ISO15118-20 dc pre charge state transitions") {
         }
     }
 
+    GIVEN("DC PreCharge performance time expired") {
+        fsm::v2::FSM<d20::StateBase> fsm{ctx.create_state<d20::state::DC_PreCharge>()};
+
+        ctx.set_active_timeout(d20::TimeoutType::DC_PRECHARGE);
+        const auto result = fsm.feed(d20::Event::TIMEOUT);
+
+        THEN("The session is stopped") {
+            REQUIRE_FALSE(result.transitioned());
+            REQUIRE(fsm.get_current_state_id() == d20::StateID::DC_PreCharge);
+            REQUIRE(ctx.session_stopped);
+        }
+    }
+
     GIVEN("Event then other V2GTP_MESSAGE") {
         fsm::v2::FSM<d20::StateBase> fsm{ctx.create_state<d20::state::DC_PreCharge>()};
         const auto result = fsm.feed(d20::Event::FAILED);

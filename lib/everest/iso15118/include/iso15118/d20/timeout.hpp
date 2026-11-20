@@ -19,16 +19,21 @@ enum class TimeoutType : uint8_t {
     PERFORMANCE,
     ONGOING,
     CONTACTOR,
+    // Bounds the complete DC PreCharge phase, starting with the first DC_PreChargeReq.
+    DC_PRECHARGE,
 };
 
-constexpr uint8_t TIMEOUT_TYPE_SIZE = 4;
+constexpr uint8_t TIMEOUT_TYPE_SIZE = 5;
 
-static_assert(TIMEOUT_TYPE_SIZE == to_underlying_value(TimeoutType::CONTACTOR) + 1,
+static_assert(TIMEOUT_TYPE_SIZE == to_underlying_value(TimeoutType::DC_PRECHARGE) + 1,
               "TIMEOUT_TYPE_SIZE should be in sync with the TimeoutType enum definition");
 
 constexpr auto TIMEOUT_ONGOING = 1000 * 55;
 constexpr auto TIMEOUT_SEQUENCE = 1000 * 60;
 constexpr auto TIMEOUT_EIM_ONGOING = 1000 * 60 * 3;
+// Customer compatibility guard. ISO 15118-20:2022 Table 223 specifies a 9 s SECC performance time,
+// but this installation needs additional time to ramp the power supply to the EV target voltage.
+constexpr auto TIMEOUT_DC_PRECHARGE = 1000 * 40;
 
 class Timeouts {
 public:
