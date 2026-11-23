@@ -244,6 +244,7 @@ void ISO15118_chargerImpl::ready() {
     auto callbacks = create_callbacks();
 
     setup_config.control_mobility_modes = fill_mobility_needs_modes_from_config(mod->config);
+    setup_config.dc_precharge_timeout_ms = static_cast<std::uint32_t>(mod->config.dc_precharge_timeout_ms);
 
     if (not mod->config.custom_protocol_namespace.empty()) {
         setup_config.custom_protocol.emplace(mod->config.custom_protocol_namespace);

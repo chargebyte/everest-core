@@ -162,7 +162,8 @@ SessionConfig::SessionConfig(EvseSetupConfig config) :
     ac_limits(std::move(config.ac_limits)),
     powersupply_limits(std::move(config.powersupply_limits)),
     supported_control_mobility_modes(std::move(config.control_mobility_modes)),
-    custom_protocol(std::move(config.custom_protocol)) {
+    custom_protocol(std::move(config.custom_protocol)),
+    dc_precharge_timeout_ms(config.dc_precharge_timeout_ms) {
 
     // TODO(SL): How to handle this probaly
     const auto is_dc_bpt_service = [](dt::ServiceCategory service) {

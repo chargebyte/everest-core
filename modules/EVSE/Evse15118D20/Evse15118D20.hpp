@@ -38,6 +38,7 @@ struct Conf {
     bool supported_scheduled_mode;
     std::string custom_protocol_namespace;
     bool negative_bidirectional_limits;
+    int dc_precharge_timeout_ms;
 };
 
 class Evse15118D20 : public Everest::ModuleBase {

@@ -11,6 +11,9 @@
 
 namespace iso15118::d20 {
 
+// ISO 15118-20:2022 Table 223 specifies a 9 s SECC performance time.
+inline constexpr std::uint32_t DEFAULT_DC_PRECHARGE_TIMEOUT_MS = 1000 * 9;
+
 struct ControlMobilityNeedsModes {
     message_20::datatypes::ControlMode control_mode;
     message_20::datatypes::MobilityNeedsMode mobility_mode;
@@ -40,6 +43,7 @@ struct EvseSetupConfig {
     std::optional<AcSetupConfig> ac_setup_config{std::nullopt};
     std::optional<BptSetupConfig> bpt_setup_config{std::nullopt};
     d20::DcTransferLimits powersupply_limits;
+    std::uint32_t dc_precharge_timeout_ms{DEFAULT_DC_PRECHARGE_TIMEOUT_MS};
 };
 
 // This should only have EVSE information
@@ -73,6 +77,7 @@ struct SessionConfig {
     std::vector<ControlMobilityNeedsModes> supported_control_mobility_modes;
 
     std::optional<std::string> custom_protocol{std::nullopt};
+    std::uint32_t dc_precharge_timeout_ms{DEFAULT_DC_PRECHARGE_TIMEOUT_MS};
 };
 
 } // namespace iso15118::d20

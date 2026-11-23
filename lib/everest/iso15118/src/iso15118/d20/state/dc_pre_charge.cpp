@@ -3,6 +3,8 @@
 #include <iso15118/d20/state/dc_pre_charge.hpp>
 #include <iso15118/d20/state/power_delivery.hpp>
 
+#include <string>
+
 #include <iso15118/detail/d20/context_helper.hpp>
 #include <iso15118/detail/d20/state/dc_pre_charge.hpp>
 #include <iso15118/detail/d20/state/session_stop.hpp>
@@ -50,8 +52,11 @@ Result DC_PreCharge::feed(Event ev) {
     if (ev == Event::TIMEOUT) {
         const auto timeout = m_ctx.get_active_timeout();
         if (timeout and *timeout == d20::TimeoutType::DC_PRECHARGE) {
-            logf_warning("DC PreCharge customer timeout (40s) exceeded. Stopping the session");
-            m_ctx.log("DC PreCharge customer timeout (40s) exceeded. Stopping the session");
+            const auto message = "DC PreCharge timeout (" +
+                                 std::to_string(m_ctx.session_config.dc_precharge_timeout_ms) +
+                                 " ms) exceeded. Stopping the session";
+            logf_warning("%s", message.c_str());
+            m_ctx.log(message);
             m_ctx.session_stopped = true;
         }
         return {};
@@ -75,7 +80,7 @@ Result DC_PreCharge::feed(Event ev) {
         }
 
         if (not pre_charge_initiated) {
-            m_ctx.start_timeout(d20::TimeoutType::DC_PRECHARGE, d20::TIMEOUT_DC_PRECHARGE);
+            m_ctx.start_timeout(d20::TimeoutType::DC_PRECHARGE, m_ctx.session_config.dc_precharge_timeout_ms);
             m_ctx.feedback.signal(session::feedback::Signal::PRE_CHARGE_STARTED);
             pre_charge_initiated = true;
         }

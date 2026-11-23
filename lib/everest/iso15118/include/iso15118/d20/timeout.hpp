@@ -31,9 +31,6 @@ static_assert(TIMEOUT_TYPE_SIZE == to_underlying_value(TimeoutType::DC_PRECHARGE
 constexpr auto TIMEOUT_ONGOING = 1000 * 55;
 constexpr auto TIMEOUT_SEQUENCE = 1000 * 60;
 constexpr auto TIMEOUT_EIM_ONGOING = 1000 * 60 * 3;
-// Customer compatibility guard. ISO 15118-20:2022 Table 223 specifies a 9 s SECC performance time,
-// but this installation needs additional time to ramp the power supply to the EV target voltage.
-constexpr auto TIMEOUT_DC_PRECHARGE = 1000 * 40;
 
 class Timeouts {
 public:

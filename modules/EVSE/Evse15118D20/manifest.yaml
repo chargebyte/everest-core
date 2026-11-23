@@ -69,6 +69,14 @@ config:
       can be converted using this option.
     type: boolean
     default: false
+  dc_precharge_timeout_ms:
+    description: >-
+      Maximum duration in milliseconds of the complete DC PreCharge phase,
+      starting with the first DC_PreChargeReq.
+    type: integer
+    minimum: 1
+    maximum: 600000
+    default: 9000
 provides:
   charger:
     interface: ISO15118_charger
