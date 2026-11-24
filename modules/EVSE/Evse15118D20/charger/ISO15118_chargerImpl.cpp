@@ -1996,9 +1996,9 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
     }
     setup_config.fake_dc_enabled = fake_dc_requested;
 
-    // ready() builds the offer only after the TLS chain lookup, while EvseManager's first
-    // update_energy_transfer_modes may already be handled on another thread. Until the offer exists
-    // filter the initial setup snapshot too, so an early session cannot negotiate ISO 15118-20.
+    // ready() builds the offer only after the TLS chain lookup, while EvseManager may deliver its first energy-mode
+    // update concurrently. Filter the setup snapshot as well, so an early session cannot negotiate ISO 15118-20 before
+    // the offer exists.
     if (configured_protocol_offer.empty()) {
         if (fake_dc_requested) {
             setup_config.supported_protocols.erase(std::remove(setup_config.supported_protocols.begin(),

@@ -164,7 +164,7 @@ Result ChargeParameterDiscovery::on_request(const message_din::Variant& received
                 status.evse_status_code = dt::DcEvseStatusCode::EVSE_Shutdown;
             }
             if (res.response_code == dt::ResponseCode::OK) {
-                res.response_code = dt::ResponseCode::FAILED_SequenceError;
+                res.response_code = dt::ResponseCode::FAILED;
                 m_ctx.session_stopped = true;
                 res.sa_schedule_list.reset();
             }

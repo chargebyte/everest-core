@@ -742,7 +742,7 @@ TEMPLATE_TEST_CASE("Fake DC CPD reports SoC and requests shutdown without provis
     fixture.queue_parameters();
     fixture.poll_response();
     const auto repeated = fixture.template response<typename TestType::ParametersResponse>();
-    REQUIRE(repeated.response_code == decltype(repeated.response_code)::FAILED_SequenceError);
+    REQUIRE(repeated.response_code == decltype(repeated.response_code)::FAILED);
     REQUIRE_FALSE(repeated.sa_schedule_list.has_value());
     if constexpr (TestType::protocol == iso15118::ProtocolId::ISO15118_2) {
         REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.notification == mdt::EVSENotification::StopCharging);

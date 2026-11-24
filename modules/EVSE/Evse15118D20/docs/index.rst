@@ -26,14 +26,14 @@ not implement this early-stop behavior. If neither DIN nor ISO 15118-2 is
 usable for the session, ISO 15118-20 and custom namespaces are not offered as
 fallbacks; SAP negotiation fails rather than starting a normal DC session.
 The EV may repeat ChargeParameterDiscovery or send SessionStopReq after the
-stop request; repeated ChargeParameterDiscovery ends the session with
-``FAILED_SequenceError`` when valid, and both protocols accept SessionStopReq
-during the pending stop. Invalid follow-up requests retain their validation
-response code and carry ``StopCharging``. ``SessionStop(Pause)`` is treated as termination during this
+stop request; a repeated, valid ChargeParameterDiscovery ends the session with
+``FAILED``. Both protocols accept SessionStopReq during the pending stop.
+Invalid follow-up requests retain their validation response code and carry
+``StopCharging``. ``SessionStop(Pause)`` is treated as termination during this
 pending stop. In ISO 15118-2, Fake-DC accepts only ``DC_core`` and
-``DC_extended``; all other energy-transfer modes, including AC, are rejected. A configured
-custom protocol namespace is not negotiated while Fake-DC is active. Changes
-to the Fake-DC setting apply to the next session.
+``DC_extended``; all other energy-transfer modes, including AC, are rejected.
+A configured custom protocol namespace is not negotiated while Fake-DC is
+active. Changes to the Fake-DC setting apply to the next session.
 
 TLS and SECC leaf certificates
 ==============================

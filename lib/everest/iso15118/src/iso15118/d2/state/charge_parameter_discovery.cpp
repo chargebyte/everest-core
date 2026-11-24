@@ -341,7 +341,7 @@ Result process_charge_parameter_discovery(Context& m_ctx, const message_2::Charg
         status.notification_max_delay = 0;
     }
     if (m_ctx.fake_dc_shutdown_pending and res.response_code == dt::ResponseCode::OK) {
-        res.response_code = dt::ResponseCode::FAILED_SequenceError;
+        res.response_code = dt::ResponseCode::FAILED;
         m_ctx.session_stopped = true;
         res.sa_schedule_list.reset();
     } else if (fake_dc_request and res.response_code == dt::ResponseCode::OK) {
