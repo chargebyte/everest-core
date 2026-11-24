@@ -1648,9 +1648,9 @@ void ISO15118_chargerImpl::handle_set_charging_parameters(types::iso15118::Setup
 
 void ISO15118_chargerImpl::handle_session_setup(std::vector<types::iso15118::PaymentOption>& payment_options,
                                                 bool& supported_certificate_service,
-                                                bool& central_contract_validation_allowed,
-                                                [[maybe_unused]] bool& fake_dc_enabled) {
+                                                bool& central_contract_validation_allowed, bool& fake_dc_enabled) {
     std::scoped_lock lock(GEL);
+    fake_dc_requested = fake_dc_enabled;
 
     std::vector<dt::Authorization> auth_services;
 
@@ -1679,6 +1679,8 @@ void ISO15118_chargerImpl::handle_session_setup(std::vector<types::iso15118::Pay
         controller->update_authorization_services(auth_services, supported_certificate_service);
         controller->update_iso2_pnc_config(contract_offered, central_contract_validation_allowed);
     }
+
+    apply_supported_protocols();
 
     setup_steps_done.set(SetupStep::AUTH_SETUP);
 }
@@ -1977,20 +1979,45 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
 }
 
 void ISO15118_chargerImpl::apply_supported_protocols() {
+    const auto fake_dc_protocol_is_usable = [this](iso15118::ProtocolId protocol) {
+        return protocol == iso15118::ProtocolId::ISO15118_2 or
+               (protocol == iso15118::ProtocolId::DIN70121 and mod->config.tls_negotiation_strategy != "ENFORCE_TLS");
+    };
+    const bool fake_dc_protocol_available =
+        configured_protocol_offer.empty()
+            ? mod->config.supported_ISO15118_2 or
+                  (mod->config.supported_DIN70121 and mod->config.tls_negotiation_strategy != "ENFORCE_TLS")
+            : std::any_of(configured_protocol_offer.begin(), configured_protocol_offer.end(),
+                          fake_dc_protocol_is_usable);
+    const bool apply_fake_dc = fake_dc_requested and fake_dc_protocol_available;
+    if (fake_dc_requested and not fake_dc_protocol_available) {
+        EVLOG_warning << "Fake-DC was requested, but neither ISO 15118-2 nor DIN SPEC 70121 is usable; "
+                         "refusing to fall back to ISO 15118-20";
+    }
+    setup_config.fake_dc_enabled = fake_dc_requested;
+
     // ready() builds the offer only after the TLS chain lookup, while EvseManager's first
     // update_energy_transfer_modes may already be handled on another thread. Until the offer exists
-    // there is nothing to filter; ready() applies it once built.
+    // filter the initial setup snapshot too, so an early session cannot negotiate ISO 15118-20.
     if (configured_protocol_offer.empty()) {
+        if (fake_dc_requested) {
+            setup_config.supported_protocols.erase(std::remove(setup_config.supported_protocols.begin(),
+                                                               setup_config.supported_protocols.end(),
+                                                               iso15118::ProtocolId::ISO15118_20),
+                                                   setup_config.supported_protocols.end());
+            if (controller) {
+                controller->update_fake_dc_config(fake_dc_requested, setup_config.supported_protocols);
+            }
+        }
         return;
     }
 
     auto offered = configured_protocol_offer;
 
-    // DIN SPEC 70121 is DC only, so it must not be offered on an AC charger -- an EV picking it would only
-    // run into FAILED_WrongEnergyTransferType at ChargeParameterDiscovery. EvseV2G does the same
-    // (EvseV2G/charger/ISO15118_chargerImpl.cpp handle_update_energy_transfer_modes).
+    // Fake-DC deliberately negotiates the legacy DC protocol on an AC charger to read the vehicle SoC.
+    // Outside that mode, DIN SPEC 70121 must not be offered when AC is enabled.
     bool din_removed{false};
-    if (ac_energy_transfer_mode) {
+    if (ac_energy_transfer_mode and not apply_fake_dc) {
         const auto din = std::find(offered.begin(), offered.end(), iso15118::ProtocolId::DIN70121);
         if (din != offered.end()) {
             offered.erase(din);
@@ -1998,22 +2025,36 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
         }
     }
 
+    // Evse15118D20 also implements ISO 15118-20, but Fake-DC is implemented only by the DIN and
+    // ISO 15118-2 state machines. Never negotiate ISO 15118-20 after Fake-DC was requested, even if no
+    // supported legacy protocol remains: the manager is already in DC mode for this session.
+    if (fake_dc_requested) {
+        offered.erase(std::remove(offered.begin(), offered.end(), iso15118::ProtocolId::ISO15118_20), offered.end());
+    }
+
     if (offered == setup_config.supported_protocols) {
         // Nothing changed; stay quiet (the energy transfer modes are updated during every session setup).
+        if (controller) {
+            controller->update_fake_dc_config(fake_dc_requested, offered);
+        }
         return;
     }
 
     if (din_removed) {
         EVLOG_warning << "Removed DIN SPEC 70121 from the list of supported protocols as AC is enabled";
     }
-    if (din_removed and offered.empty()) {
+    if (din_removed and offered.empty() and not fake_dc_requested) {
         EVLOG_error << "No protocol left to offer: DIN SPEC 70121 is the only configured protocol but the "
                        "charger offers AC energy transfer. Every SupportedAppProtocol handshake will fail";
+    }
+    if (fake_dc_requested and not fake_dc_protocol_available and offered.empty()) {
+        EVLOG_error << "No usable DIN SPEC 70121 or ISO 15118-2 protocol remains while Fake-DC is requested; "
+                       "the ISO 15118-20 fallback is disabled";
     }
 
     setup_config.supported_protocols = offered;
     if (controller) {
-        controller->update_supported_protocols(offered);
+        controller->update_fake_dc_config(fake_dc_requested, offered);
     }
 }
 

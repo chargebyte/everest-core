@@ -127,6 +127,7 @@ private:
     // combines both into setup_config.supported_protocols. All three need GEL held.
     std::vector<iso15118::ProtocolId> configured_protocol_offer;
     bool ac_energy_transfer_mode{false};
+    bool fake_dc_requested{false};
     void apply_supported_protocols();
 
     std::optional<float> evse_max_reactive_power;

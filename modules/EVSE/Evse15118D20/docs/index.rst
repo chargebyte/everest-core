@@ -14,6 +14,27 @@ and ``supported_DIN70121``). DIN SPEC 70121 sends the EVSEID from EvseManager's
 is empty the eMI3 ``evse_id`` is packed instead, which only works for ids made of
 digits and ``*``, so an eMI3 id like ``DE*PNX*E12345*1`` is sent as ``0x00``.
 
+Fake-DC
+~~~~~~~
+
+When Fake-DC is enabled for a session, the module uses DIN SPEC 70121 or
+ISO 15118-2 to report the vehicle's EV status and SoC, then requests
+an immediate charging stop during ChargeParameterDiscovery. It does not enter
+cable check or energize the DC output. ISO 15118-20 is removed from the
+SupportedAppProtocol offer while Fake-DC is active because that protocol does
+not implement this early-stop behavior. If neither DIN nor ISO 15118-2 is
+usable for the session, ISO 15118-20 and custom namespaces are not offered as
+fallbacks; SAP negotiation fails rather than starting a normal DC session.
+The EV may repeat ChargeParameterDiscovery or send SessionStopReq after the
+stop request; repeated ChargeParameterDiscovery ends the session with
+``FAILED_SequenceError`` when valid, and both protocols accept SessionStopReq
+during the pending stop. Invalid follow-up requests retain their validation
+response code and carry ``StopCharging``. ``SessionStop(Pause)`` is treated as termination during this
+pending stop. In ISO 15118-2, Fake-DC accepts only ``DC_core`` and
+``DC_extended``; all other energy-transfer modes, including AC, are rejected. A configured
+custom protocol namespace is not negotiated while Fake-DC is active. Changes
+to the Fake-DC setting apply to the next session.
+
 TLS and SECC leaf certificates
 ==============================
 
