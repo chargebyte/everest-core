@@ -345,7 +345,6 @@ Result process_charge_parameter_discovery(Context& m_ctx, const message_2::Charg
         m_ctx.session_stopped = true;
         res.sa_schedule_list.reset();
     } else if (fake_dc_request and res.response_code == dt::ResponseCode::OK) {
-        m_ctx.report_ev_status(req.dc_ev_charge_parameter->dc_ev_status);
         auto& status = res.dc_evse_charge_parameter->dc_evse_status;
         status.notification = dt::EVSENotification::StopCharging;
         status.notification_max_delay = 0;
@@ -364,6 +363,7 @@ Result process_charge_parameter_discovery(Context& m_ctx, const message_2::Charg
     }
 
     if (fake_dc_request and m_ctx.fake_dc_shutdown_pending) {
+        m_ctx.report_ev_status(req.dc_ev_charge_parameter->dc_ev_status);
         return {};
     }
 
