@@ -199,8 +199,16 @@ template <typename Messages> struct Pre20Session : SessionFixture {
     std::vector<iso15118::session::feedback::SessionStopAction> stop_actions;
     bool transport_closed_on_dlink{false};
     const bool same_type_only;
+    const bool fake_dc;
+    int dc_max_limit_callbacks{0};
+    int ev_charge_parameter_callbacks{0};
+    int dc_ev_status_callbacks{0};
+    std::optional<int8_t> reported_soc;
 
-    explicit Pre20Session(bool enabled) : same_type_only(enabled) {
+    explicit Pre20Session(bool enabled, bool fake_dc_ = false,
+                          iso15118::d20::NoEnergyPauseMode fake_dc_pause = iso15118::d20::NoEnergyPauseMode::None,
+                          std::vector<iso15118::shared_datatypes::EnergyTransferMode> pre20_modes = {}) :
+        same_type_only(enabled), fake_dc(fake_dc_) {
         callbacks.signal = [this](auto signal) {
             signals.push_back(signal);
             using Signal = iso15118::session::feedback::Signal;
@@ -209,16 +217,27 @@ template <typename Messages> struct Pre20Session : SessionFixture {
             }
         };
         callbacks.session_stop_res_sent = [this](auto action) { stop_actions.push_back(action); };
+        callbacks.dc_max_limits = [this](const auto&) { ++dc_max_limit_callbacks; };
+        callbacks.ev_charge_parameters = [this](const auto&) { ++ev_charge_parameter_callbacks; };
+        callbacks.dc_ev_status = [this](const auto& status) {
+            ++dc_ev_status_callbacks;
+            reported_soc = status.ress_soc;
+        };
         auto config = make_eim_session_config();
         config.evse_id = "DE*EVR*E00000*1";
         config.evse_id_din = "49A00001";
-        config.supported_energy_transfer_services = {
-            Messages::protocol == iso15118::ProtocolId::ISO15118_2 ? dt::ServiceCategory::AC : dt::ServiceCategory::DC};
+        config.supported_energy_transfer_services = {(Messages::protocol == iso15118::ProtocolId::ISO15118_2 or fake_dc)
+                                                         ? dt::ServiceCategory::AC
+                                                         : dt::ServiceCategory::DC};
+        config.selecting_sap_based_on_energy_service = fake_dc;
         config.ac_limits.charge_power.max = dt::from_float(11000);
         config.dc_limits.voltage.max = dt::from_float(500);
         config.dc_limits.charge_limits.current.max = dt::from_float(200);
         config.dc_limits.charge_limits.power.max = dt::from_float(50000);
         config.supported_protocols = {Messages::protocol};
+        config.fake_dc_enabled = fake_dc;
+        config.no_energy_pause = fake_dc_pause;
+        config.pre20_energy_transfer_modes = std::move(pre20_modes);
         session = make_session(config, false, enabled);
         conn->fire(iso15118::io::ConnectionEvent::ACCEPTED);
         queue_sap(*conn, Messages::protocol);
@@ -290,6 +309,13 @@ template <typename Messages> struct Pre20Session : SessionFixture {
         }
     }
 
+    void finish_session_after_shutdown() {
+        now += 2500ms;
+        session->poll();
+        now += 500ms;
+        session->poll();
+    }
+
     void start_authorization() {
         typename Messages::DiscoveryRequest discovery{};
         discovery.header.session_id = session_id;
@@ -309,25 +335,107 @@ template <typename Messages> struct Pre20Session : SessionFixture {
         poll_response();
         REQUIRE(response<typename Messages::AuthResponse>().response_code ==
                 decltype(typename Messages::AuthResponse{}.response_code)::OK);
+        if (fake_dc) {
+            now += 100ms;
+            session->push_control_event(iso15118::d20::AuthorizationResponse{true});
+            queue_auth();
+            poll_response();
+            REQUIRE(response<typename Messages::AuthResponse>().evse_processing ==
+                    decltype(typename Messages::AuthResponse{}.evse_processing)::Finished);
+        }
     }
 
-    void queue_parameters() {
+    void queue_parameters(bool use_core_for_fake_dc = true) {
         typename Messages::ParametersRequest req{};
         req.header.session_id = session_id;
         if constexpr (Messages::protocol == iso15118::ProtocolId::ISO15118_2) {
             namespace mdt = iso15118::message_2::datatypes;
+            if (fake_dc) {
+                req.requested_energy_transfer_mode =
+                    use_core_for_fake_dc ? mdt::EnergyTransferMode::DC_core : mdt::EnergyTransferMode::DC_extended;
+                auto& params = req.dc_ev_charge_parameter.emplace();
+                params.dc_ev_status.ev_ress_soc = 42;
+                params.ev_maximum_current_limit = mdt::to_physical_value(200, mdt::Unit::A);
+                params.ev_maximum_voltage_limit = mdt::to_physical_value(400, mdt::Unit::V);
+            } else {
+                req.requested_energy_transfer_mode = mdt::EnergyTransferMode::AC_three_phase_core;
+                auto& params = req.ac_ev_charge_parameter.emplace();
+                params.ev_max_voltage = mdt::to_physical_value(230, mdt::Unit::V);
+                params.ev_max_current = mdt::to_physical_value(32, mdt::Unit::A);
+                params.ev_min_current = mdt::to_physical_value(6, mdt::Unit::A);
+            }
+        } else {
+            req.ev_requested_energy_transfer_type =
+                fake_dc && use_core_for_fake_dc ? iso15118::message_din::datatypes::EnergyTransferMode::DC_core
+                                                : iso15118::message_din::datatypes::EnergyTransferMode::DC_extended;
+            auto& params = req.dc_ev_charge_parameter.emplace();
+            params.dc_ev_status.ev_ress_soc = 42;
+            params.ev_maximum_current_limit = 200;
+            params.ev_maximum_voltage_limit = 400;
+        }
+        queue(req);
+    }
+
+    void queue_invalid_fake_dc_parameters() {
+        static_assert(Messages::protocol == iso15118::ProtocolId::ISO15118_2);
+        namespace mdt = iso15118::message_2::datatypes;
+        iso15118::message_2::ChargeParameterDiscoveryRequest req{};
+        req.header.session_id = session_id;
+        req.requested_energy_transfer_mode = mdt::EnergyTransferMode::DC_core;
+        auto& params = req.dc_ev_charge_parameter.emplace();
+        params.dc_ev_status.ev_ress_soc = 42;
+        params.ev_maximum_current_limit = mdt::to_physical_value(0, mdt::Unit::A);
+        params.ev_maximum_voltage_limit = mdt::to_physical_value(400, mdt::Unit::V);
+        queue(req);
+    }
+
+    void queue_invalid_fake_dc_ac_parameters() {
+        static_assert(Messages::protocol == iso15118::ProtocolId::ISO15118_2);
+        namespace mdt = iso15118::message_2::datatypes;
+        iso15118::message_2::ChargeParameterDiscoveryRequest req{};
+        req.header.session_id = session_id;
+        req.requested_energy_transfer_mode = mdt::EnergyTransferMode::AC_three_phase_core;
+        queue(req);
+    }
+
+    void queue_invalid_fake_dc_din_parameters() {
+        static_assert(Messages::protocol == iso15118::ProtocolId::DIN70121);
+        namespace ddt = iso15118::message_din::datatypes;
+        iso15118::message_din::ChargeParameterDiscoveryRequest req{};
+        req.header.session_id = session_id;
+        req.ev_requested_energy_transfer_type = ddt::EnergyTransferMode::DC_extended;
+        auto& params = req.dc_ev_charge_parameter.emplace();
+        params.dc_ev_status.ev_ress_soc = 42;
+        params.ev_maximum_current_limit = -1;
+        params.ev_maximum_voltage_limit = 400;
+        queue(req);
+    }
+
+    void queue_fake_dc_mode(iso15118::message_2::datatypes::EnergyTransferMode mode) {
+        static_assert(Messages::protocol == iso15118::ProtocolId::ISO15118_2);
+        namespace mdt = iso15118::message_2::datatypes;
+        iso15118::message_2::ChargeParameterDiscoveryRequest req{};
+        req.header.session_id = session_id;
+        req.requested_energy_transfer_mode = mode;
+        auto& params = req.dc_ev_charge_parameter.emplace();
+        params.dc_ev_status.ev_ress_soc = 42;
+        params.ev_maximum_current_limit = mdt::to_physical_value(200, mdt::Unit::A);
+        params.ev_maximum_voltage_limit = mdt::to_physical_value(400, mdt::Unit::V);
+        queue(req);
+    }
+
+    void queue_ac_parameters() {
+        if constexpr (Messages::protocol == iso15118::ProtocolId::ISO15118_2) {
+            namespace mdt = iso15118::message_2::datatypes;
+            iso15118::message_2::ChargeParameterDiscoveryRequest req{};
+            req.header.session_id = session_id;
             req.requested_energy_transfer_mode = mdt::EnergyTransferMode::AC_three_phase_core;
             auto& params = req.ac_ev_charge_parameter.emplace();
             params.ev_max_voltage = mdt::to_physical_value(230, mdt::Unit::V);
             params.ev_max_current = mdt::to_physical_value(32, mdt::Unit::A);
             params.ev_min_current = mdt::to_physical_value(6, mdt::Unit::A);
-        } else {
-            req.ev_requested_energy_transfer_type = iso15118::message_din::datatypes::EnergyTransferMode::DC_extended;
-            auto& params = req.dc_ev_charge_parameter.emplace();
-            params.ev_maximum_current_limit = 200;
-            params.ev_maximum_voltage_limit = 400;
+            queue(req);
         }
-        queue(req);
     }
 
     void queue_auth() {
@@ -593,6 +701,244 @@ TEST_CASE_METHOD(SessionFixture, "Failed SAP responses bypass pacing only with t
             iso15118::message_20::SupportedAppProtocolResponse::ResponseCode::Failed_NoNegotiation);
     REQUIRE(conn->closed);
     REQUIRE(session->is_finished());
+}
+
+TEMPLATE_TEST_CASE("Fake DC CPD reports SoC and requests shutdown without provisioning power", "", Iso2Messages,
+                   DinMessages) {
+    namespace mdt = iso15118::message_2::datatypes;
+    namespace ddt = iso15118::message_din::datatypes;
+    Pre20Session<TestType> fixture{true, true};
+    fixture.start_authorization();
+
+    fixture.queue_parameters();
+    fixture.poll_response();
+    const auto response = fixture.template response<typename TestType::ParametersResponse>();
+    REQUIRE(response.response_code == decltype(response.response_code)::OK);
+    REQUIRE(response.evse_processing == decltype(response.evse_processing)::Ongoing);
+    REQUIRE_FALSE(response.sa_schedule_list.has_value());
+    if constexpr (TestType::protocol == iso15118::ProtocolId::ISO15118_2) {
+        REQUIRE(response.dc_evse_charge_parameter.has_value());
+        REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.notification == mdt::EVSENotification::StopCharging);
+        REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.notification_max_delay == 0);
+        REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.status_code == mdt::DC_EVSEStatusCode::EVSE_Shutdown);
+    } else {
+        REQUIRE(response.dc_evse_charge_parameter.has_value());
+        REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.evse_notification ==
+                ddt::EvseNotification::StopCharging);
+        REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.notification_max_delay == 0);
+        REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.evse_status_code ==
+                ddt::DcEvseStatusCode::EVSE_Shutdown);
+    }
+    REQUIRE(fixture.reported_soc == 42);
+    REQUIRE(fixture.dc_ev_status_callbacks == 1);
+    REQUIRE(fixture.dc_max_limit_callbacks == 0);
+    REQUIRE(fixture.ev_charge_parameter_callbacks == 0);
+    REQUIRE(std::find(fixture.signals.begin(), fixture.signals.end(),
+                      iso15118::session::feedback::Signal::START_CABLE_CHECK) == fixture.signals.end());
+    REQUIRE(std::find(fixture.signals.begin(), fixture.signals.end(),
+                      iso15118::session::feedback::Signal::PRE_CHARGE_STARTED) == fixture.signals.end());
+    REQUIRE_FALSE(fixture.session->is_finished());
+
+    fixture.queue_parameters();
+    fixture.poll_response();
+    const auto repeated = fixture.template response<typename TestType::ParametersResponse>();
+    REQUIRE(repeated.response_code == decltype(repeated.response_code)::FAILED_SequenceError);
+    REQUIRE_FALSE(repeated.sa_schedule_list.has_value());
+    if constexpr (TestType::protocol == iso15118::ProtocolId::ISO15118_2) {
+        REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.notification == mdt::EVSENotification::StopCharging);
+        REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.notification_max_delay == 0);
+        REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.status_code == mdt::DC_EVSEStatusCode::EVSE_Shutdown);
+    } else {
+        REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.evse_notification ==
+                ddt::EvseNotification::StopCharging);
+        REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.notification_max_delay == 0);
+        REQUIRE(repeated.dc_evse_charge_parameter->dc_evse_status.evse_status_code ==
+                ddt::DcEvseStatusCode::EVSE_Shutdown);
+    }
+    REQUIRE(fixture.dc_ev_status_callbacks == 1);
+    REQUIRE(fixture.dc_max_limit_callbacks == 0);
+    REQUIRE(fixture.ev_charge_parameter_callbacks == 0);
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+}
+
+TEMPLATE_TEST_CASE("Fake DC CPD accepts SessionStop after the shutdown request", "", Iso2Messages, DinMessages) {
+    Pre20Session<TestType> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+    if constexpr (TestType::protocol == iso15118::ProtocolId::ISO15118_2) {
+        namespace mdt = iso15118::message_2::datatypes;
+        REQUIRE(fixture.template response<iso15118::message_2::ChargeParameterDiscoveryResponse>().evse_processing ==
+                mdt::EVSEProcessing::Ongoing);
+        iso15118::message_2::SessionStopRequest stop{};
+        stop.header.session_id = fixture.session_id;
+        stop.charging_session = mdt::ChargingSession::Terminate;
+        fixture.queue(stop);
+        fixture.poll_response();
+        REQUIRE(fixture.template response<iso15118::message_2::SessionStopResponse>().response_code ==
+                mdt::ResponseCode::OK);
+    } else {
+        iso15118::message_din::SessionStopRequest stop{};
+        stop.header.session_id = fixture.session_id;
+        fixture.queue(stop);
+        fixture.poll_response();
+        REQUIRE(fixture.template response<iso15118::message_din::SessionStopResponse>().response_code ==
+                iso15118::message_din::datatypes::ResponseCode::OK);
+    }
+    REQUIRE(fixture.stop_actions == std::vector{iso15118::session::feedback::SessionStopAction::Terminate});
+}
+
+TEMPLATE_TEST_CASE("Fake DC takes precedence over a before-cable-check pause", "", Iso2Messages, DinMessages) {
+    Pre20Session<TestType> fixture{true, true, iso15118::d20::NoEnergyPauseMode::BeforeCableCheck};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+
+    const auto response = fixture.template response<typename TestType::ParametersResponse>();
+    REQUIRE(response.response_code == decltype(response.response_code)::OK);
+    REQUIRE(response.evse_processing == decltype(response.evse_processing)::Ongoing);
+    REQUIRE_FALSE(response.sa_schedule_list.has_value());
+    REQUIRE(std::find(fixture.signals.begin(), fixture.signals.end(),
+                      iso15118::session::feedback::Signal::START_CABLE_CHECK) == fixture.signals.end());
+    REQUIRE(std::find(fixture.signals.begin(), fixture.signals.end(),
+                      iso15118::session::feedback::Signal::PRE_CHARGE_STARTED) == fixture.signals.end());
+    REQUIRE_FALSE(fixture.session->is_finished());
+}
+
+TEMPLATE_TEST_CASE("Fake DC accepts DC_extended as well as DC_core", "", Iso2Messages, DinMessages) {
+    Pre20Session<TestType> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters(false);
+    fixture.poll_response();
+    REQUIRE(fixture.template response<typename TestType::ParametersResponse>().response_code ==
+            decltype(typename TestType::ParametersResponse{}.response_code)::OK);
+}
+
+TEST_CASE("ISO 15118-2 Fake DC terminates a CPD that switches to AC") {
+    namespace mdt = iso15118::message_2::datatypes;
+    Pre20Session<Iso2Messages> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+    REQUIRE(fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>().response_code ==
+            mdt::ResponseCode::OK);
+
+    fixture.queue_ac_parameters();
+    fixture.poll_response();
+    REQUIRE(fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>().response_code ==
+            mdt::ResponseCode::FAILED_WrongEnergyTransferMode);
+    const auto response = fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>();
+    REQUIRE(response.ac_evse_charge_parameter->ac_evse_status.notification == mdt::EVSENotification::StopCharging);
+    REQUIRE(response.ac_evse_charge_parameter->ac_evse_status.notification_max_delay == 0);
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+    REQUIRE(fixture.dc_max_limit_callbacks == 0);
+    REQUIRE(fixture.ev_charge_parameter_callbacks == 0);
+}
+
+TEST_CASE("ISO 15118-2 Fake DC preserves the validation failure and stop notification") {
+    namespace mdt = iso15118::message_2::datatypes;
+    Pre20Session<Iso2Messages> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+    REQUIRE(fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>().response_code ==
+            mdt::ResponseCode::OK);
+
+    fixture.queue_invalid_fake_dc_parameters();
+    fixture.poll_response();
+    const auto response = fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>();
+    REQUIRE(response.response_code == mdt::ResponseCode::FAILED_WrongChargeParameter);
+    REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.notification == mdt::EVSENotification::StopCharging);
+    REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.notification_max_delay == 0);
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+}
+
+TEST_CASE("ISO 15118-2 Fake DC rejects unsupported DC energy transfer modes") {
+    namespace mdt = iso15118::message_2::datatypes;
+    const auto mode = GENERATE(mdt::EnergyTransferMode::DC_combo_core, mdt::EnergyTransferMode::DC_unique);
+    CAPTURE(mode);
+    Pre20Session<Iso2Messages> fixture{true, true, iso15118::d20::NoEnergyPauseMode::None, {mode}};
+    fixture.start_authorization();
+    fixture.queue_fake_dc_mode(mode);
+    fixture.poll_response();
+    REQUIRE(fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>().response_code ==
+            mdt::ResponseCode::FAILED_WrongEnergyTransferMode);
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+}
+
+TEST_CASE("ISO 15118-2 Fake DC rejects an AC CPD before the stop is pending") {
+    namespace mdt = iso15118::message_2::datatypes;
+    Pre20Session<Iso2Messages> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_ac_parameters();
+    fixture.poll_response();
+
+    REQUIRE(fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>().response_code ==
+            mdt::ResponseCode::FAILED_WrongEnergyTransferMode);
+    REQUIRE(fixture.dc_max_limit_callbacks == 0);
+    REQUIRE(fixture.ev_charge_parameter_callbacks == 0);
+    REQUIRE(std::find(fixture.signals.begin(), fixture.signals.end(),
+                      iso15118::session::feedback::Signal::START_CABLE_CHECK) == fixture.signals.end());
+    REQUIRE(std::find(fixture.signals.begin(), fixture.signals.end(),
+                      iso15118::session::feedback::Signal::PRE_CHARGE_STARTED) == fixture.signals.end());
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+}
+
+TEST_CASE("ISO 15118-2 Fake DC preserves StopCharging on invalid AC renegotiation") {
+    namespace mdt = iso15118::message_2::datatypes;
+    Pre20Session<Iso2Messages> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+
+    fixture.queue_invalid_fake_dc_ac_parameters();
+    fixture.poll_response();
+    const auto response = fixture.response<iso15118::message_2::ChargeParameterDiscoveryResponse>();
+    REQUIRE(response.response_code == mdt::ResponseCode::FAILED_WrongEnergyTransferMode);
+    REQUIRE(response.ac_evse_charge_parameter->ac_evse_status.notification == mdt::EVSENotification::StopCharging);
+    REQUIRE(response.ac_evse_charge_parameter->ac_evse_status.notification_max_delay == 0);
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+}
+
+TEST_CASE("DIN Fake DC preserves StopCharging on invalid repeated CPD") {
+    namespace ddt = iso15118::message_din::datatypes;
+    Pre20Session<DinMessages> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+
+    fixture.queue_invalid_fake_dc_din_parameters();
+    fixture.poll_response();
+    const auto response = fixture.response<iso15118::message_din::ChargeParameterDiscoveryResponse>();
+    REQUIRE(response.response_code == ddt::ResponseCode::FAILED_WrongChargeParameter);
+    REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.evse_notification == ddt::EvseNotification::StopCharging);
+    REQUIRE(response.dc_evse_charge_parameter->dc_evse_status.notification_max_delay == 0);
+    fixture.finish_session_after_shutdown();
+    REQUIRE(fixture.session->is_finished());
+}
+
+TEST_CASE("ISO 15118-2 Fake DC treats SessionStop Pause as termination") {
+    namespace mdt = iso15118::message_2::datatypes;
+    Pre20Session<Iso2Messages> fixture{true, true};
+    fixture.start_authorization();
+    fixture.queue_parameters();
+    fixture.poll_response();
+
+    iso15118::message_2::SessionStopRequest stop{};
+    stop.header.session_id = fixture.session_id;
+    stop.charging_session = mdt::ChargingSession::Pause;
+    fixture.queue(stop);
+    fixture.poll_response();
+
+    REQUIRE(fixture.response<iso15118::message_2::SessionStopResponse>().response_code == mdt::ResponseCode::OK);
+    REQUIRE(fixture.stop_actions == std::vector{iso15118::session::feedback::SessionStopAction::Terminate});
+    REQUIRE_FALSE(fixture.d2_pause_ctx.has_value());
 }
 
 TEMPLATE_TEST_CASE("Pre-20 changed responses release a held deadline", "", Iso2Messages, DinMessages) {

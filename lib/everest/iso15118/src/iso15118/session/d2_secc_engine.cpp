@@ -129,6 +129,7 @@ d2::SessionConfig make_d2_config(const session::SessionConfig& config, bool tls_
     out.central_contract_validation_allowed = config.central_contract_validation_allowed;
     out.receipt_required = config.iso2_receipt_required;
     out.no_energy_pause = config.no_energy_pause;
+    out.fake_dc_enabled = config.fake_dc_enabled;
     out.auth_timeout_eim_ms = session::auth_timeout_to_ms(config.auth_timeout_eim_s);
     out.auth_timeout_pnc_ms = session::auth_timeout_to_ms(config.auth_timeout_pnc_s);
 

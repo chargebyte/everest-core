@@ -25,8 +25,12 @@ message_20::SupportedAppProtocol make_protocol(const std::string& protocol_names
 
 class SapEngineHelper {
 public:
-    SapEngineHelper(std::vector<ProtocolId> supported_protocols, bool tls_active) :
-        config(make_config(std::move(supported_protocols))),
+    SapEngineHelper(std::vector<ProtocolId> supported_protocols, bool tls_active, bool fake_dc = false,
+                    std::optional<std::string> custom_protocol = std::nullopt,
+                    std::vector<message_20::datatypes::ServiceCategory> supported_energy_services = {},
+                    bool selecting_sap_based_on_energy_service = false) :
+        config(make_config(std::move(supported_protocols), fake_dc, std::move(custom_protocol),
+                           std::move(supported_energy_services), selecting_sap_based_on_energy_service)),
         engine(io::StreamOutputView{buffer.data(), buffer.size()}, config, make_callbacks(), tls_active) {
         io::set_logging_callback([this](LogLevel level, const std::string& message) {
             if (level == LogLevel::Error) {
@@ -76,9 +80,16 @@ public:
     std::vector<std::string> errors;
 
 private:
-    static session::SessionConfig make_config(std::vector<ProtocolId> supported_protocols) {
+    static session::SessionConfig
+    make_config(std::vector<ProtocolId> supported_protocols, bool fake_dc, std::optional<std::string> custom_protocol,
+                std::vector<message_20::datatypes::ServiceCategory> supported_energy_services,
+                bool selecting_sap_based_on_energy_service) {
         session::EvseSetupConfig setup;
         setup.supported_protocols = std::move(supported_protocols);
+        setup.fake_dc_enabled = fake_dc;
+        setup.custom_protocol = std::move(custom_protocol);
+        setup.supported_energy_services = std::move(supported_energy_services);
+        setup.selecting_sap_based_on_energy_service = selecting_sap_based_on_energy_service;
         return session::SessionConfig{std::move(setup)};
     }
 
@@ -104,6 +115,60 @@ private:
 };
 
 } // namespace
+
+TEST_CASE("SapEngine refuses a custom ISO 15118-20 namespace during Fake DC") {
+    constexpr auto custom_namespace = "urn:iso:std:iso:15118:-20:AABB";
+    SapEngineHelper helper{{ProtocolId::ISO15118_2}, false, true, custom_namespace};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(custom_namespace, 1, 0, 1, 1));
+
+    // Starting only from the request also verifies the active SAP candidate selection path.
+    helper.feed(request);
+
+    REQUIRE(helper.take_response().response_code ==
+            message_20::SupportedAppProtocolResponse::ResponseCode::Failed_NoNegotiation);
+}
+
+TEST_CASE("SapEngine fails negotiation rather than falling back to ISO 15118-20 during Fake DC") {
+    constexpr auto custom_namespace = "urn:iso:std:iso:15118:-20:AABB";
+    SapEngineHelper helper{{ProtocolId::ISO15118_20}, false, true, custom_namespace};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(ISO20_DC_PROTOCOL_NAMESPACE, 1, 0, 1, 1));
+    request.app_protocol.push_back(make_protocol(custom_namespace, 1, 0, 2, 2));
+
+    helper.feed(request);
+
+    REQUIRE(helper.take_response().response_code ==
+            message_20::SupportedAppProtocolResponse::ResponseCode::Failed_NoNegotiation);
+}
+
+TEST_CASE("SapEngine selects a legacy protocol when an EV ranks ISO 15118-20 first during Fake DC") {
+    SapEngineHelper helper{{ProtocolId::ISO15118_20, ProtocolId::ISO15118_2}, false, true};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(ISO20_DC_PROTOCOL_NAMESPACE, 1, 0, 1, 1));
+    request.app_protocol.push_back(make_protocol(ISO2_NAMESPACE, 2, 0, 2, 2));
+
+    helper.feed(request);
+
+    const auto response = helper.take_response();
+    REQUIRE(response.response_code == message_20::SupportedAppProtocolResponse::ResponseCode::OK_SuccessfulNegotiation);
+    REQUIRE(response.schema_id == 2);
+    REQUIRE(helper.selected_protocols == std::vector<std::string>{"ISO15118-2-2013"});
+}
+
+TEST_CASE("SapEngine offers DIN as a DC service during AC-only Fake DC") {
+    using ServiceCategory = message_20::datatypes::ServiceCategory;
+    SapEngineHelper helper{{ProtocolId::DIN70121}, false, true, std::nullopt, {ServiceCategory::AC}, true};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(DIN70121_NAMESPACE, 2, 0, 1, 1));
+
+    helper.feed(request);
+
+    const auto response = helper.take_response();
+    REQUIRE(response.response_code == message_20::SupportedAppProtocolResponse::ResponseCode::OK_SuccessfulNegotiation);
+    REQUIRE(response.schema_id == 1);
+    REQUIRE(helper.selected_protocols == std::vector<std::string>{"DIN70121"});
+}
 
 SCENARIO("SapEngine hands the session over to the negotiated protocol") {
 

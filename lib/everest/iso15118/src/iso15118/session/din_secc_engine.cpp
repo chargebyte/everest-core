@@ -133,6 +133,7 @@ din::SessionConfig make_din_config(const session::SessionConfig& config) {
     }
     apply_physical_values(cfg, config.physical_values);
     cfg.no_energy_pause = config.no_energy_pause;
+    cfg.fake_dc_enabled = config.fake_dc_enabled;
     // DIN SPEC 70121 authorization is EIM only, so only that timeout applies.
     cfg.auth_timeout_eim_ms = session::auth_timeout_to_ms(config.auth_timeout_eim_s);
 

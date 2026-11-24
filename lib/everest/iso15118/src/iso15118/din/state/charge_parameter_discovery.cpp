@@ -92,8 +92,13 @@ message_din::ChargeParameterDiscoveryResponse handle_request(const message_din::
     param.evse_current_regulation_tolerance = config.evse_current_regulation_tolerance;
     param.evse_energy_to_be_delivered = config.evse_energy_to_be_delivered;
     res.dc_evse_charge_parameter = param;
-    // [V2G-DC-397]: an EV asking for DC_core against a DC_extended-only EVSE has to be rejected.
-    if (not requested_mode_is_offered(req.ev_requested_energy_transfer_type, config.energy_transfer_mode)) {
+    // Fake-DC accepts either legacy DC mode even when the EVSE's normal offer is AC-only.
+    const bool fake_dc_mode =
+        config.fake_dc_enabled and (req.ev_requested_energy_transfer_type == dt::EnergyTransferMode::DC_core or
+                                    req.ev_requested_energy_transfer_type == dt::EnergyTransferMode::DC_extended);
+    // [V2G-DC-397]: an EV asking for DC_core against a DC_extended-only EVSE has to be rejected normally.
+    if (not fake_dc_mode and
+        not requested_mode_is_offered(req.ev_requested_energy_transfer_type, config.energy_transfer_mode)) {
         return response_with_code(res, dt::ResponseCode::FAILED_WrongEnergyTransferType);
     }
 
@@ -148,12 +153,43 @@ void ChargeParameterDiscovery::enter() {
 Result ChargeParameterDiscovery::on_request(const message_din::Variant& received) {
     if (const auto req = received.get_if<message_din::ChargeParameterDiscoveryRequest>()) {
         // EIM/SIL: the DC parameters are available immediately, so EVSEProcessing finishes at once.
-        const auto res = handle_request(*req, m_ctx.session_config, true, m_ctx.get_session_id(),
-                                        m_ctx.evse().charger_stop_requested, m_ctx.error_status_code());
+        auto res = handle_request(*req, m_ctx.session_config, true, m_ctx.get_session_id(),
+                                  m_ctx.evse().charger_stop_requested, m_ctx.error_status_code());
+        const bool fake_dc_request = m_ctx.session_config.fake_dc_enabled;
+        if (fake_dc_request and m_ctx.fake_dc_shutdown_pending) {
+            auto& status = res.dc_evse_charge_parameter->dc_evse_status;
+            status.evse_notification = dt::EvseNotification::StopCharging;
+            status.notification_max_delay = 0;
+            if (not m_ctx.error_status_code().has_value()) {
+                status.evse_status_code = dt::DcEvseStatusCode::EVSE_Shutdown;
+            }
+            if (res.response_code == dt::ResponseCode::OK) {
+                res.response_code = dt::ResponseCode::FAILED_SequenceError;
+                m_ctx.session_stopped = true;
+                res.sa_schedule_list.reset();
+            }
+        } else if (fake_dc_request and res.response_code == dt::ResponseCode::OK) {
+            {
+                auto& status = res.dc_evse_charge_parameter->dc_evse_status;
+                status.evse_notification = dt::EvseNotification::StopCharging;
+                status.notification_max_delay = 0;
+                if (not m_ctx.error_status_code().has_value()) {
+                    status.evse_status_code = dt::DcEvseStatusCode::EVSE_Shutdown;
+                }
+                res.evse_processing = dt::EvseProcessing::Ongoing;
+                res.sa_schedule_list.reset();
+                m_ctx.fake_dc_shutdown_pending = true;
+            }
+        }
         m_ctx.respond(res);
 
         if (res.response_code >= dt::ResponseCode::FAILED) {
             m_ctx.session_stopped = true;
+            return {};
+        }
+
+        if (fake_dc_request and m_ctx.fake_dc_shutdown_pending) {
+            m_ctx.report_ev_status(req->dc_ev_charge_parameter->dc_ev_status);
             return {};
         }
 

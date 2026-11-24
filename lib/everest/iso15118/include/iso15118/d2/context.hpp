@@ -358,6 +358,8 @@ public:
     // Guarded by TIMEOUT_EMERGENCY_SHUTDOWN_GUARD so a silent EV cannot hold the connection open.
 
     bool session_stopped{false};
+    // The first valid Fake DC CPD response requests shutdown; the next CPD ends this session.
+    bool fake_dc_shutdown_pending{false};
     bool session_paused{false};
     // Detected outside a response (CP State A / unplug): Session closes at once, with no EV-first linger.
     bool session_ended_with_error{false};

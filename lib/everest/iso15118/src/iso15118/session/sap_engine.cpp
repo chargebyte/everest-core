@@ -2,6 +2,7 @@
 // Copyright Pionix GmbH and Contributors to EVerest
 #include <iso15118/session/sap_engine.hpp>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -17,10 +18,23 @@ SapEngine::SapEngine(io::StreamOutputView output_view_, const session::SessionCo
                      session::feedback::Callbacks callbacks, bool tls_active_) :
     output_view(output_view_),
     feedback(std::move(callbacks)),
-    supported_protocols(config.supported_protocols),
-    supported_energy_services(config.supported_energy_transfer_services),
+    supported_protocols([&config] {
+        auto protocols = config.supported_protocols;
+        if (config.fake_dc_enabled) {
+            protocols.erase(std::remove(protocols.begin(), protocols.end(), ProtocolId::ISO15118_20), protocols.end());
+        }
+        return protocols;
+    }()),
+    supported_energy_services([&config] {
+        auto services = config.supported_energy_transfer_services;
+        if (config.fake_dc_enabled) {
+            // Fake-DC negotiates DIN as a DC service even when the normal session is AC-only.
+            services.push_back(message_20::datatypes::ServiceCategory::DC);
+        }
+        return services;
+    }()),
     selecting_sap_based_on_energy_service(config.selecting_sap_based_on_energy_service),
-    custom_protocol(config.custom_protocol),
+    custom_protocol(config.fake_dc_enabled ? std::nullopt : config.custom_protocol),
     tls_active(tls_active_) {
 }
 

@@ -28,7 +28,9 @@ Result process_session_stop(Context& m_ctx, const message_2::SessionStopRequest&
     m_ctx.respond(res);
     m_ctx.welding_detection.finish(m_ctx.feedback);
 
-    if (req.charging_session == dt::ChargingSession::Pause) {
+    const bool pause_session =
+        req.charging_session == dt::ChargingSession::Pause and not m_ctx.fake_dc_shutdown_pending;
+    if (pause_session) {
         // Retain the session id so the returning EV can re-join with OK_OldSessionJoined, and the payment
         // option so the resumed ServiceDiscoveryRes can offer only that one [V2G2-741].
         m_ctx.session_paused = true;
@@ -41,9 +43,8 @@ Result process_session_stop(Context& m_ctx, const message_2::SessionStopRequest&
     }
 
     // Reported once the response actually hit the wire (Session::send_response).
-    m_ctx.session_stop_res_pending = (req.charging_session == dt::ChargingSession::Pause)
-                                         ? session::feedback::SessionStopAction::Pause
-                                         : session::feedback::SessionStopAction::Terminate;
+    m_ctx.session_stop_res_pending =
+        pause_session ? session::feedback::SessionStopAction::Pause : session::feedback::SessionStopAction::Terminate;
 
     return {};
 }

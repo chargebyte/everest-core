@@ -91,6 +91,16 @@ SCENARIO("DIN SPEC 70121 SECC EVSEID") {
     }
 }
 
+TEST_CASE("Fake DC configuration is snapshotted into both pre-20 engine configs") {
+    session::EvseSetupConfig setup{};
+    setup.fake_dc_enabled = true;
+    const session::SessionConfig config{setup};
+
+    REQUIRE(config.fake_dc_enabled);
+    REQUIRE(make_din_config(config).fake_dc_enabled);
+    REQUIRE(make_d2_config(config, false).fake_dc_enabled);
+}
+
 SCENARIO("DIN SPEC 70121 SECC offered energy transfer mode") {
     using Mode = shared_datatypes::EnergyTransferMode;
     using Offered = message_din::datatypes::SupportedEnergyTransferMode;

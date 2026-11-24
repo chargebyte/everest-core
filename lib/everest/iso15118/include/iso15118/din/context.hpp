@@ -291,6 +291,8 @@ public:
     }
 
     bool session_stopped{false};
+    // The first valid Fake DC CPD response requests shutdown; the next CPD ends this session.
+    bool fake_dc_shutdown_pending{false};
     // Detected outside a response (CP State A / unplug, [V2G-DC-962]): Session closes at once.
     bool session_ended_with_error{false};
     // A PowerDeliveryRes(ReadyToChargeState=FALSE, OK) was sent, so the next request requires CP State B

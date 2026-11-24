@@ -79,6 +79,7 @@ struct SessionConfig {
     // IEC 61851-23:2023 CC.3.5.3. BeforeCableCheck additionally skips the cable check, and both stopping
     // modes reject a PowerDelivery(Start).
     d20::NoEnergyPauseMode no_energy_pause{d20::NoEnergyPauseMode::None};
+    bool fake_dc_enabled{false};
 
     // In MILLISECONDS; 0 waits indefinitely. Selected per session by the payment option the EV chose;
     // see session::EvseSetupConfig for why EIM defaults well beyond the 55 s of [V2G2-712/713].
