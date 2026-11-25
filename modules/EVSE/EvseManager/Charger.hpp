@@ -127,6 +127,8 @@ public:
     sigslot::signal<float> signal_max_current;
 
     void setup(const SetupConfig& config);
+    void update_runtime_session_configuration(const SetupConfig& config);
+    bool can_change_charge_mode();
     std::uint64_t start_ac_with_soc_timeout();
     void cancel_ac_with_soc_timeout();
     void check_ac_with_soc_timeout();
@@ -214,6 +216,7 @@ public:
 
     EvseState get_current_state();
     sigslot::signal<EvseState> signal_state;
+    sigslot::signal<> signal_reinit_ready;
 
     void inform_new_evse_max_hlc_limits(const types::iso15118::DcEvseMaximumLimits& l);
     types::iso15118::DcEvseMaximumLimits get_evse_max_hlc_limits();
@@ -535,6 +538,7 @@ private:
         std::optional<std::chrono::steady_clock::time_point> reinit_deadline;
         EvseState last_state_detect_state_change;
         EvseState last_state;
+        bool reinit_ready_notification_pending{false};
 
         bool pp_warning_printed{false};
         bool no_energy_warning_printed{false};

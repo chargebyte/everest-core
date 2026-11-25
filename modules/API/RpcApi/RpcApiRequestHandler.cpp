@@ -240,6 +240,20 @@ RpcApiRequestHandler::reinit_charging_session(int32_t evse_index,
     return res;
 }
 
+ErrorResObj RpcApiRequestHandler::set_ac_session_configuration(
+    int32_t evse_index, const types::evse_manager::ACChargingSessionConfiguration& configuration) {
+    const auto it = std::find_if(evse_managers.begin(), evse_managers.end(), [evse_index](const auto& manager) {
+        const auto mapping = manager->get_mapping();
+        return mapping.has_value() && mapping->evse == evse_index;
+    });
+    if (it == evse_managers.end()) {
+        return {ResponseErrorEnum::ErrorInvalidEVSEIndex};
+    }
+    return {(*it)->call_set_ac_charging_session_configuration(configuration)
+                ? ResponseErrorEnum::NoError
+                : ResponseErrorEnum::ErrorValuesNotApplied};
+}
+
 // template method to set the external limits depending on the type of value (current, power, or phase count)
 template <typename T>
 ErrorResObj RpcApiRequestHandler::set_external_limit(const int32_t evse_index, T value,

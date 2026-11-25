@@ -21,6 +21,20 @@ constexpr std::string_view session_info_without_reserved = R"({
 
 } // namespace
 
+TEST(evse_manager, ev_info_mac_round_trips) {
+    EVInfo info{};
+    info.mac = "AA:BB:CC:11:22:33";
+    info.soc = 42.0F;
+
+    const auto payload = nlohmann::json::parse(serialize(info));
+    EXPECT_EQ(payload.at("mac"), "AA:BB:CC:11:22:33");
+
+    EVInfo result;
+    ASSERT_TRUE(everest::lib::API::deserialize(payload.dump(), result));
+    EXPECT_EQ(result.mac, info.mac);
+    EXPECT_EQ(result.soc, info.soc);
+}
+
 TEST(evse_manager, session_info_without_reserved_defaults_to_false) {
     SessionInfo result;
     result.reserved = true;

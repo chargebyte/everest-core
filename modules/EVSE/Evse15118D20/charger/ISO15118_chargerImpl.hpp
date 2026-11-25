@@ -126,6 +126,7 @@ private:
     // the AC filter, plus whether an AC energy transfer mode is configured. apply_supported_protocols()
     // combines both into setup_config.supported_protocols. All three need GEL held.
     std::vector<iso15118::ProtocolId> configured_protocol_offer;
+    bool supported_protocol_offer_was_updated{false};
     bool ac_energy_transfer_mode{false};
     bool fake_dc_requested{false};
     void apply_supported_protocols();

@@ -282,6 +282,25 @@ in the EVerest documentation.
 ### everest_api/evse_manager/cmd/force_unlock
 Command to force unlock a connector on the EVSE. The payload should be a positive integer identifying the connector that should be unlocked. If the payload is empty or cannot be converted to an integer connector 1 is assumed.
 
+### everest_api/evse_manager/cmd/set_ac_charging_session_configuration
+Sets the AC charging session configuration using a JSON object:
+
+```json
+{
+    "allow_isod20": true,
+    "allow_isod2": true,
+    "allow_isod2_fake_dc": false,
+    "reinit_configuration": {"state_transition": "CPStateX1", "duration": 4000},
+    "phase_switch_configuration": {
+        "reinit_configuration": {"state_transition": "CPStateX1", "duration": 4000}
+    },
+    "mac_filter": ["AA:BB:CC"]
+}
+```
+
+The optional MAC filter accepts full addresses or three-octet OUIs. Without a filter the configuration
+is the default. The optional `disable_isod2_fake_dc_after_replug` field is accepted but has no effect.
+
 ### everest_api/evse_manager/cmd/reinit_charging_session
 Starts a charging-session reinitialization sequence. An empty payload uses the configured defaults. To override either default, publish a JSON object; omitted properties still use their configured defaults.
 

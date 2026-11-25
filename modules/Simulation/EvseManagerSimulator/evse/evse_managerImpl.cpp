@@ -95,6 +95,11 @@ void evse_managerImpl::handle_set_plug_and_charge_configuration(
     // your code for cmd set_plug_and_charge_configuration goes here
 }
 
+bool evse_managerImpl::handle_set_ac_charging_session_configuration(
+    types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+    return true;
+}
+
 types::evse_manager::UpdateAllowedEnergyTransferModesResult
 evse_managerImpl::handle_update_allowed_energy_transfer_modes(
     std::vector<types::iso15118::EnergyTransferMode>& allowed_energy_transfer_modes) {

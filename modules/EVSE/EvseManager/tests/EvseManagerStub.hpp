@@ -68,6 +68,10 @@ struct evse_managerImplStub : public evse_managerImplBase {
     virtual void handle_set_plug_and_charge_configuration(
         types::evse_manager::PlugAndChargeConfiguration& plug_and_charge_configuration) {
     }
+    virtual bool handle_set_ac_charging_session_configuration(
+        types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+        return true;
+    }
     virtual types::evse_manager::UpdateAllowedEnergyTransferModesResult handle_update_allowed_energy_transfer_modes(
         std::vector<types::iso15118::EnergyTransferMode>& allowed_energy_transfer_modes) {
         return types::evse_manager::UpdateAllowedEnergyTransferModesResult::Accepted;

@@ -401,6 +401,15 @@ void EVSEStatusStore::set_display_parameters(
     }
 }
 
+void EVSEStatusStore::set_ev_mac(const std::optional<std::string>& ev_mac) {
+    std::unique_lock<std::mutex> data_lock(this->data_mutex);
+    if (this->dataobj.ev_mac != ev_mac) {
+        this->dataobj.ev_mac = ev_mac;
+        data_lock.unlock();
+        this->notify_data_changed();
+    }
+}
+
 types::json_rpc_api::EVSEStateEnum EVSEStatusStore::get_state() const {
     std::unique_lock<std::mutex> data_lock(this->data_mutex);
     return this->dataobj.state;

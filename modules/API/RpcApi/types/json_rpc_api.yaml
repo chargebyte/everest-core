@@ -498,6 +498,9 @@ types:
         description: display_parameters
         type: object
         $ref: /json_rpc_api#/DisplayParametersObj
+      ev_mac:
+        description: MAC address of the connected EV, if known
+        type: string
       state:
         description: state
         type: object
@@ -773,6 +776,40 @@ types:
         description: Duration of the state transition in milliseconds.
         type: integer
         minimum: 0
+  ACSessionConfigurationObj:
+    description: AC charging session configuration.
+    type: object
+    additionalProperties: false
+    required:
+      - allow_isod20
+      - allow_isod2
+      - allow_hlc_fake_dc
+    properties:
+      allow_isod20:
+        description: Offer ISO 15118-20 AC charging.
+        type: boolean
+      allow_isod2:
+        description: Offer ISO 15118-2 AC charging.
+        type: boolean
+      allow_hlc_fake_dc:
+        description: Offer Fake DC over DIN and optionally ISO 15118-2 during an AC session to obtain SoC.
+        type: boolean
+      disable_isod2_fake_dc_after_replug:
+        description: Reserved for compatibility; currently has no effect.
+        type: boolean
+      reinit_configuration:
+        description: Reinitialization settings for matching sessions.
+        type: object
+        $ref: /json_rpc_api#/ReinitConfiguration
+      phase_switch_configuration:
+        description: Reinitialization settings for AC phase switching.
+        type: object
+        $ref: /json_rpc_api#/ReinitConfiguration
+      mac_filter:
+        description: Full MAC addresses or three-octet OUIs to which this configuration applies.
+        type: array
+        items:
+          type: string
   ErrorResObj:
     description: Response which only contains an error type
     type: object

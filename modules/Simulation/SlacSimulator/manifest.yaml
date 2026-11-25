@@ -6,6 +6,12 @@ provides:
   ev:
     interface: ev_slac
     description: SLAC interface implementation for EV side
+config:
+  ev_mac_address:
+    description: EV MAC address published by the SLAC simulator
+    type: string
+    default: "AA:BB:CC:DD:EE:FF"
+    pattern: ^[A-Fa-f0-9]{2}(:[A-Fa-f0-9]{2}){5}$
 metadata:
   license: https://opensource.org/licenses/Apache-2.0
   authors:

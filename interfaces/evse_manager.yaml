@@ -132,6 +132,18 @@ cmds:
         description: The plug and charge configuration object
         type: object
         $ref: /evse_manager#/PlugAndChargeConfiguration
+  set_ac_charging_session_configuration:
+    description: >-
+      Sets the AC session protocol and Fake DC policy. A MAC filter scopes the configuration to matching EV MAC
+      addresses or prefixes. An omitted or empty filter updates the default configuration.
+    arguments:
+      ac_charging_session_configuration:
+        description: AC charging session configuration to apply
+        type: object
+        $ref: /evse_manager#/ACChargingSessionConfiguration
+    result:
+      description: Returns true if the configuration was accepted
+      type: boolean
   update_allowed_energy_transfer_modes:
     description: >-
       Sets the supported energy transfer mode for ISO15118. It is expected that this command will update the ISO15118

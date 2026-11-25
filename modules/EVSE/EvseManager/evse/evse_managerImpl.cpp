@@ -502,7 +502,7 @@ bool evse_managerImpl::handle_stop_transaction(types::evse_manager::StopTransact
 };
 
 bool evse_managerImpl::handle_reinit_charging_session(types::evse_manager::ReinitConfiguration& reinit_configuration) {
-    return mod->charger->start_reinit(reinit_configuration);
+    return mod->reinit_charging_session(reinit_configuration);
 }
 
 bool evse_managerImpl::handle_external_ready_to_start_charging() {
@@ -543,6 +543,11 @@ void evse_managerImpl::handle_set_plug_and_charge_configuration(
         mod->set_contract_certificate_installation_enabled(
             plug_and_charge_configuration.contract_certificate_installation_enabled.value());
     }
+}
+
+bool evse_managerImpl::handle_set_ac_charging_session_configuration(
+    types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) {
+    return mod->set_ac_charging_session_configuration(ac_charging_session_configuration);
 }
 
 types::evse_manager::UpdateAllowedEnergyTransferModesResult

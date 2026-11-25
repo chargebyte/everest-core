@@ -190,11 +190,40 @@ void EvseManager::init() {
         slac_enabled = false;
     }
 
-    // Use SLAC MAC address for Autocharge if configured.
-    if (config.autocharge_use_slac_instead_of_hlc and slac_enabled and config.enable_autocharge) {
+    types::evse_manager::ACChargingSessionConfiguration default_ac_configuration;
+    default_ac_configuration.allow_isod20 = config.ac_hlc_enabled;
+    default_ac_configuration.allow_isod2 = config.ac_hlc_enabled;
+    default_ac_configuration.allow_isod2_fake_dc =
+        config.ac_with_soc and config.charge_mode == "AC" and slac_enabled and not r_hlc.empty();
+    ac_session_configuration_store = std::make_unique<AcSessionConfigurationStore>(default_ac_configuration);
+    active_ac_session_configuration = default_ac_configuration;
+
+    if (slac_enabled) {
         r_slac[0]->subscribe_ev_mac_address([this](const std::string& token) {
-            p_token_provider->publish_provided_token(create_autocharge_token(token, config.connector_id));
+            {
+                std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+                current_ev_mac = token;
+            }
+            dlink_ready_condition.notify_all();
+            {
+                Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
+                ev_info.mac = token;
+                if (manager_ready.load()) {
+                    p_evse->publish_ev_info(ev_info);
+                }
+            }
+
+            if (config.autocharge_use_slac_instead_of_hlc and config.enable_autocharge) {
+                p_token_provider->publish_provided_token(create_autocharge_token(token, config.connector_id));
+            }
         });
+    }
+
+    if (not r_hlc.empty()) {
+        r_hlc[0]->subscribe_supported_app_protocols_secc(
+            [this](const types::iso15118::SupportedAppProtocols& protocols) {
+                ac_session_configuration_store->set_available_protocols(protocols);
+            });
     }
 
     hlc_enabled = not r_hlc.empty();
@@ -450,7 +479,7 @@ void EvseManager::ready() {
             std::uint64_t attempt_generation;
             {
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
-                fake_dc_session = fake_dc_enabled.load() and config.ac_with_soc and config.charge_mode == "AC";
+                fake_dc_session = fake_dc_enabled.load() and config.charge_mode == "AC";
                 attempt_generation = fake_dc_attempt_generation;
                 complete_fake_dc_session = fake_dc_attempt_active.exchange(false);
                 fake_dc_timeout_generation = 0;
@@ -460,6 +489,7 @@ void EvseManager::ready() {
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                 if (attempt_generation == fake_dc_attempt_generation) {
                     setup_AC_mode(false);
+                    basic_ac_fallback_latched = true;
                 }
             }
             // Inform charger after restoring AC mode so its error recovery follows the AC path.
@@ -480,7 +510,7 @@ void EvseManager::ready() {
             std::uint64_t attempt_generation;
             {
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
-                fake_dc_session = fake_dc_enabled.load() and config.ac_with_soc and config.charge_mode == "AC";
+                fake_dc_session = fake_dc_enabled.load() and config.charge_mode == "AC";
                 attempt_generation = fake_dc_attempt_generation;
                 complete_fake_dc_session = fake_dc_attempt_active.exchange(false);
                 fake_dc_timeout_generation = 0;
@@ -493,6 +523,7 @@ void EvseManager::ready() {
                         std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                         if (attempt_generation == fake_dc_attempt_generation) {
                             setup_AC_mode(false);
+                            basic_ac_fallback_latched = true;
                         }
                     }
                 } else {
@@ -521,7 +552,7 @@ void EvseManager::ready() {
             {
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                 fake_dc_timeout_generation = 0;
-                fake_dc_session = fake_dc_enabled.load() and config.ac_with_soc and config.charge_mode == "AC";
+                fake_dc_session = fake_dc_enabled.load() and config.charge_mode == "AC";
                 attempt_generation = fake_dc_attempt_generation;
                 complete_fake_dc_session = fake_dc_session and fake_dc_attempt_active.exchange(false);
                 charger->cancel_ac_with_soc_timeout();
@@ -533,6 +564,7 @@ void EvseManager::ready() {
                     std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                     if (attempt_generation == fake_dc_attempt_generation) {
                         setup_AC_mode(false);
+                        basic_ac_fallback_latched = true;
                     }
                 }
             } else {
@@ -1260,25 +1292,50 @@ void EvseManager::ready() {
                 }
             }
         });
-        // switch to DC mode for first session for AC with SoC
-        if (config.ac_with_soc and config.charge_mode == "AC") {
+        if (config.charge_mode == "AC") {
 
             bsp->signal_event.connect([this](const CPEvent event) {
                 if (event == CPEvent::CarUnplugged) {
-                    // Prepare Fake-DC for the next plugged-in session.
+                    {
+                        std::lock_guard<std::mutex> dlink_lock(dlink_ready_mutex);
+                        std::lock_guard<std::mutex> mac_lock(ac_session_configuration_mutex);
+                        ++dlink_ready_generation;
+                        current_ev_mac.clear();
+                        dlink_ready_pending_for_mac = false;
+                    }
+                    dlink_ready_condition.notify_all();
+                    const auto default_policy = ac_session_configuration_store->get_default();
+                    {
+                        std::lock_guard<std::mutex> config_lock(active_ac_session_configuration_mutex);
+                        active_ac_session_configuration = default_policy.configuration;
+                    }
                     {
                         std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                         ++fake_dc_attempt_generation;
+                        basic_ac_fallback_latched = false;
+                        fake_dc_rearm_requested = false;
                         fake_dc_timeout_generation = 0;
                         fake_dc_soc_received = false;
                         fake_dc_timeout_stop_requested = false;
                         fake_dc_attempt_consumed = false;
                         charger->cancel_ac_with_soc_timeout();
-                        if (fake_dc_enabled.load()) {
-                            fake_dc_attempt_active = false;
-                        } else {
+                        const bool default_fake_dc =
+                            config.charge_mode == "AC" and default_policy.configuration.allow_isod2_fake_dc;
+                        if (default_fake_dc and not fake_dc_enabled.load()) {
                             switch_DC_mode();
+                        } else if (not default_fake_dc) {
+                            const auto default_protocols =
+                                ac_session_configuration_store->protocols_for(default_policy, false);
+                            setup_AC_mode(hlc_enabled and not default_protocols.app_protocols.empty());
+                        } else {
+                            fake_dc_attempt_active = false;
                         }
+                        const auto default_protocols =
+                            ac_session_configuration_store->protocols_for(default_policy, default_fake_dc);
+                        const auto runtime_setup = get_charger_setup_config(
+                            default_fake_dc ? Charger::ChargeMode::DC : Charger::ChargeMode::AC,
+                            hlc_enabled and not default_protocols.app_protocols.empty(), default_fake_dc);
+                        charger->update_runtime_session_configuration(runtime_setup);
                     }
                 }
             });
@@ -1317,6 +1374,13 @@ void EvseManager::ready() {
 
             r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus const& status) {
                 EVLOG_info << fmt::format("SoC received: {}.", status.dc_ev_ress_soc);
+                {
+                    Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
+                    ev_info.soc = status.dc_ev_ress_soc;
+                    if (manager_ready.load()) {
+                        p_evse->publish_ev_info(ev_info);
+                    }
+                }
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                 if (fake_dc_enabled.load() and fake_dc_attempt_active) {
                     fake_dc_soc_received = true;
@@ -1364,6 +1428,27 @@ void EvseManager::ready() {
     }
 
     bsp->signal_event.connect([this](const CPEvent event) {
+        if (event == CPEvent::CarPluggedIn) {
+            ev_plugged_in = true;
+        } else if (event == CPEvent::CarUnplugged) {
+            ev_plugged_in = false;
+            {
+                std::lock_guard<std::mutex> dlink_lock(dlink_ready_mutex);
+                std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+                ++dlink_ready_generation;
+                current_ev_mac.clear();
+                dlink_ready_pending_for_mac = false;
+            }
+            dlink_ready_condition.notify_all();
+            const auto default_policy = ac_session_configuration_store->get_default();
+            {
+                std::lock_guard<std::mutex> lock(active_ac_session_configuration_mutex);
+                active_ac_session_configuration = default_policy.configuration;
+            }
+            charger->update_runtime_session_configuration(
+                get_charger_setup_config(Charger::ChargeMode::AC, false, false));
+        }
+
         // Forward events from BSP to SLAC module before we process the events in the charger
         if (slac_enabled) {
             if (event == CPEvent::EFtoBCD) {
@@ -1393,6 +1478,13 @@ void EvseManager::ready() {
                 bc_transition_count += 1;
                 r_slac[0]->call_count_bc(bc_transition_count);
             } else if (event == CPEvent::CarUnplugged) {
+                {
+                    Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
+                    ev_info = types::evse_manager::EVInfo{};
+                    if (manager_ready.load()) {
+                        p_evse->publish_ev_info(ev_info);
+                    }
+                }
                 if (hlc_link_in_use) {
                     // An HLC session is still up: the stack closes the V2G TCP connection on the
                     // CP State A it just received ([V2G-DC-962]) and its FIN must still traverse
@@ -1557,21 +1649,47 @@ void EvseManager::ready() {
         });
 
         r_slac[0]->subscribe_dlink_ready([this](const bool value) {
-            session_log.evse(true, fmt::format("D-LINK_READY ({})", value));
-            charger->set_dlink_ready(value);
-            {
-                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
-                if (not value) {
-                    hlc_link_in_use = false;
+            if (value) {
+                std::uint64_t generation = 0;
+                bool should_wait_for_mac = false;
+                {
+                    std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+                    ++dlink_ready_generation;
+                    generation = dlink_ready_generation;
+                    should_wait_for_mac = config.charge_mode == "AC" and
+                                          ac_session_configuration_store->has_mac_rules() and current_ev_mac.empty();
+                    dlink_ready_pending_for_mac = should_wait_for_mac;
                 }
-                detail::begin_fake_dc_attempt_on_dlink_ready(
-                    value, fake_dc_enabled.load(), fake_dc_attempt_consumed, fake_dc_attempt_active,
-                    fake_dc_attempt_generation, fake_dc_soc_received, fake_dc_timeout_stop_requested,
-                    fake_dc_timeout_generation, [this] { return charger->start_ac_with_soc_timeout(); });
-            }
-            if (hlc_enabled) {
-                r_hlc[0]->call_dlink_ready(value);
-                charger->get_stopwatch().mark("D-LINK_READY");
+                if (should_wait_for_mac) {
+                    std::unique_lock<std::mutex> lock(ac_session_configuration_mutex);
+                    const bool mac_received =
+                        dlink_ready_condition.wait_for(lock, std::chrono::milliseconds(500), [this, generation] {
+                            return dlink_ready_generation != generation or not current_ev_mac.empty();
+                        });
+                    const bool mac_available =
+                        mac_received and dlink_ready_generation == generation and not current_ev_mac.empty();
+                    dlink_ready_pending_for_mac = false;
+                    if (not mac_available and dlink_ready_generation == generation) {
+                        EVLOG_warning << "No SLAC MAC received within 500 ms; applying the manifest-default AC policy";
+                    }
+                }
+                std::lock_guard<std::mutex> dlink_lock(dlink_ready_mutex);
+                {
+                    std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+                    if (dlink_ready_generation != generation) {
+                        return;
+                    }
+                }
+                handle_dlink_ready(true);
+            } else {
+                std::lock_guard<std::mutex> dlink_lock(dlink_ready_mutex);
+                {
+                    std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+                    ++dlink_ready_generation;
+                    dlink_ready_pending_for_mac = false;
+                }
+                dlink_ready_condition.notify_all();
+                handle_dlink_ready(false);
             }
         });
     }
@@ -1617,11 +1735,37 @@ void EvseManager::ready() {
         }
     });
 
+    charger->signal_reinit_ready.connect([this] {
+        if (not fake_dc_rearm_requested.load() or not charger->can_change_charge_mode()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+        bool fake_dc_still_allowed = false;
+        {
+            std::lock_guard<std::mutex> config_lock(active_ac_session_configuration_mutex);
+            fake_dc_still_allowed =
+                active_ac_session_configuration.has_value() and active_ac_session_configuration->allow_isod2_fake_dc;
+        }
+        if (basic_ac_fallback_latched.load() or not fake_dc_still_allowed) {
+            fake_dc_rearm_requested = false;
+            return;
+        }
+        if (fake_dc_rearm_requested.exchange(false)) {
+            setup_fake_DC_mode();
+        }
+    });
+
     charger->signal_simple_event.connect([this](types::evse_manager::SessionEventEnum session_event) {
         if (session_event == types::evse_manager::SessionEventEnum::SessionFinished) {
-            // Reset EV information on Session start and end
-            ev_info = types::evse_manager::EVInfo();
-            p_evse->publish_ev_info(ev_info);
+            {
+                Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
+                const auto mac = ev_info.mac;
+                ev_info = types::evse_manager::EVInfo();
+                ev_info.mac = mac;
+                if (manager_ready.load()) {
+                    p_evse->publish_ev_info(ev_info);
+                }
+            }
         }
 
         if (not hlc_enabled) {
@@ -1648,9 +1792,15 @@ void EvseManager::ready() {
     charger->signal_session_started_event.connect(
         [this](types::evse_manager::StartSessionReason start_reason,
                const std::optional<types::authorization::ProvidedIdToken>& provided_id_token) {
-            // Reset EV information on Session start and end
-            ev_info = types::evse_manager::EVInfo();
-            p_evse->publish_ev_info(ev_info);
+            {
+                Everest::scoped_lock_timeout lock(ev_info_mutex, Everest::MutexDescription::EVSE_set_ev_info);
+                const auto mac = ev_info.mac;
+                ev_info = types::evse_manager::EVInfo();
+                ev_info.mac = mac;
+                if (manager_ready.load()) {
+                    p_evse->publish_ev_info(ev_info);
+                }
+            }
 
             if (not hlc_enabled) {
                 return;
@@ -1680,14 +1830,22 @@ void EvseManager::ready() {
     invoke_ready(*p_token_provider);
     invoke_ready(*p_random_delay);
 
-    if (config.ac_with_soc and config.charge_mode == "AC") {
+    const auto default_ac_policy = ac_session_configuration_store->get_default();
+    if (config.charge_mode == "AC" and default_ac_policy.configuration.allow_isod2_fake_dc) {
         {
             std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
             setup_fake_DC_mode();
         }
     } else {
-        const auto charge_mode = config.charge_mode == "DC" ? Charger::ChargeMode::DC : Charger::ChargeMode::AC;
-        charger->setup(get_charger_setup_config(charge_mode, hlc_enabled, false));
+        if (config.charge_mode == "AC") {
+            const auto default_protocols = ac_session_configuration_store->protocols_for(default_ac_policy, false);
+            const bool ac_hlc_enabled = hlc_enabled and not default_protocols.app_protocols.empty();
+            charger->setup(get_charger_setup_config(Charger::ChargeMode::AC, ac_hlc_enabled, false));
+            fake_dc_enabled = false;
+            basic_ac_mode_active = not ac_hlc_enabled;
+        } else {
+            charger->setup(get_charger_setup_config(Charger::ChargeMode::DC, hlc_enabled, false));
+        }
     }
 
     telemetryThreadHandle = std::thread([this]() {
@@ -1838,6 +1996,7 @@ void EvseManager::ready_to_start_charging() {
     // startup
     charger->enable_disable_initial_state_publish();
 
+    manager_ready = true;
     this->p_evse->publish_ready(true);
     EVLOG_info << fmt::format(fmt::emphasis::bold | fg(fmt::terminal_color::green), "🌀🌀🌀 Ready to start charging 🌀🌀🌀");
     if (!initial_powermeter_value_received) {
@@ -1867,13 +2026,218 @@ void EvseManager::switch_DC_mode() {
 }
 
 void EvseManager::switch_AC_mode() {
+    fake_dc_rearm_requested = false;
     setup_AC_mode(false);
+    basic_ac_fallback_latched = true;
     if (not charger->start_reinit()) {
         EVLOG_warning << "Fake-DC fallback could not reinitialize the charging session after switching to AC";
     }
 }
 
+void EvseManager::handle_dlink_ready(bool value) {
+    session_log.evse(true, fmt::format("D-LINK_READY ({})", value));
+    if (value) {
+        std::string ev_mac;
+        {
+            std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+            ev_mac = current_ev_mac;
+        }
+        apply_ac_session_configuration(ev_mac);
+    }
+    charger->set_dlink_ready(value);
+    {
+        std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+        if (not value) {
+            hlc_link_in_use = false;
+        }
+        detail::begin_fake_dc_attempt_on_dlink_ready(
+            value, fake_dc_enabled.load(), fake_dc_attempt_consumed, fake_dc_attempt_active, fake_dc_attempt_generation,
+            fake_dc_soc_received, fake_dc_timeout_stop_requested, fake_dc_timeout_generation,
+            [this] { return charger->start_ac_with_soc_timeout(); });
+    }
+    if (hlc_enabled) {
+        r_hlc[0]->call_dlink_ready(value);
+        charger->get_stopwatch().mark("D-LINK_READY");
+    }
+}
+
+bool EvseManager::set_ac_charging_session_configuration(
+    const types::evse_manager::ACChargingSessionConfiguration& configuration) {
+    if (config.charge_mode != "AC" or ac_session_configuration_store == nullptr) {
+        EVLOG_warning << "Ignoring AC charging session configuration because this EVSE is not in AC mode";
+        return false;
+    }
+    if (configuration.allow_isod2_fake_dc and (not hlc_enabled or r_hlc.empty())) {
+        EVLOG_warning << "Rejecting Fake-DC configuration because no HLC implementation is enabled";
+        return false;
+    }
+    if (not hlc_enabled and (configuration.allow_isod20 or configuration.allow_isod2)) {
+        EVLOG_warning << "Rejecting AC protocol configuration because no HLC implementation is enabled";
+        return false;
+    }
+    if (not ac_session_configuration_store->set(configuration)) {
+        return false;
+    }
+    if (not ev_plugged_in.load() and not hlc_link_in_use.load() and not fake_dc_attempt_active.load()) {
+        std::string ev_mac;
+        {
+            std::lock_guard<std::mutex> lock(ac_session_configuration_mutex);
+            ev_mac = current_ev_mac;
+        }
+        apply_ac_session_configuration(ev_mac);
+    }
+    return true;
+}
+
+bool EvseManager::reinit_charging_session(const types::evse_manager::ReinitConfiguration& configuration) {
+    if (config.charge_mode != "AC") {
+        return charger->start_reinit(configuration);
+    }
+
+    bool fake_dc_configured = false;
+    {
+        std::lock_guard<std::mutex> lock(active_ac_session_configuration_mutex);
+        fake_dc_configured =
+            active_ac_session_configuration.has_value() and active_ac_session_configuration->allow_isod2_fake_dc;
+    }
+    std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+    const bool previous_attempt_consumed = fake_dc_attempt_consumed;
+    const bool previous_fallback_latched = basic_ac_fallback_latched.load();
+    if (fake_dc_configured) {
+        fake_dc_attempt_consumed = false;
+        basic_ac_fallback_latched = false;
+        fake_dc_rearm_requested = true;
+    }
+    const bool reinit_started = charger->start_reinit(configuration);
+    if (not reinit_started) {
+        if (fake_dc_configured) {
+            fake_dc_attempt_consumed = previous_attempt_consumed;
+            basic_ac_fallback_latched = previous_fallback_latched;
+            fake_dc_rearm_requested = false;
+        }
+        return false;
+    }
+    if (fake_dc_configured) {
+        if (charger->can_change_charge_mode()) {
+            fake_dc_rearm_requested = false;
+            setup_fake_DC_mode();
+        }
+    }
+    return true;
+}
+
+bool EvseManager::apply_ac_session_configuration(const std::string& ev_mac) {
+    if (config.charge_mode != "AC" or ac_session_configuration_store == nullptr) {
+        return true;
+    }
+
+    std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+    const auto policy = ac_session_configuration_store->get(ev_mac);
+    if (r_hlc.empty()) {
+        {
+            std::lock_guard<std::mutex> config_lock(active_ac_session_configuration_mutex);
+            active_ac_session_configuration = policy.configuration;
+        }
+        const auto runtime_setup = get_charger_setup_config(Charger::ChargeMode::AC, false, false);
+        charger->update_runtime_session_configuration(runtime_setup);
+        return true;
+    }
+
+    if (hlc_link_in_use.load() or fake_dc_attempt_active.load()) {
+        EVLOG_debug << "Keeping the active AC session policy until the next HLC attempt";
+        return true;
+    }
+
+    if (basic_ac_fallback_latched.load()) {
+        types::iso15118::SupportedAppProtocols no_protocols;
+        if (not r_hlc[0]->call_update_supported_app_protocols(no_protocols)) {
+            EVLOG_warning << "HLC rejected the empty protocol policy after Fake-DC fallback";
+        }
+        return true;
+    }
+
+    const bool fake_dc_requested = policy.configuration.allow_isod2_fake_dc;
+    const bool run_fake_dc = fake_dc_requested and not fake_dc_attempt_consumed;
+    const auto requested_protocols = ac_session_configuration_store->protocols_for(policy, run_fake_dc);
+    const bool needs_mode_change =
+        fake_dc_enabled.load() != run_fake_dc or
+        (requested_protocols.app_protocols.empty() and not basic_ac_mode_active.load()) or
+        (not requested_protocols.app_protocols.empty() and not run_fake_dc and basic_ac_mode_active.load());
+    if (needs_mode_change and not charger->can_change_charge_mode()) {
+        EVLOG_warning << "Reinitializing the charging session before applying a charge-mode change";
+        {
+            std::lock_guard<std::mutex> config_lock(active_ac_session_configuration_mutex);
+            active_ac_session_configuration = policy.configuration;
+        }
+        if (not charger->start_reinit()) {
+            EVLOG_error << "Could not safely reinitialize before applying the MAC-specific AC configuration";
+        }
+        r_slac[0]->call_dlink_terminate();
+        return false;
+    }
+
+    {
+        std::lock_guard<std::mutex> config_lock(active_ac_session_configuration_mutex);
+        active_ac_session_configuration = policy.configuration;
+    }
+
+    bool effective_fake_dc = run_fake_dc;
+    bool mode_changed = needs_mode_change;
+    if (requested_protocols.app_protocols.empty()) {
+        fake_dc_attempt_consumed = fake_dc_attempt_consumed or run_fake_dc;
+        effective_fake_dc = false;
+        if (not basic_ac_mode_active.load()) {
+            setup_AC_mode(false);
+        } else {
+            fake_dc_enabled = false;
+        }
+    } else if (fake_dc_enabled.load() != run_fake_dc) {
+        if (run_fake_dc) {
+            setup_fake_DC_mode();
+        } else {
+            setup_AC_mode(hlc_enabled and not requested_protocols.app_protocols.empty());
+        }
+    } else if (not run_fake_dc and basic_ac_mode_active.load()) {
+        setup_AC_mode(hlc_enabled);
+    }
+
+    const bool policy_accepted = r_hlc[0]->call_update_supported_app_protocols(requested_protocols);
+    if (not policy_accepted and run_fake_dc) {
+        EVLOG_warning << "HLC cannot offer a usable Fake-DC protocol for MAC "
+                      << (ev_mac.empty() ? "<default>" : ev_mac) << "; keeping AC charging enabled";
+        fake_dc_attempt_consumed = true;
+        effective_fake_dc = false;
+        mode_changed = true;
+        const auto ac_protocols = ac_session_configuration_store->protocols_for(policy, false);
+        setup_AC_mode(hlc_enabled and not ac_protocols.app_protocols.empty());
+        if (not r_hlc[0]->call_update_supported_app_protocols(ac_protocols)) {
+            EVLOG_warning << "HLC rejected the AC session protocol policy after Fake-DC was disabled";
+        }
+    } else if (not policy_accepted) {
+        EVLOG_warning << "HLC rejected the AC session protocol policy for MAC "
+                      << (ev_mac.empty() ? "<default>" : ev_mac);
+    }
+
+    const auto runtime_setup = get_charger_setup_config(
+        effective_fake_dc ? Charger::ChargeMode::DC : Charger::ChargeMode::AC,
+        hlc_enabled and not requested_protocols.app_protocols.empty() and not effective_fake_dc, effective_fake_dc);
+    charger->update_runtime_session_configuration(runtime_setup);
+
+    if (mode_changed and ev_plugged_in.load()) {
+        if (not charger->start_reinit()) {
+            EVLOG_error << "Could not reinitialize the charging session after applying the MAC-specific AC mode";
+        }
+        r_slac[0]->call_dlink_terminate();
+        return false;
+    }
+    return true;
+}
+
 void EvseManager::update_hlc_session_setup(const HlcSessionSetupConfig& session_setup) {
+    {
+        std::lock_guard<std::mutex> lock(hlc_session_setup_mutex);
+        active_hlc_session_setup = session_setup;
+    }
     if (not hlc_enabled or r_hlc.empty()) {
         return;
     }
@@ -1925,18 +2289,44 @@ Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode c
     charger_setup.sleep_before_enabling_pwm_hlc_mode_ms = config.sleep_before_enabling_pwm_hlc_mode_ms;
     charger_setup.session_id_type = utils::get_session_id_type_from_string(config.session_id_type);
     charger_setup.hlc_charge_loop_without_energy_timeout_s = config.hlc_charge_loop_without_energy_timeout_s;
+    {
+        std::lock_guard<std::mutex> lock(active_ac_session_configuration_mutex);
+        if (active_ac_session_configuration.has_value()) {
+            const auto& session_configuration = *active_ac_session_configuration;
+            if (session_configuration.reinit_configuration.has_value()) {
+                if (session_configuration.reinit_configuration->state_transition.has_value()) {
+                    charger_setup.reinit_method = *session_configuration.reinit_configuration->state_transition;
+                }
+                if (session_configuration.reinit_configuration->duration.has_value()) {
+                    charger_setup.reinit_duration_ms = *session_configuration.reinit_configuration->duration;
+                }
+            }
+            if (session_configuration.phase_switch_configuration.has_value()) {
+                const auto& phase_switch = session_configuration.phase_switch_configuration->reinit_configuration;
+                if (phase_switch.state_transition.has_value()) {
+                    charger_setup.switch_3ph1ph_cp_state =
+                        types::evse_manager::reinit_state_enum_to_string(*phase_switch.state_transition).substr(7);
+                }
+                if (phase_switch.duration.has_value()) {
+                    charger_setup.switch_3ph1ph_delay_s =
+                        static_cast<int>((static_cast<int64_t>(*phase_switch.duration) + 999) / 1000);
+                }
+            }
+        }
+    }
     return charger_setup;
 }
 
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
+    fake_dc_rearm_requested = false;
     ++fake_dc_attempt_generation;
     fake_dc_attempt_active = false;
-    fake_dc_attempt_consumed = false;
     fake_dc_soc_received = false;
     fake_dc_timeout_stop_requested = false;
     fake_dc_enabled = true;
+    basic_ac_mode_active = false;
     charger->setup(get_charger_setup_config(Charger::ChargeMode::DC, hlc_enabled, true));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
@@ -1968,13 +2358,21 @@ void EvseManager::setup_fake_DC_mode() {
     constexpr auto sae_mode = types::iso15118::SaeJ2847BidiMode::None;
 
     r_hlc[0]->call_setup(evseid, sae_mode, config.session_logging);
+    HlcSessionSetupConfig session_setup;
+    {
+        std::lock_guard<std::mutex> lock(hlc_session_setup_mutex);
+        session_setup = active_hlc_session_setup;
+    }
+    update_hlc_session_setup(session_setup);
     set_supported_energy_transfers([&transfer_modes]() { return transfer_modes; }, SendEnergyTransfers::Always);
 }
 
 void EvseManager::setup_AC_mode(bool ac_hlc_enabled) {
+    fake_dc_rearm_requested = false;
     ++fake_dc_attempt_generation;
     charger->cancel_ac_with_soc_timeout();
     fake_dc_enabled = false;
+    basic_ac_mode_active = not ac_hlc_enabled;
     fake_dc_attempt_active = false;
     charger->setup(get_charger_setup_config(Charger::ChargeMode::AC, ac_hlc_enabled, false));
 
@@ -1990,7 +2388,14 @@ void EvseManager::setup_AC_mode(bool ac_hlc_enabled) {
         set_supported_energy_transfers([this] { return ac_energy_transfers(); }, SendEnergyTransfers::Always);
     } else {
         selected_protocol = "IEC61851-1";
+        set_supported_energy_transfers([this] { return ac_energy_transfers(); }, SendEnergyTransfers::Always);
     }
+    HlcSessionSetupConfig session_setup;
+    {
+        std::lock_guard<std::mutex> lock(hlc_session_setup_mutex);
+        session_setup = active_hlc_session_setup;
+    }
+    update_hlc_session_setup(session_setup);
 }
 
 void EvseManager::setup_v2h_mode() {

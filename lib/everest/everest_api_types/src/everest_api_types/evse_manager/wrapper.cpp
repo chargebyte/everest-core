@@ -489,6 +489,7 @@ Limits_External to_external_api(Limits_Internal const& val) {
 
 EVInfo_Internal to_internal_api(EVInfo_External const& val) {
     EVInfo_Internal result;
+    result.mac = val.mac;
     result.soc = val.soc;
     result.present_voltage = val.present_voltage;
     result.present_current = val.present_current;
@@ -511,6 +512,7 @@ EVInfo_Internal to_internal_api(EVInfo_External const& val) {
 
 EVInfo_External to_external_api(EVInfo_Internal const& val) {
     EVInfo_External result;
+    result.mac = val.mac;
     result.soc = val.soc;
     result.present_voltage = val.present_voltage;
     result.present_current = val.present_current;

@@ -128,6 +128,7 @@ void Charger::main_thread() {
             process_event(event);
         }
 
+        bool notify_reinit_ready = false;
         {
             Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_mainloop);
             // update power limits
@@ -135,6 +136,11 @@ void Charger::main_thread() {
             // Run our own state machine update (i.e. run everything that needs
             // to be done on regular intervals independent from events)
             run_state_machine();
+            notify_reinit_ready = internal_context.reinit_ready_notification_pending;
+            internal_context.reinit_ready_notification_pending = false;
+        }
+        if (notify_reinit_ready) {
+            signal_reinit_ready();
         }
         check_ac_with_soc_timeout();
     }
@@ -187,6 +193,10 @@ void Charger::run_state_machine() {
         // If a state change happened or an error recovered during a state we reinitialize the state
         bool initialize_state = (internal_context.last_state_detect_state_change not_eq shared_context.current_state) or
                                 (internal_context.last_shutdown_type not_eq shared_context.shutdown_type);
+
+        if (initialize_state and shared_context.current_state == EvseState::Reinit) {
+            internal_context.reinit_ready_notification_pending = true;
+        }
 
         if (initialize_state) {
             session_log.evse(false, fmt::format("Charger state: {}->{}",
@@ -790,7 +800,7 @@ void Charger::run_state_machine() {
                     break;
                 }
             }
-            if (internal_context.reinit_deadline.has_value() &&
+            if (not initialize_state and internal_context.reinit_deadline.has_value() &&
                 std::chrono::steady_clock::now() >= internal_context.reinit_deadline.value()) {
                 internal_context.reinit_deadline.reset();
                 session_log.evse(false, "Restarting charging negotiation after reinitialization");
@@ -2147,6 +2157,30 @@ void Charger::setup(const SetupConfig& config) {
 
     if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled)
         EVLOG_info << "AC HLC mode enabled.";
+}
+
+void Charger::update_runtime_session_configuration(const SetupConfig& config) {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
+    config_context.reinit_duration_ms = config.reinit_duration_ms;
+    config_context.reinit_method = config.reinit_method;
+    config_context.switch_3ph1ph_delay_s = config.switch_3ph1ph_delay_s;
+    config_context.switch_3ph1ph_cp_state = config.switch_3ph1ph_cp_state;
+}
+
+bool Charger::can_change_charge_mode() {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
+    if (!shared_context.contactor_open) {
+        return false;
+    }
+    switch (shared_context.current_state) {
+    case EvseState::Idle:
+    case EvseState::WaitingForAuthentication:
+    case EvseState::PrepareCharging:
+    case EvseState::Reinit:
+        return true;
+    default:
+        return false;
+    }
 }
 
 std::uint64_t Charger::start_ac_with_soc_timeout() {

@@ -2503,6 +2503,9 @@ components:
       type: object
       additionalProperties: true
       properties:
+        mac:
+          description: EV MAC address learned during SLAC
+          type: string
         soc:
           description: State of charge of the vehicle's battery in percent
           type: number

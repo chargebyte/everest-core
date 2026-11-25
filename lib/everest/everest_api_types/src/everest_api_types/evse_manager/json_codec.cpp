@@ -630,6 +630,9 @@ void from_json(json const& j, Limits& k) {
 
 void to_json(json& j, EVInfo const& k) noexcept {
     j = json({});
+    if (k.mac) {
+        j["mac"] = k.mac.value();
+    }
     if (k.soc) {
         j["soc"] = k.soc.value();
     }
@@ -684,6 +687,9 @@ void to_json(json& j, EVInfo const& k) noexcept {
 }
 
 void from_json(json const& j, EVInfo& k) {
+    if (j.contains("mac")) {
+        k.mac.emplace(j.at("mac"));
+    }
     if (j.contains("soc")) {
         k.soc.emplace(json_number<float>(j.at("soc")));
     }

@@ -851,6 +851,45 @@ TEST_F(RpcHandlerTest, EvseEnableConnectorReq) {
                               expected_error_invalid_connector_index, is_key_value_in_json_rpc_result);
 }
 
+TEST_F(RpcHandlerTest, EvseSetACSessionConfiguration) {
+    WebSocketTestClient client("localhost", test_port);
+    ASSERT_TRUE(client.connect());
+    ASSERT_TRUE(client.wait_until_connected(std::chrono::milliseconds(100)));
+    client.send_api_hello_req();
+    client.wait_for_data(std::chrono::seconds(1));
+
+    nlohmann::json configuration = {
+        {"allow_isod20", true},
+        {"allow_isod2", false},
+        {"allow_hlc_fake_dc", true},
+        {"phase_switch_configuration", {{"state_transition", "CPStateF"}, {"duration", 42}}},
+        {"mac_filter", {"AA:BB:CC"}}};
+    const types::json_rpc_api::ErrorResObj success{RPCDataTypes::ResponseErrorEnum::NoError};
+    const types::json_rpc_api::ErrorResObj invalid{RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+    send_req_and_validate_res(client,
+                              create_json_rpc_request("EVSE.SetACSessionConfiguration",
+                                                      {{"evse_index", 1}, {"ac_session_configuration", configuration}},
+                                                      1),
+                              create_json_rpc_response(success, 1));
+    const auto& actual = RequestHandlerDummy::last_ac_session_configuration;
+    EXPECT_TRUE(actual.allow_isod20);
+    EXPECT_FALSE(actual.allow_isod2);
+    EXPECT_TRUE(actual.allow_isod2_fake_dc);
+    ASSERT_TRUE(actual.phase_switch_configuration.has_value());
+    EXPECT_EQ(actual.phase_switch_configuration->reinit_configuration.state_transition,
+              types::evse_manager::ReinitStateEnum::CPStateF);
+    EXPECT_EQ(actual.phase_switch_configuration->reinit_configuration.duration, 42);
+    ASSERT_TRUE(actual.mac_filter.has_value());
+    EXPECT_EQ(actual.mac_filter->at(0), "AA:BB:CC");
+
+    configuration["phase_switch_configuration"]["duration"] = -1;
+    send_req_and_validate_res(client,
+                              create_json_rpc_request("EVSE.SetACSessionConfiguration",
+                                                      {{"evse_index", 1}, {"ac_session_configuration", configuration}},
+                                                      2),
+                              create_json_rpc_response(invalid, 2));
+}
+
 // Test: Connect to WebSocket server and send EVSE.ReinitChargingSession requests with and without configuration
 TEST_F(RpcHandlerTest, EvseReinitChargingSessionReq) {
     WebSocketTestClient client("localhost", test_port);

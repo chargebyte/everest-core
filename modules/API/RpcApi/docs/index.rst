@@ -489,6 +489,32 @@ by EvseManager returns ``ErrorValuesNotApplied``.
      "error": "$ResponseErrorEnum"
    }
 
+EVSE.SetACSessionConfiguration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sets the AC session configuration for an EVSE. The three boolean fields shown below are required.
+``mac_filter`` optionally restricts the configuration to full MAC addresses or three-octet OUIs;
+an omitted or empty filter makes the configuration the default. ``reinit_configuration`` and
+``phase_switch_configuration`` are optional objects with the same ``state_transition`` and ``duration``
+properties as ``EVSE.ReinitChargingSession``. ``disable_isod2_fake_dc_after_replug`` is accepted for
+compatibility but currently has no effect.
+
+.. code-block:: json
+
+   {
+     "evse_index": 1,
+     "ac_session_configuration": {
+       "allow_isod20": true,
+       "allow_isod2": true,
+       "allow_hlc_fake_dc": false,
+       "phase_switch_configuration": {"state_transition": "CPStateX1", "duration": 4000}
+     }
+   }
+
+The response contains ``error``: ``NoError`` on success, ``ErrorInvalidParameter`` for invalid
+configuration, ``ErrorInvalidEVSEIndex`` for an unknown EVSE, or ``ErrorValuesNotApplied`` if the
+manager rejects the configuration.
+
 Notifications
 ~~~~~~~~~~~~~
 
@@ -711,6 +737,7 @@ information can also be used by GUI applications to display the active connector
      "active_connector_index": "int",
      "error_present": "bool",
      "charge_protocol": "$ChargeProtocolEnum",
+     "ev_mac": "string", // optional, EV MAC address reported by SLAC
      "ac_charge_param": "$ACChargeParametersObj", // optional, only if AC supported
      "dc_charge_param": "$DCChargeParametersObj", // optional, only if DC supported
      "ac_charge_status": "$ACChargeStatusObj", // optional, only if AC supported

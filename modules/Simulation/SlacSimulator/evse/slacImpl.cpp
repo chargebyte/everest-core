@@ -72,6 +72,7 @@ void slacImpl::set_state_matched() {
     armed = false;
     state = State::MATCHED;
     publish_state(state);
+    publish_ev_mac_address(mod->config.ev_mac_address);
     publish_dlink_ready(true);
 };
 } // namespace evse

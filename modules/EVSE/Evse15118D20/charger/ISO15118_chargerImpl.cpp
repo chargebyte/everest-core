@@ -1921,8 +1921,12 @@ void ISO15118_chargerImpl::handle_no_energy_pause_charging(types::iso15118::NoEn
 bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     types::iso15118::SupportedAppProtocols& supported_app_protocols) {
     if (supported_app_protocols.app_protocols.empty()) {
-        EVLOG_warning << "No supported app protocols configured";
-        return false;
+        EVLOG_info << "No app protocols configured; HLC negotiation will reject the EV offer";
+        std::scoped_lock lock(GEL);
+        configured_protocol_offer.clear();
+        supported_protocol_offer_was_updated = true;
+        apply_supported_protocols();
+        return true;
     }
 
     std::string configured_protocols;
@@ -1969,14 +1973,23 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     }
 
     if (offered.empty()) {
-        EVLOG_warning << "None of the requested app protocols is configured; keeping the current offer";
+        EVLOG_warning << "None of the requested app protocols is configured; rejecting protocol negotiation";
+        std::scoped_lock lock(GEL);
+        configured_protocol_offer.clear();
+        supported_protocol_offer_was_updated = true;
+        apply_supported_protocols();
         return false;
     }
 
     std::scoped_lock lock(GEL);
     configured_protocol_offer = offered;
+    supported_protocol_offer_was_updated = true;
     apply_supported_protocols();
-    return all_supported;
+    const SupportedProtocolPolicyOptions options{fake_dc_requested, ac_energy_transfer_mode,
+                                                 mod->config.supported_ISO15118_2, mod->config.supported_DIN70121,
+                                                 mod->config.tls_negotiation_strategy == "ENFORCE_TLS"};
+    const auto policy = compute_supported_protocols(offered, setup_config.supported_protocols, options);
+    return all_supported and (not fake_dc_requested or policy.fake_dc_protocol_available);
 }
 
 void ISO15118_chargerImpl::apply_supported_protocols() {
@@ -1985,14 +1998,21 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
                                                  mod->config.tls_negotiation_strategy == "ENFORCE_TLS"};
     auto policy = compute_supported_protocols(configured_protocol_offer, setup_config.supported_protocols, options);
     if (fake_dc_requested and not policy.fake_dc_protocol_available) {
-        EVLOG_warning << "Fake-DC was requested, but neither ISO 15118-2 nor DIN SPEC 70121 is usable; "
-                         "refusing to fall back to ISO 15118-20";
+        EVLOG_warning << "Fake-DC was requested, but neither ISO 15118-2 nor DIN SPEC 70121 is usable";
     }
     setup_config.fake_dc_enabled = fake_dc_requested;
 
     // ready() builds the offer only after the TLS chain lookup, while EvseManager may deliver its first energy-mode
     // update concurrently. Filter the setup snapshot as well, so an early session cannot negotiate ISO 15118-20 before
     // the offer exists.
+    if (configured_protocol_offer.empty() and supported_protocol_offer_was_updated) {
+        setup_config.supported_protocols.clear();
+        if (controller) {
+            controller->update_fake_dc_config(fake_dc_requested, setup_config.supported_protocols);
+        }
+        return;
+    }
+
     if (configured_protocol_offer.empty()) {
         if (fake_dc_requested) {
             setup_config.supported_protocols = std::move(policy.protocols);
@@ -2025,7 +2045,7 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
     }
     if (fake_dc_requested and not policy.fake_dc_protocol_available and offered.empty()) {
         EVLOG_error << "No usable DIN SPEC 70121 or ISO 15118-2 protocol remains while Fake-DC is requested; "
-                       "the ISO 15118-20 fallback is disabled";
+                       "the configured protocol offer is empty";
     }
 
     setup_config.supported_protocols = offered;

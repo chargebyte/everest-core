@@ -7,6 +7,13 @@ using namespace types::json_rpc_api;
 
 bool RequestHandlerDummy::reinit_result = true;
 types::evse_manager::ReinitConfiguration RequestHandlerDummy::last_reinit_configuration;
+types::evse_manager::ACChargingSessionConfiguration RequestHandlerDummy::last_ac_session_configuration;
+
+types::json_rpc_api::ErrorResObj RequestHandlerDummy::set_ac_session_configuration(
+    int32_t, const types::evse_manager::ACChargingSessionConfiguration& configuration) {
+    last_ac_session_configuration = configuration;
+    return {types::json_rpc_api::ResponseErrorEnum::NoError};
+}
 
 RequestHandlerDummy::RequestHandlerDummy(data::DataStoreCharger& dataobj) : data_store(dataobj) {
 }

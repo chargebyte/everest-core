@@ -692,11 +692,7 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     if (updated_supported_app_protocols.app_protocols.empty()) {
         v2g_ctx->iso20_proxy_enabled = false;
         EVLOG_info << "No protocols configured, disabling ISO-20 proxy routing";
-        // Forward empty updates to both implementations
-        // TODO(FH): Currently only forwarded to the ISO-2 module, because ISO-20 module is not able to
-        // disable supported protocols. Currently, this implementation gap has been resolved by deactivating
-        // the ISO-20 proxy if the ISO-20 protocol has not been enabled. In that case, the ISO-2
-        // proxy takes over the responsibility for responding to the SupportedAppReq.
+        // Clear each implementation's offer so a previous policy cannot leak into this session.
         const bool ok_iso2 = mod->r_iso2->call_update_supported_app_protocols(updated_supported_app_protocols);
         mod->r_iso20->call_update_supported_app_protocols(updated_supported_app_protocols);
         return ok_iso2;
@@ -731,12 +727,8 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
 
     /* update supported protocols */
     bool ok = true;
-    if (!iso2_payload.app_protocols.empty()) {
-        ok = mod->r_iso2->call_update_supported_app_protocols(iso2_payload) && ok;
-    }
-    if (!iso20_payload.app_protocols.empty()) {
-        ok = mod->r_iso20->call_update_supported_app_protocols(iso20_payload) && ok;
-    }
+    ok = mod->r_iso2->call_update_supported_app_protocols(iso2_payload) && ok;
+    ok = mod->r_iso20->call_update_supported_app_protocols(iso20_payload) && ok;
 
     /* route to ISO-20 proxy only when ISO15118-20 is explicitly configured. */
     v2g_ctx->iso20_proxy_enabled = iso20_configured;

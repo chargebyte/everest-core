@@ -163,6 +163,7 @@ struct Limits {
 };
 
 struct EVInfo {
+    std::optional<std::string> mac;
     std::optional<float> soc;
     std::optional<float> present_voltage;
     std::optional<float> present_current;

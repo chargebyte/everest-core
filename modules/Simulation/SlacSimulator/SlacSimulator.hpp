@@ -20,7 +20,9 @@
 
 namespace module {
 
-struct Conf {};
+struct Conf {
+    std::string ev_mac_address;
+};
 
 class SlacSimulator : public Everest::ModuleBase {
 public:

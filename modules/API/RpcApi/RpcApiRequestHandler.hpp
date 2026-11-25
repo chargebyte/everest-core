@@ -23,6 +23,9 @@ public:
                                                      std::optional<int> phase_count) override;
     types::json_rpc_api::ErrorResObj set_ac_charging_current(const int32_t evse_index, float max_current) override;
     types::json_rpc_api::ErrorResObj set_ac_charging_phase_count(const int32_t evse_index, int phase_count) override;
+    types::json_rpc_api::ErrorResObj
+    set_ac_session_configuration(int32_t evse_index,
+                                 const types::evse_manager::ACChargingSessionConfiguration& configuration) override;
     types::json_rpc_api::ErrorResObj set_dc_charging(const int32_t evse_index, bool charging_allowed,
                                                      float max_power) override;
     types::json_rpc_api::ErrorResObj set_dc_charging_power(const int32_t evse_index, float max_power) override;

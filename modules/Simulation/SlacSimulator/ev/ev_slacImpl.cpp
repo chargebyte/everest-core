@@ -12,6 +12,7 @@ void ev_slacImpl::init() {
 }
 
 void ev_slacImpl::ready() {
+    publish_ev_mac_address(mod->config.ev_mac_address);
     publish_state(state);
 }
 

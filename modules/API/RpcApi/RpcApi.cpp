@@ -174,9 +174,18 @@ void RpcApi::subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evs
         evse_data.evseinfo.set_id(evse_id);
     });
 
-    evse_manager->subscribe_session_event([this, &evse_data](types::evse_manager::SessionEvent session_event) {
-        this->check_evse_session_event(evse_data, session_event);
-    });
+    auto start_soc = std::make_shared<std::optional<int>>();
+    auto start_soc_mutex = std::make_shared<std::mutex>();
+    auto last_ev_mac = std::make_shared<std::optional<std::string>>();
+    evse_manager->subscribe_session_event(
+        [this, &evse_data, start_soc, start_soc_mutex](types::evse_manager::SessionEvent session_event) {
+            if (session_event.event == types::evse_manager::SessionEventEnum::SessionStarted or
+                session_event.event == types::evse_manager::SessionEventEnum::SessionFinished) {
+                std::lock_guard<std::mutex> lock(*start_soc_mutex);
+                start_soc->reset();
+            }
+            this->check_evse_session_event(evse_data, session_event);
+        });
 
     evse_manager->subscribe_selected_protocol([&evse_data](const std::string& selected_protocol) {
         const auto var_selected_protocol =
@@ -212,37 +221,49 @@ void RpcApi::subscribe_evse_manager(const std::unique_ptr<evse_managerIntf>& evs
             evse_data.evseinfo.set_is_ac_transfer_mode(is_ac_transfer_mode);
         });
 
-    evse_manager->subscribe_ev_info([&evse_data](types::evse_manager::EVInfo ev_info) {
-        RPCDataTypes::DisplayParametersObj display_parameters;
+    evse_manager->subscribe_ev_info(
+        [&evse_data, start_soc, start_soc_mutex, last_ev_mac](types::evse_manager::EVInfo ev_info) {
+            RPCDataTypes::DisplayParametersObj display_parameters;
 
-        if (ev_info.soc.has_value()) {
-            // for some reason, soc in types::evse_manager::EVInfo is declared as float;
-            // all integers from 0 to 100 can be exactly represented in float, but let's
-            // (l)round them just in case:
-            display_parameters.present_soc = std::lround(ev_info.soc.value());
-        }
-
-        if (ev_info.battery_capacity.has_value()) {
-            display_parameters.battery_energy_capacity = ev_info.battery_capacity;
-        }
-
-        if (ev_info.estimated_time_full.has_value()) {
-            // calculate the distance of estimated_time_full to now, and if greater 0,
-            // report it
-            const auto time_until =
-                Everest::Date::from_rfc3339(ev_info.estimated_time_full.value()) - date::utc_clock::now();
-            const auto secs = std::chrono::duration_cast<std::chrono::seconds>(time_until).count();
-            if (secs > 0) {
-                display_parameters.remaining_time_to_maximum_soc = secs;
+            std::lock_guard<std::mutex> lock(*start_soc_mutex);
+            if (ev_info.mac != *last_ev_mac) {
+                start_soc->reset();
+                *last_ev_mac = ev_info.mac;
             }
-        }
-        // pass an empty optional object if no member was set
-        std::optional<RPCDataTypes::DisplayParametersObj> result{};
-        if (display_parameters != RPCDataTypes::DisplayParametersObj()) {
-            result = display_parameters;
-        }
-        evse_data.evsestatus.set_display_parameters(result);
-    });
+            if (ev_info.soc.has_value()) {
+                // for some reason, soc in types::evse_manager::EVInfo is declared as float;
+                // all integers from 0 to 100 can be exactly represented in float, but let's
+                // (l)round them just in case:
+                const auto present_soc = std::lround(ev_info.soc.value());
+                if (not start_soc->has_value()) {
+                    start_soc->emplace(present_soc);
+                }
+                display_parameters.start_soc = start_soc->value();
+                display_parameters.present_soc = present_soc;
+            }
+
+            if (ev_info.battery_capacity.has_value()) {
+                display_parameters.battery_energy_capacity = ev_info.battery_capacity;
+            }
+
+            if (ev_info.estimated_time_full.has_value()) {
+                // calculate the distance of estimated_time_full to now, and if greater 0,
+                // report it
+                const auto time_until =
+                    Everest::Date::from_rfc3339(ev_info.estimated_time_full.value()) - date::utc_clock::now();
+                const auto secs = std::chrono::duration_cast<std::chrono::seconds>(time_until).count();
+                if (secs > 0) {
+                    display_parameters.remaining_time_to_maximum_soc = secs;
+                }
+            }
+            // pass an empty optional object if no member was set
+            std::optional<RPCDataTypes::DisplayParametersObj> result{};
+            if (display_parameters != RPCDataTypes::DisplayParametersObj()) {
+                result = display_parameters;
+            }
+            evse_data.evsestatus.set_display_parameters(result);
+            evse_data.evsestatus.set_ev_mac(ev_info.mac);
+        });
 }
 
 void RpcApi::subscribe_global_errors() {

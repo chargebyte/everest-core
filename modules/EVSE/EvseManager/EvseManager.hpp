@@ -45,6 +45,7 @@
 
 #include <utils/mqtt_config_service.hpp>
 
+#include "AcSessionConfigurationStore.hpp"
 #include "CarManufacturer.hpp"
 #include "Charger.hpp"
 #include "CpStateFrameEmitter.hpp"
@@ -307,6 +308,12 @@ public:
     std::atomic_bool fake_dc_soc_received{false};
     std::atomic_bool fake_dc_timeout_stop_requested{false};
     std::atomic<std::uint64_t> fake_dc_timeout_generation{0};
+    std::unique_ptr<AcSessionConfigurationStore> ac_session_configuration_store;
+    std::atomic_bool manager_ready{false};
+    std::atomic_bool ev_plugged_in{false};
+    std::atomic_bool basic_ac_mode_active{false};
+    std::atomic_bool basic_ac_fallback_latched{false};
+    std::atomic_bool fake_dc_rearm_requested{false};
 
     std::atomic_bool sae_bidi_active{false};
 
@@ -365,6 +372,9 @@ public:
     bool is_hlc_enabled() const {
         return hlc_enabled;
     }
+    bool
+    set_ac_charging_session_configuration(const types::evse_manager::ACChargingSessionConfiguration& configuration);
+    bool reinit_charging_session(const types::evse_manager::ReinitConfiguration& configuration);
     // ev@1fce4c5e-0ab8-41bb-90f7-14277703d2ac:v1
 
 protected:
@@ -382,6 +392,14 @@ private:
     // insert your private definitions here
     std::mutex powersupply_capabilities_mutex;
     std::mutex fake_dc_mode_mutex;
+    std::mutex ac_session_configuration_mutex;
+    std::mutex dlink_ready_mutex;
+    std::condition_variable dlink_ready_condition;
+    bool dlink_ready_pending_for_mac{false};
+    std::uint64_t dlink_ready_generation{0};
+    mutable std::mutex active_ac_session_configuration_mutex;
+    std::string current_ev_mac;
+    std::optional<types::evse_manager::ACChargingSessionConfiguration> active_ac_session_configuration;
     std::uint64_t fake_dc_attempt_generation{0};
     types::power_supply_DC::Capabilities powersupply_capabilities;
     std::optional<types::power_supply_DC::Capabilities> last_hlc_capabilities;
@@ -397,6 +415,7 @@ private:
                                                                  bool log_warnings = false);
     types::power_supply_DC::Capabilities apply_external_derating(types::power_supply_DC::Capabilities caps);
     void push_powersupply_capabilities_to_hlc();
+    bool apply_ac_session_configuration(const std::string& ev_mac);
 
     Everest::timed_mutex_traceable power_mutex;
     types::powermeter::Powermeter latest_powermeter_data_billing;
@@ -526,7 +545,10 @@ private:
         bool central_contract_validation{false};
         bool force_external_payment{false};
     };
+    std::mutex hlc_session_setup_mutex;
+    HlcSessionSetupConfig active_hlc_session_setup;
     void update_hlc_session_setup(const HlcSessionSetupConfig& session_setup);
+    void handle_dlink_ready(bool value);
 
     // special funtion to switch mode while session is active
     void switch_AC_mode();

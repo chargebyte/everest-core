@@ -206,6 +206,65 @@ RPCDataTypes::ErrorResObj Evse::enable_connector(const int32_t evse_index, int c
     return m_request_handler_ptr->enable_connector(evse_index, connector_index, enable, priority);
 }
 
+RPCDataTypes::ErrorResObj Evse::set_ac_session_configuration(int32_t evse_index, nlohmann::json configuration) {
+    if (!m_dataobj.get_evse_store(evse_index)) {
+        return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidEVSEIndex};
+    }
+    try {
+        if (!configuration.is_object()) {
+            return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+        }
+        for (const auto& [key, value] : configuration.items()) {
+            if (key == "allow_isod20" || key == "allow_isod2" || key == "allow_hlc_fake_dc" ||
+                key == "disable_isod2_fake_dc_after_replug") {
+                if (!value.is_boolean()) {
+                    return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+                }
+            } else if (key == "reinit_configuration" || key == "phase_switch_configuration") {
+                if (!value.is_object()) {
+                    return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+                }
+                for (const auto& [field, setting] : value.items()) {
+                    if (field == "state_transition") {
+                        if (!setting.is_string()) {
+                            return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+                        }
+                        types::evse_manager::string_to_reinit_state_enum(setting.get<std::string>());
+                    } else if (field == "duration") {
+                        if ((!setting.is_number_integer() && !setting.is_number_unsigned()) ||
+                            (setting.is_number_unsigned() &&
+                             setting.get<uint64_t>() > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) ||
+                            (!setting.is_number_unsigned() &&
+                             (setting.get<int64_t>() < 0 ||
+                              setting.get<int64_t>() > std::numeric_limits<int32_t>::max()))) {
+                            return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+                        }
+                    } else {
+                        return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+                    }
+                }
+            } else if (key == "mac_filter") {
+                if (!value.is_array() ||
+                    !std::all_of(value.begin(), value.end(), [](const auto& mac) { return mac.is_string(); })) {
+                    return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+                }
+            } else {
+                return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+            }
+        }
+        configuration["allow_isod2_fake_dc"] = configuration.at("allow_hlc_fake_dc");
+        configuration.erase("allow_hlc_fake_dc");
+        if (configuration.contains("phase_switch_configuration")) {
+            configuration["phase_switch_configuration"] = {
+                {"reinit_configuration", configuration.at("phase_switch_configuration")}};
+        }
+        return m_request_handler_ptr->set_ac_session_configuration(
+            evse_index, configuration.get<types::evse_manager::ACChargingSessionConfiguration>());
+    } catch (const std::exception&) {
+        return {RPCDataTypes::ResponseErrorEnum::ErrorInvalidParameter};
+    }
+}
+
 RPCDataTypes::ErrorResObj Evse::reinit_charging_session(int32_t evse_index,
                                                         std::optional<nlohmann::json> reinit_configuration) {
     RPCDataTypes::ErrorResObj res{};

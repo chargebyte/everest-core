@@ -172,6 +172,54 @@ types:
         description: Duration of the state transition in milliseconds.
         type: integer
         minimum: 0
+  PhaseSwitchConfiguration:
+    description: Configuration for the control-pilot transition during a phase switch.
+    type: object
+    additionalProperties: false
+    required:
+      - reinit_configuration
+    properties:
+      reinit_configuration:
+        description: Reinitialization transition used after a phase switch.
+        type: object
+        $ref: /evse_manager#/ReinitConfiguration
+  ACChargingSessionConfiguration:
+    description: >-
+      Runtime AC session policy for supported protocols, Fake DC SoC retrieval, and optional MAC filters.
+    type: object
+    additionalProperties: false
+    required:
+      - allow_isod20
+      - allow_isod2
+      - allow_isod2_fake_dc
+    properties:
+      allow_isod20:
+        description: Offer ISO 15118-20 during AC charging
+        type: boolean
+      allow_isod2:
+        description: Offer ISO 15118-2 during AC charging or Fake DC
+        type: boolean
+      allow_isod2_fake_dc:
+        description: Offer DIN 70121 and retrieve SoC before returning to basic AC
+        type: boolean
+      disable_isod2_fake_dc_after_replug:
+        description: Retained for API compatibility; currently has no effect
+        type: boolean
+      reinit_configuration:
+        description: Reinitialization settings used when restarting the charging session
+        type: object
+        $ref: /evse_manager#/ReinitConfiguration
+      phase_switch_configuration:
+        description: Reinitialization settings used after a phase switch
+        type: object
+        $ref: /evse_manager#/PhaseSwitchConfiguration
+      mac_filter:
+        description: >-
+          Full MAC addresses or OUI prefixes to which this configuration applies. An omitted or empty list sets the
+          default policy.
+        type: array
+        items:
+          type: string
   SessionEventEnum:
     description: >-
       Session Event enum
@@ -528,6 +576,9 @@ types:
     type: object
     additionalProperties: false
     properties:
+      mac:
+        description: EV MAC address learned during SLAC
+        type: string
       soc:
         description: State of charge of the vehicle's battery in percent
         type: number

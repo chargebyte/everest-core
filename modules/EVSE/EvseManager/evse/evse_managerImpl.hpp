@@ -54,6 +54,8 @@ protected:
     virtual bool handle_external_ready_to_start_charging() override;
     virtual void handle_set_plug_and_charge_configuration(
         types::evse_manager::PlugAndChargeConfiguration& plug_and_charge_configuration) override;
+    virtual bool handle_set_ac_charging_session_configuration(
+        types::evse_manager::ACChargingSessionConfiguration& ac_charging_session_configuration) override;
     virtual types::evse_manager::UpdateAllowedEnergyTransferModesResult handle_update_allowed_energy_transfer_modes(
         std::vector<types::iso15118::EnergyTransferMode>& allowed_energy_transfer_modes) override;
     virtual types::evse_manager::SetDerAvailableResult handle_set_der_available(bool& available) override;

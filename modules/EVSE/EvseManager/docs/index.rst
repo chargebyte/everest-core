@@ -45,13 +45,23 @@ AC Configuration
 AC charging with SoC
 ~~~~~~~~~~~~~~~~~~~~
 
-``ac_with_soc`` temporarily offers a Fake-DC HLC session to retrieve the vehicle's SoC, then returns to Basic AC
-charging. The 60-second fallback starts when the Fake-DC attempt begins, normally when SLAC reports D-LINK_READY.
-This also covers attempts that never select an HLC protocol. If no SoC arrives before it expires, EvseManager
-requests the HLC session to stop and returns to Basic AC after the data link closes. If no HLC link is in use, it
-returns to Basic AC directly and terminates the SLAC data link. A Fake-DC attempt is not restarted during the same
-plug-in. A Fake-DC SessionStop(Pause) also ends the attempt instead of leaving a resumable HLC session. The option
-applies only when ``charge_mode`` is ``AC``; in DC mode it is ignored.
+``ac_with_soc`` enables the manifest-default Fake-DC policy. It temporarily offers a Fake-DC HLC session to retrieve
+the vehicle's SoC, then returns to Basic AC charging. The 60-second fallback starts when the Fake-DC attempt begins,
+normally when SLAC reports D-LINK_READY. This also covers attempts that never select an HLC protocol. If no SoC
+arrives before it expires, EvseManager requests the HLC session to stop and returns to Basic AC after the data link
+closes. If no HLC link is in use, it returns to Basic AC directly and terminates the SLAC data link. The attempt
+does not restart automatically during the same plug-in; an explicit session reinitialization can start a new attempt.
+A Fake-DC SessionStop(Pause) also ends the attempt instead of
+leaving a resumable HLC session. The option applies only when ``charge_mode`` is ``AC``; in DC mode it is ignored.
+
+The ``set_ac_charging_session_configuration`` command can override this policy at runtime. The command accepts
+``allow_isod20``, ``allow_isod2`` and ``allow_isod2_fake_dc`` flags, optional reinitialization and phase-switch
+settings, and an optional ``mac_filter`` containing full EV MAC addresses or three-octet OUIs. Without a MAC filter,
+the configuration becomes the volatile default. With a filter, it applies to matching vehicles; the longest matching
+prefix wins, and unmatched vehicles use the default. MAC rules require the SLAC module to publish the EV MAC
+address. Rules can be overwritten but not removed until restart. Fake DC offers DIN 70121 when the HLC module
+supports it and optionally ISO 15118-2 according to ``allow_isod2``; ISO 15118-20 is excluded during Fake DC.
+Configuration is applied before the next HLC negotiation and is not persisted across a restart.
 
 Captive cable mode
 ~~~~~~~~~~~~~~~~~~

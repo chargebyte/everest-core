@@ -52,16 +52,15 @@ compute_supported_protocols(const std::vector<iso15118::ProtocolId>& configured_
         din_removed_for_tls =
             std::find(offered.begin(), offered.end(), iso15118::ProtocolId::DIN70121) != offered.end();
         offered.erase(std::remove(offered.begin(), offered.end(), iso15118::ProtocolId::DIN70121), offered.end());
-    } else if (not configured_offer_empty and options.ac_energy_transfer_mode and not apply_fake_dc) {
+    }
+    if (options.fake_dc_requested) {
+        offered.erase(std::remove(offered.begin(), offered.end(), iso15118::ProtocolId::ISO15118_20), offered.end());
+    } else if (not configured_offer_empty and options.ac_energy_transfer_mode) {
         const auto din = std::find(offered.begin(), offered.end(), iso15118::ProtocolId::DIN70121);
         if (din != offered.end()) {
             offered.erase(din);
             din_removed = true;
         }
-    }
-
-    if (options.fake_dc_requested) {
-        offered.erase(std::remove(offered.begin(), offered.end(), iso15118::ProtocolId::ISO15118_20), offered.end());
     }
 
     return {std::move(offered), fake_dc_protocol_available, din_removed, din_removed_for_tls};
