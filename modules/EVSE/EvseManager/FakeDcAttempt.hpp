@@ -9,6 +9,14 @@
 
 namespace module::detail {
 
+inline bool claim_fake_dc_timeout(std::atomic_bool& fake_dc_enabled, std::atomic_bool& attempt_active,
+                                  std::atomic_bool& soc_received, std::atomic_bool& timeout_stop_requested,
+                                  std::atomic<std::uint64_t>& timeout_generation, std::uint64_t generation) {
+    auto expected_generation = generation;
+    return timeout_generation.compare_exchange_strong(expected_generation, 0) and fake_dc_enabled.load() and
+           attempt_active and not soc_received and not timeout_stop_requested.exchange(true);
+}
+
 template <typename StartTimeout>
 bool begin_fake_dc_attempt(bool& attempt_consumed, std::atomic_bool& attempt_active, std::uint64_t& attempt_generation,
                            std::atomic_bool& soc_received, std::atomic_bool& timeout_stop_requested,

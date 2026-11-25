@@ -1248,10 +1248,10 @@ void EvseManager::ready() {
         // it must be maintained regardless of the session_logging debug switch.
         r_hlc[0]->subscribe_selected_protocol([this](std::string const& selected_protocol) {
             this->selected_protocol = selected_protocol;
+            hlc_link_in_use = true;
             charger->notify_hlc_session_started_by_ev();
             {
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
-                hlc_link_in_use = true;
                 if (fake_dc_enabled.load()) {
                     detail::begin_fake_dc_attempt(fake_dc_attempt_consumed, fake_dc_attempt_active,
                                                   fake_dc_attempt_generation, fake_dc_soc_received,
@@ -1290,10 +1290,9 @@ void EvseManager::ready() {
                 std::uint64_t attempt_generation = 0;
                 {
                     std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
-                    auto expected_generation = generation;
-                    if (fake_dc_timeout_generation.compare_exchange_strong(expected_generation, 0) and
-                        fake_dc_enabled.load() and fake_dc_attempt_active and not fake_dc_soc_received and
-                        not fake_dc_timeout_stop_requested.exchange(true)) {
+                    if (detail::claim_fake_dc_timeout(fake_dc_enabled, fake_dc_attempt_active, fake_dc_soc_received,
+                                                      fake_dc_timeout_stop_requested, fake_dc_timeout_generation,
+                                                      generation)) {
                         stop_hlc = true;
                         attempt_generation = fake_dc_attempt_generation;
                     }
@@ -1873,7 +1872,9 @@ void EvseManager::switch_DC_mode() {
 
 void EvseManager::switch_AC_mode() {
     setup_AC_mode(false);
-    charger->start_reinit();
+    if (not charger->start_reinit()) {
+        EVLOG_warning << "Fake-DC fallback could not reinitialize the charging session after switching to AC";
+    }
 }
 
 void EvseManager::update_hlc_session_setup(const HlcSessionSetupConfig& session_setup) {

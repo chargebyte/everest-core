@@ -249,6 +249,26 @@ TEST_F(ChargerTest, FakeDcTimeoutReturnsToBasicAcWhenNoHlcLinkIsInUse) {
     EXPECT_TRUE(basic_ac_started);
 }
 
+TEST_F(ChargerTest, FakeDcTimeoutCanBeClaimedOnlyOnceForAnActiveAttempt) {
+    std::atomic_bool fake_dc_enabled{true};
+    std::atomic_bool attempt_active{true};
+    std::atomic_bool soc_received{false};
+    std::atomic_bool timeout_stop_requested{false};
+    std::atomic<std::uint64_t> timeout_generation{17};
+
+    EXPECT_TRUE(detail::claim_fake_dc_timeout(fake_dc_enabled, attempt_active, soc_received, timeout_stop_requested,
+                                              timeout_generation, 17));
+    EXPECT_EQ(timeout_generation, 0);
+    EXPECT_TRUE(timeout_stop_requested);
+    EXPECT_FALSE(detail::claim_fake_dc_timeout(fake_dc_enabled, attempt_active, soc_received, timeout_stop_requested,
+                                               timeout_generation, 17));
+
+    timeout_generation = 18;
+    EXPECT_FALSE(detail::claim_fake_dc_timeout(fake_dc_enabled, attempt_active, soc_received, timeout_stop_requested,
+                                               timeout_generation, 17));
+    EXPECT_EQ(timeout_generation, 18);
+}
+
 TEST_F(ChargerTest, AcWithSocTimeoutEmitsOnceAfterReleasingStateLock) {
     auto& context = charger->get_shared_context();
     context.ac_with_soc_timeout = true;
