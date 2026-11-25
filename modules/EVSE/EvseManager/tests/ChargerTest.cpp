@@ -214,6 +214,41 @@ TEST_F(ChargerTest, FakeDcAttemptStartsTimeoutBeforeProtocolSelection) {
     EXPECT_EQ(timeout_start_count, 1);
 }
 
+TEST_F(ChargerTest, FakeDcTimeoutReturnsToBasicAcWhenNoHlcLinkIsInUse) {
+    bool hlc_link_in_use = false;
+    bool hlc_stop_requested = false;
+    bool basic_ac_started = false;
+
+    const auto has_hlc_link = [&] { return hlc_link_in_use; };
+    const auto return_to_basic_ac = [&] {
+        EXPECT_TRUE(hlc_stop_requested);
+        basic_ac_started = true;
+    };
+
+    detail::stop_fake_dc_attempt([&] { hlc_stop_requested = true; }, has_hlc_link, return_to_basic_ac);
+
+    EXPECT_TRUE(hlc_stop_requested);
+    EXPECT_TRUE(basic_ac_started);
+
+    hlc_link_in_use = true;
+    hlc_stop_requested = false;
+    basic_ac_started = false;
+    detail::stop_fake_dc_attempt([&] { hlc_stop_requested = true; }, has_hlc_link, return_to_basic_ac);
+
+    EXPECT_TRUE(hlc_stop_requested);
+    EXPECT_FALSE(basic_ac_started);
+
+    hlc_stop_requested = false;
+    detail::stop_fake_dc_attempt(
+        [&] {
+            hlc_stop_requested = true;
+            hlc_link_in_use = false;
+        },
+        has_hlc_link, return_to_basic_ac);
+
+    EXPECT_TRUE(basic_ac_started);
+}
+
 TEST_F(ChargerTest, AcWithSocTimeoutEmitsOnceAfterReleasingStateLock) {
     auto& context = charger->get_shared_context();
     context.ac_with_soc_timeout = true;

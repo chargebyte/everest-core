@@ -43,4 +43,12 @@ bool begin_fake_dc_attempt_on_dlink_ready(bool dlink_ready, bool fake_dc_enabled
                                  timeout_stop_requested, timeout_generation, std::forward<StartTimeout>(start_timeout));
 }
 
+template <typename StopHlc, typename HlcLinkInUse, typename ReturnToBasicAc>
+void stop_fake_dc_attempt(StopHlc&& stop_hlc, HlcLinkInUse&& hlc_link_in_use, ReturnToBasicAc&& return_to_basic_ac) {
+    std::forward<StopHlc>(stop_hlc)();
+    if (not std::forward<HlcLinkInUse>(hlc_link_in_use)()) {
+        std::forward<ReturnToBasicAc>(return_to_basic_ac)();
+    }
+}
+
 } // namespace module::detail

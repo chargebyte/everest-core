@@ -130,9 +130,9 @@ config:
   ac_with_soc:
     description: >-
       AC-only mode that temporarily offers Fake-DC to retrieve the vehicle SoC, then returns to Basic AC charging.
-      If no SoC is received, HLC is stopped after 60 seconds and Basic AC starts after the data link closes. The
-      timeout starts when the Fake-DC attempt begins, normally when SLAC reports D-LINK_READY. The option is ignored
-      when charge_mode is DC.
+      If no SoC is received, HLC is stopped after 60 seconds and Basic AC starts after the data link closes. If no
+      HLC link is in use, Basic AC starts directly and the SLAC data link is terminated. The timeout starts when the
+      Fake-DC attempt begins, normally when SLAC reports D-LINK_READY. The option is ignored when charge_mode is DC.
     type: boolean
     default: false
   reinit_duration_ms:
