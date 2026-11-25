@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <Charger.hpp>
+#include <FakeDcAttempt.hpp>
 #include <memory>
 #include <optional>
 
@@ -161,6 +162,78 @@ TEST_F(ChargerTest, EnableDisableSourceInit) {
     EXPECT_EQ(last_event, default_event);
     EXPECT_TRUE(charger->connector_enabled());
     EXPECT_EQ(charger->current_state(), Charger::EvseState::Idle);
+}
+
+TEST_F(ChargerTest, AcWithSocTimeoutStartsOnDemandAndCanBeCancelled) {
+    auto& context = charger->get_shared_context();
+    context.ac_with_soc_timeout = true;
+
+    const auto first_generation = charger->start_ac_with_soc_timeout();
+    ASSERT_TRUE(context.ac_with_soc_deadline.has_value());
+    EXPECT_GE(context.ac_with_soc_deadline.value(), std::chrono::steady_clock::now() + std::chrono::seconds(59));
+    EXPECT_LE(context.ac_with_soc_deadline.value(), std::chrono::steady_clock::now() + std::chrono::seconds(60));
+
+    charger->cancel_ac_with_soc_timeout();
+    EXPECT_FALSE(context.ac_with_soc_deadline.has_value());
+    EXPECT_NE(charger->start_ac_with_soc_timeout(), first_generation);
+}
+
+TEST_F(ChargerTest, FakeDcAttemptStartsTimeoutBeforeProtocolSelection) {
+    auto& context = charger->get_shared_context();
+    context.ac_with_soc_timeout = true;
+
+    bool attempt_consumed = false;
+    std::atomic_bool attempt_active{false};
+    std::uint64_t attempt_generation = 0;
+    std::atomic_bool soc_received{false};
+    std::atomic_bool timeout_stop_requested{false};
+    std::atomic<std::uint64_t> timeout_generation{0};
+    int timeout_start_count = 0;
+
+    const auto start_timeout = [this, &timeout_start_count] {
+        ++timeout_start_count;
+        return charger->start_ac_with_soc_timeout();
+    };
+
+    EXPECT_TRUE(detail::begin_fake_dc_attempt_on_dlink_ready(true, true, false, attempt_consumed, attempt_active,
+                                                             attempt_generation, soc_received, timeout_stop_requested,
+                                                             timeout_generation, start_timeout));
+
+    EXPECT_TRUE(attempt_consumed);
+    EXPECT_TRUE(attempt_active);
+    EXPECT_EQ(attempt_generation, 1);
+    EXPECT_FALSE(soc_received);
+    EXPECT_FALSE(timeout_stop_requested);
+    EXPECT_EQ(timeout_start_count, 1);
+    ASSERT_TRUE(context.ac_with_soc_deadline.has_value());
+    EXPECT_GE(context.ac_with_soc_deadline.value(), std::chrono::steady_clock::now() + std::chrono::seconds(59));
+    EXPECT_LE(context.ac_with_soc_deadline.value(), std::chrono::steady_clock::now() + std::chrono::seconds(60));
+
+    EXPECT_FALSE(detail::begin_fake_dc_attempt(attempt_consumed, attempt_active, attempt_generation, soc_received,
+                                               timeout_stop_requested, timeout_generation, start_timeout));
+    EXPECT_EQ(timeout_start_count, 1);
+}
+
+TEST_F(ChargerTest, AcWithSocTimeoutEmitsOnceAfterReleasingStateLock) {
+    auto& context = charger->get_shared_context();
+    context.ac_with_soc_timeout = true;
+    context.ac_with_soc_timeout_generation = 23;
+    context.ac_with_soc_deadline = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+
+    int timeout_count = 0;
+    std::uint64_t notified_generation = 0;
+    charger->signal_ac_with_soc_timeout.connect([&](std::uint64_t generation) {
+        charger->get_current_state();
+        notified_generation = generation;
+        ++timeout_count;
+    });
+
+    charger->check_ac_with_soc_timeout();
+    charger->check_ac_with_soc_timeout();
+
+    EXPECT_EQ(timeout_count, 1);
+    EXPECT_EQ(notified_generation, 23);
+    EXPECT_FALSE(context.ac_with_soc_deadline.has_value());
 }
 
 TEST_F(ChargerTest, ReinitRejectsDisconnectedSessionAndUnsupportedCpStateE) {

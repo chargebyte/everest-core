@@ -27,6 +27,7 @@
 #include "ld-ev.hpp"
 #include "utils/thread.hpp"
 #include <chrono>
+#include <cstdint>
 #include <date/date.h>
 #include <date/tz.h>
 #include <generated/interfaces/ISO15118_charger/Interface.hpp>
@@ -126,6 +127,9 @@ public:
     sigslot::signal<float> signal_max_current;
 
     void setup(const SetupConfig& config);
+    std::uint64_t start_ac_with_soc_timeout();
+    void cancel_ac_with_soc_timeout();
+    void check_ac_with_soc_timeout();
 
     void enable_disable_initial_state_publish();
     bool enable_disable(int connector_id, const types::evse_manager::EnableDisableSource& source);
@@ -176,7 +180,7 @@ public:
         signal_transaction_finished_event;
     sigslot::signal<types::evse_manager::ChargingPausedEVSEReasons> signal_charging_paused_evse_event;
 
-    sigslot::signal<> signal_ac_with_soc_timeout;
+    sigslot::signal<std::uint64_t> signal_ac_with_soc_timeout;
 
     sigslot::signal<> signal_dc_supply_off;
     sigslot::signal<types::iso15118::DcEvseMaximumLimits> signal_dc_enforce_target_limits;
@@ -430,9 +434,9 @@ private:
         std::chrono::time_point<std::chrono::steady_clock> current_drawn_by_vehicle_last_update{};
         ShutdownType shutdown_type{ShutdownType::None};
         ShutdownType last_shutdown_type{ShutdownType::None};
-        int ac_with_soc_timer{3600000};
-        // non standard compliant option: time out after a while and switch back to DC to get SoC update
         bool ac_with_soc_timeout{false};
+        std::optional<std::chrono::steady_clock::time_point> ac_with_soc_deadline;
+        std::uint64_t ac_with_soc_timeout_generation{0};
         bool contactor_welded{false};
         bool switch_3ph1ph_threephase{false};
         bool switch_3ph1ph_threephase_ongoing{false};

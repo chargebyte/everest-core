@@ -7,6 +7,7 @@
 #include <fmt/color.h>
 #include <fmt/format.h>
 
+#include "FakeDcAttempt.hpp"
 #include "IECStateMachine.hpp"
 #include "SessionLog.hpp"
 #include "Timeout.hpp"
@@ -184,7 +185,8 @@ void EvseManager::init() {
     slac_enabled = not r_slac.empty();
 
     // if hlc is disabled in config, disable slac even if requirement is connected
-    if (not(config.ac_hlc_enabled or config.ac_with_soc or config.charge_mode == "DC")) {
+    if (not(config.ac_hlc_enabled or (config.ac_with_soc and config.charge_mode == "AC") or
+            config.charge_mode == "DC")) {
         slac_enabled = false;
     }
 
@@ -211,7 +213,7 @@ void EvseManager::init() {
     pnc_enabled = config.payment_enable_contract;
     central_contract_validation_allowed = config.central_contract_validation_allowed;
     contract_certificate_installation_enabled = config.contract_certificate_installation_enabled;
-    fake_dc_enabled = config.ac_with_soc;
+    fake_dc_enabled = config.ac_with_soc and config.charge_mode == "AC";
 
     reserved = false;
     reservation_id = -1;
@@ -443,10 +445,24 @@ void EvseManager::ready() {
             hlc_link_in_use = false;
             // In case the fake DC unexpectedly disconnects due to a d-link error, we'll need to switch
             // back to AC basic mode.
-            if (fake_dc_enabled and config.ac_with_soc) {
-                setup_AC_mode(false);
+            bool fake_dc_session;
+            bool complete_fake_dc_session;
+            std::uint64_t attempt_generation;
+            {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                fake_dc_session = fake_dc_enabled.load() and config.ac_with_soc and config.charge_mode == "AC";
+                attempt_generation = fake_dc_attempt_generation;
+                complete_fake_dc_session = fake_dc_attempt_active.exchange(false);
+                fake_dc_timeout_generation = 0;
+                charger->cancel_ac_with_soc_timeout();
             }
-            // Inform charger
+            if (fake_dc_session and complete_fake_dc_session) {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                if (attempt_generation == fake_dc_attempt_generation) {
+                    setup_AC_mode(false);
+                }
+            }
+            // Inform charger after restoring AC mode so its error recovery follows the AC path.
             charger->dlink_error();
             // Inform SLAC layer, it will leave the logical network
             r_slac[0]->call_dlink_error();
@@ -459,8 +475,39 @@ void EvseManager::ready() {
             end_welding_detection_phase();
             session_log.evse(true, "D-LINK_PAUSE.req");
             hlc_link_in_use = false;
-            charger->dlink_pause();
-            r_slac[0]->call_dlink_pause();
+            bool fake_dc_session;
+            bool complete_fake_dc_session;
+            std::uint64_t attempt_generation;
+            {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                fake_dc_session = fake_dc_enabled.load() and config.ac_with_soc and config.charge_mode == "AC";
+                attempt_generation = fake_dc_attempt_generation;
+                complete_fake_dc_session = fake_dc_attempt_active.exchange(false);
+                fake_dc_timeout_generation = 0;
+                charger->cancel_ac_with_soc_timeout();
+            }
+            if (fake_dc_session) {
+                if (charger->dlink_terminate()) {
+                    r_slac[0]->call_dlink_error();
+                    if (complete_fake_dc_session) {
+                        std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                        if (attempt_generation == fake_dc_attempt_generation) {
+                            setup_AC_mode(false);
+                        }
+                    }
+                } else {
+                    r_slac[0]->call_dlink_terminate();
+                    if (complete_fake_dc_session) {
+                        std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                        if (attempt_generation == fake_dc_attempt_generation) {
+                            switch_AC_mode();
+                        }
+                    }
+                }
+            } else {
+                charger->dlink_pause();
+                r_slac[0]->call_dlink_pause();
+            }
         });
 
         r_hlc[0]->subscribe_dlink_terminate([this] {
@@ -468,14 +515,34 @@ void EvseManager::ready() {
             selected_d20_energy_service.reset();
             session_log.evse(true, "D-LINK_TERMINATE.req");
             hlc_link_in_use = false;
+            bool fake_dc_session;
+            bool complete_fake_dc_session;
+            std::uint64_t attempt_generation;
+            {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                fake_dc_timeout_generation = 0;
+                fake_dc_session = fake_dc_enabled.load() and config.ac_with_soc and config.charge_mode == "AC";
+                attempt_generation = fake_dc_attempt_generation;
+                complete_fake_dc_session = fake_dc_session and fake_dc_attempt_active.exchange(false);
+                charger->cancel_ac_with_soc_timeout();
+            }
             if (charger->dlink_terminate()) {
                 // A data link loss during session setup, handled as D-LINK_ERROR: see Charger::dlink_terminate().
-                if (fake_dc_enabled and config.ac_with_soc) {
-                    setup_AC_mode(false);
-                }
                 r_slac[0]->call_dlink_error();
+                if (fake_dc_session and complete_fake_dc_session) {
+                    std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                    if (attempt_generation == fake_dc_attempt_generation) {
+                        setup_AC_mode(false);
+                    }
+                }
             } else {
                 r_slac[0]->call_dlink_terminate();
+                if (complete_fake_dc_session) {
+                    std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                    if (attempt_generation == fake_dc_attempt_generation) {
+                        switch_AC_mode();
+                    }
+                }
             }
         });
 
@@ -1183,22 +1250,59 @@ void EvseManager::ready() {
             this->selected_protocol = selected_protocol;
             hlc_link_in_use = true;
             charger->notify_hlc_session_started_by_ev();
+            {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                if (fake_dc_enabled.load()) {
+                    detail::begin_fake_dc_attempt(fake_dc_attempt_consumed, fake_dc_attempt_active,
+                                                  fake_dc_attempt_generation, fake_dc_soc_received,
+                                                  fake_dc_timeout_stop_requested, fake_dc_timeout_generation,
+                                                  [this] { return charger->start_ac_with_soc_timeout(); });
+                }
+            }
         });
         // switch to DC mode for first session for AC with SoC
-        if (config.ac_with_soc) {
+        if (config.ac_with_soc and config.charge_mode == "AC") {
 
             bsp->signal_event.connect([this](const CPEvent event) {
                 if (event == CPEvent::CarUnplugged) {
-                    // configure for DC again for next session. Will reset to AC when SoC is received
-                    switch_DC_mode();
+                    // Prepare Fake-DC for the next plugged-in session.
+                    {
+                        std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                        ++fake_dc_attempt_generation;
+                        fake_dc_timeout_generation = 0;
+                        fake_dc_soc_received = false;
+                        fake_dc_timeout_stop_requested = false;
+                        fake_dc_attempt_consumed = false;
+                        charger->cancel_ac_with_soc_timeout();
+                        if (fake_dc_enabled.load()) {
+                            fake_dc_previous_teardown_pending = hlc_link_in_use;
+                            fake_dc_attempt_active = false;
+                        } else {
+                            fake_dc_previous_teardown_pending = false;
+                            switch_DC_mode();
+                        }
+                    }
                 }
             });
 
-            charger->signal_ac_with_soc_timeout.connect([this]() { switch_DC_mode(); });
+            charger->signal_ac_with_soc_timeout.connect([this](std::uint64_t generation) {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                auto expected_generation = generation;
+                if (fake_dc_timeout_generation.compare_exchange_strong(expected_generation, 0) and
+                    fake_dc_enabled.load() and fake_dc_attempt_active and not fake_dc_soc_received and
+                    not fake_dc_timeout_stop_requested.exchange(true)) {
+                    charger->signal_hlc_stop_charging();
+                }
+            });
 
             r_hlc[0]->subscribe_dc_ev_status([this](types::iso15118::DcEvStatus const& status) {
                 EVLOG_info << fmt::format("SoC received: {}.", status.dc_ev_ress_soc);
-                switch_AC_mode();
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                if (fake_dc_enabled.load() and fake_dc_attempt_active) {
+                    fake_dc_soc_received = true;
+                    charger->cancel_ac_with_soc_timeout();
+                    fake_dc_timeout_generation = 0;
+                }
             });
         }
     }
@@ -1435,8 +1539,17 @@ void EvseManager::ready() {
         r_slac[0]->subscribe_dlink_ready([this](const bool value) {
             session_log.evse(true, fmt::format("D-LINK_READY ({})", value));
             charger->set_dlink_ready(value);
-            if (not value) {
-                hlc_link_in_use = false;
+            {
+                std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+                if (not value) {
+                    hlc_link_in_use = false;
+                    fake_dc_previous_teardown_pending = false;
+                }
+                detail::begin_fake_dc_attempt_on_dlink_ready(
+                    value, fake_dc_enabled.load(), fake_dc_previous_teardown_pending, fake_dc_attempt_consumed,
+                    fake_dc_attempt_active, fake_dc_attempt_generation, fake_dc_soc_received,
+                    fake_dc_timeout_stop_requested, fake_dc_timeout_generation,
+                    [this] { return charger->start_ac_with_soc_timeout(); });
             }
             if (hlc_enabled) {
                 r_hlc[0]->call_dlink_ready(value);
@@ -1549,8 +1662,11 @@ void EvseManager::ready() {
     invoke_ready(*p_token_provider);
     invoke_ready(*p_random_delay);
 
-    if (config.ac_with_soc) {
-        setup_fake_DC_mode();
+    if (config.ac_with_soc and config.charge_mode == "AC") {
+        {
+            std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
+            setup_fake_DC_mode();
+        }
     } else {
         const auto charge_mode = config.charge_mode == "DC" ? Charger::ChargeMode::DC : Charger::ChargeMode::AC;
         charger->setup(get_charger_setup_config(charge_mode, hlc_enabled, false));
@@ -1762,7 +1878,7 @@ void EvseManager::update_hlc_session_setup(const HlcSessionSetupConfig& session_
     const bool supported_certificate_service = contract_payment_enabled and session_setup.supported_certificate_service;
     const bool central_contract_validation = pnc_is_enabled and session_setup.central_contract_validation;
     r_hlc[0]->call_session_setup(payment_options, supported_certificate_service, central_contract_validation,
-                                 fake_dc_enabled);
+                                 fake_dc_enabled.load());
 }
 
 Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode charge_mode, bool ac_hlc_enabled,
@@ -1795,8 +1911,14 @@ Charger::SetupConfig EvseManager::get_charger_setup_config(Charger::ChargeMode c
 // This sets up a fake DC mode that is just supposed to work until we get the SoC.
 // It is only used for AC<>DC<>AC<>DC mode to get AC charging with SoC.
 void EvseManager::setup_fake_DC_mode() {
+    ++fake_dc_attempt_generation;
+    fake_dc_attempt_active = false;
+    fake_dc_attempt_consumed = false;
+    fake_dc_previous_teardown_pending = false;
+    fake_dc_soc_received = false;
+    fake_dc_timeout_stop_requested = false;
     fake_dc_enabled = true;
-    charger->setup(get_charger_setup_config(Charger::ChargeMode::DC, hlc_enabled, false));
+    charger->setup(get_charger_setup_config(Charger::ChargeMode::DC, hlc_enabled, true));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 
@@ -1831,8 +1953,11 @@ void EvseManager::setup_fake_DC_mode() {
 }
 
 void EvseManager::setup_AC_mode(bool ac_hlc_enabled) {
+    ++fake_dc_attempt_generation;
+    charger->cancel_ac_with_soc_timeout();
     fake_dc_enabled = false;
-    charger->setup(get_charger_setup_config(Charger::ChargeMode::AC, ac_hlc_enabled, true));
+    fake_dc_attempt_active = false;
+    charger->setup(get_charger_setup_config(Charger::ChargeMode::AC, ac_hlc_enabled, false));
 
     types::iso15118::EVSEID evseid = {config.evse_id, config.evse_id_din};
 

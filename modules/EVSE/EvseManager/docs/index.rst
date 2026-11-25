@@ -42,6 +42,16 @@ TODO: AC and DC module graphs and description
 AC Configuration
 ----------------
 
+AC charging with SoC
+~~~~~~~~~~~~~~~~~~~~
+
+``ac_with_soc`` temporarily offers a Fake-DC HLC session to retrieve the vehicle's SoC, then returns to Basic AC
+charging. The 60-second fallback starts when the Fake-DC attempt begins, normally when SLAC reports D-LINK_READY.
+This also covers attempts that never select an HLC protocol. If no SoC arrives before it expires, EvseManager
+requests the HLC session to stop and switches to Basic AC only after the data link closes. A Fake-DC attempt is not
+restarted during the same plug-in. A Fake-DC SessionStop(Pause) also ends the attempt instead of leaving a resumable
+HLC session. The option applies only when ``charge_mode`` is ``AC``; in DC mode it is ignored.
+
 Captive cable mode
 ~~~~~~~~~~~~~~~~~~
 

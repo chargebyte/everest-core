@@ -136,6 +136,7 @@ void Charger::main_thread() {
             // to be done on regular intervals independent from events)
             run_state_machine();
         }
+        check_ac_with_soc_timeout();
     }
 }
 
@@ -198,13 +199,6 @@ void Charger::run_state_machine() {
         internal_context.last_shutdown_type = shared_context.shutdown_type;
 
         auto now = std::chrono::system_clock::now();
-
-        if (shared_context.ac_with_soc_timeout and (shared_context.ac_with_soc_timer -= 50) < 0) {
-            shared_context.ac_with_soc_timeout = false;
-            shared_context.ac_with_soc_timer = 3600000;
-            signal_ac_with_soc_timeout();
-            return;
-        }
 
         if (initialize_state) {
             internal_context.current_state_started = now;
@@ -2128,7 +2122,8 @@ void Charger::setup(const SetupConfig& config) {
     config_context.soft_over_current_timeout_ms = config.soft_over_current_timeout_ms;
     config_context.soft_over_current_stale_data_warning_ms = config.soft_over_current_stale_data_warning_ms;
     shared_context.ac_with_soc_timeout = config.ac_with_soc_timeout;
-    shared_context.ac_with_soc_timer = 3600000;
+    shared_context.ac_with_soc_deadline.reset();
+    ++shared_context.ac_with_soc_timeout_generation;
     soft_over_current_tolerance_percent = config.soft_over_current_tolerance_percent;
     soft_over_current_measurement_noise_A = config.soft_over_current_measurement_noise_A;
 
@@ -2152,6 +2147,38 @@ void Charger::setup(const SetupConfig& config) {
 
     if (config_context.charge_mode == ChargeMode::AC and config_context.ac_hlc_enabled)
         EVLOG_info << "AC HLC mode enabled.";
+}
+
+std::uint64_t Charger::start_ac_with_soc_timeout() {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
+    if (shared_context.ac_with_soc_timeout) {
+        ++shared_context.ac_with_soc_timeout_generation;
+        shared_context.ac_with_soc_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    }
+    return shared_context.ac_with_soc_timeout_generation;
+}
+
+void Charger::cancel_ac_with_soc_timeout() {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_setup);
+    shared_context.ac_with_soc_deadline.reset();
+    ++shared_context.ac_with_soc_timeout_generation;
+}
+
+void Charger::check_ac_with_soc_timeout() {
+    bool timeout_reached = false;
+    std::uint64_t timeout_generation = 0;
+    {
+        Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_mainloop);
+        if (shared_context.ac_with_soc_deadline.has_value() and
+            std::chrono::steady_clock::now() >= shared_context.ac_with_soc_deadline.value()) {
+            shared_context.ac_with_soc_deadline.reset();
+            timeout_generation = shared_context.ac_with_soc_timeout_generation;
+            timeout_reached = true;
+        }
+    }
+    if (timeout_reached) {
+        signal_ac_with_soc_timeout(timeout_generation);
+    }
 }
 
 Charger::EvseState Charger::get_current_state() {

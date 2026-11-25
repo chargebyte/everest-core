@@ -34,6 +34,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <ctime>
 #include <date/date.h>
 #include <date/tz.h>
@@ -300,7 +301,12 @@ public:
     void process_dc_ev_target_voltage_current(const types::iso15118::DcEvseMaximumLimits& hlc_limits);
 
     std::string selected_protocol = "Unknown";
-    bool fake_dc_enabled{false};
+    std::atomic_bool fake_dc_enabled{false};
+    std::atomic_bool fake_dc_attempt_active{false};
+    bool fake_dc_attempt_consumed{false};
+    std::atomic_bool fake_dc_soc_received{false};
+    std::atomic_bool fake_dc_timeout_stop_requested{false};
+    std::atomic<std::uint64_t> fake_dc_timeout_generation{0};
 
     std::atomic_bool sae_bidi_active{false};
 
@@ -375,6 +381,9 @@ private:
     // ev@211cfdbe-f69a-4cd6-a4ec-f8aaa3d1b6c8:v1
     // insert your private definitions here
     std::mutex powersupply_capabilities_mutex;
+    std::mutex fake_dc_mode_mutex;
+    std::uint64_t fake_dc_attempt_generation{0};
+    bool fake_dc_previous_teardown_pending{false};
     types::power_supply_DC::Capabilities powersupply_capabilities;
     std::optional<types::power_supply_DC::Capabilities> last_hlc_capabilities;
     std::mutex dc_external_derate_mutex;
