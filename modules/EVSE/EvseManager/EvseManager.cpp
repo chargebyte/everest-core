@@ -1275,10 +1275,8 @@ void EvseManager::ready() {
                         fake_dc_attempt_consumed = false;
                         charger->cancel_ac_with_soc_timeout();
                         if (fake_dc_enabled.load()) {
-                            fake_dc_previous_teardown_pending = hlc_link_in_use;
                             fake_dc_attempt_active = false;
                         } else {
-                            fake_dc_previous_teardown_pending = false;
                             switch_DC_mode();
                         }
                     }
@@ -1565,13 +1563,11 @@ void EvseManager::ready() {
                 std::lock_guard<std::mutex> lock(fake_dc_mode_mutex);
                 if (not value) {
                     hlc_link_in_use = false;
-                    fake_dc_previous_teardown_pending = false;
                 }
                 detail::begin_fake_dc_attempt_on_dlink_ready(
-                    value, fake_dc_enabled.load(), fake_dc_previous_teardown_pending, fake_dc_attempt_consumed,
-                    fake_dc_attempt_active, fake_dc_attempt_generation, fake_dc_soc_received,
-                    fake_dc_timeout_stop_requested, fake_dc_timeout_generation,
-                    [this] { return charger->start_ac_with_soc_timeout(); });
+                    value, fake_dc_enabled.load(), fake_dc_attempt_consumed, fake_dc_attempt_active,
+                    fake_dc_attempt_generation, fake_dc_soc_received, fake_dc_timeout_stop_requested,
+                    fake_dc_timeout_generation, [this] { return charger->start_ac_with_soc_timeout(); });
             }
             if (hlc_enabled) {
                 r_hlc[0]->call_dlink_ready(value);
@@ -1938,7 +1934,6 @@ void EvseManager::setup_fake_DC_mode() {
     ++fake_dc_attempt_generation;
     fake_dc_attempt_active = false;
     fake_dc_attempt_consumed = false;
-    fake_dc_previous_teardown_pending = false;
     fake_dc_soc_received = false;
     fake_dc_timeout_stop_requested = false;
     fake_dc_enabled = true;

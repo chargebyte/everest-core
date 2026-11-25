@@ -195,7 +195,7 @@ TEST_F(ChargerTest, FakeDcAttemptStartsTimeoutBeforeProtocolSelection) {
         return charger->start_ac_with_soc_timeout();
     };
 
-    EXPECT_TRUE(detail::begin_fake_dc_attempt_on_dlink_ready(true, true, false, attempt_consumed, attempt_active,
+    EXPECT_TRUE(detail::begin_fake_dc_attempt_on_dlink_ready(true, true, attempt_consumed, attempt_active,
                                                              attempt_generation, soc_received, timeout_stop_requested,
                                                              timeout_generation, start_timeout));
 

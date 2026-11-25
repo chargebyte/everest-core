@@ -37,13 +37,12 @@ bool begin_fake_dc_attempt(bool& attempt_consumed, std::atomic_bool& attempt_act
 }
 
 template <typename StartTimeout>
-bool begin_fake_dc_attempt_on_dlink_ready(bool dlink_ready, bool fake_dc_enabled, bool previous_teardown_pending,
-                                          bool& attempt_consumed, std::atomic_bool& attempt_active,
-                                          std::uint64_t& attempt_generation, std::atomic_bool& soc_received,
-                                          std::atomic_bool& timeout_stop_requested,
+bool begin_fake_dc_attempt_on_dlink_ready(bool dlink_ready, bool fake_dc_enabled, bool& attempt_consumed,
+                                          std::atomic_bool& attempt_active, std::uint64_t& attempt_generation,
+                                          std::atomic_bool& soc_received, std::atomic_bool& timeout_stop_requested,
                                           std::atomic<std::uint64_t>& timeout_generation,
                                           StartTimeout&& start_timeout) {
-    if (not dlink_ready or not fake_dc_enabled or previous_teardown_pending or attempt_consumed or attempt_active) {
+    if (not dlink_ready or not fake_dc_enabled or attempt_consumed or attempt_active) {
         return false;
     }
 

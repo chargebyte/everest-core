@@ -383,7 +383,6 @@ private:
     std::mutex powersupply_capabilities_mutex;
     std::mutex fake_dc_mode_mutex;
     std::uint64_t fake_dc_attempt_generation{0};
-    bool fake_dc_previous_teardown_pending{false};
     types::power_supply_DC::Capabilities powersupply_capabilities;
     std::optional<types::power_supply_DC::Capabilities> last_hlc_capabilities;
     std::mutex dc_external_derate_mutex;
