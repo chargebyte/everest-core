@@ -932,12 +932,11 @@ struct ImplementationIdentifier {
         k.implementation_id = j.at("implementation_id");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("evse_index");
+        auto it = j.find("evse_index");
         if (it != j.end()) {
             k.evse_index = it->get<int32_t>();
         }
-        it = it = j.find("connector_index");
+        it = j.find("connector_index");
         if (it != j.end()) {
             k.connector_index = it->get<int32_t>();
         }
@@ -1017,32 +1016,31 @@ struct ChargerInfoObj {
         k.firmware_version = j.at("firmware_version");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("friendly_name");
+        auto it = j.find("friendly_name");
         if (it != j.end()) {
             k.friendly_name = it->get<std::string>();
         }
-        it = it = j.find("manufacturer");
+        it = j.find("manufacturer");
         if (it != j.end()) {
             k.manufacturer = it->get<std::string>();
         }
-        it = it = j.find("manufacturer_url");
+        it = j.find("manufacturer_url");
         if (it != j.end()) {
             k.manufacturer_url = it->get<std::string>();
         }
-        it = it = j.find("model_url");
+        it = j.find("model_url");
         if (it != j.end()) {
             k.model_url = it->get<std::string>();
         }
-        it = it = j.find("model_no");
+        it = j.find("model_no");
         if (it != j.end()) {
             k.model_no = it->get<std::string>();
         }
-        it = it = j.find("revision");
+        it = j.find("revision");
         if (it != j.end()) {
             k.revision = it->get<std::string>();
         }
-        it = it = j.find("board_revision");
+        it = j.find("board_revision");
         if (it != j.end()) {
             k.board_revision = it->get<std::string>();
         }
@@ -1108,8 +1106,7 @@ struct ErrorObj {
         k.uuid = j.at("uuid");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("sub_type");
+        auto it = j.find("sub_type");
         if (it != j.end()) {
             k.sub_type = it->get<std::string>();
         }
@@ -1161,8 +1158,7 @@ struct ConnectorInfoObj {
         k.type = types::json_rpc_api::string_to_connector_type_enum(j.at("type"));
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("description");
+        auto it = j.find("description");
         if (it != j.end()) {
             k.description = it->get<std::string>();
         }
@@ -1229,16 +1225,15 @@ struct ACChargeParametersObj {
         k.evse_nominal_frequency = j.at("evse_nominal_frequency");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("evse_nominal_voltage");
+        auto it = j.find("evse_nominal_voltage");
         if (it != j.end()) {
             k.evse_nominal_voltage = it->get<float>();
         }
-        it = it = j.find("evse_maximum_discharge_power");
+        it = j.find("evse_maximum_discharge_power");
         if (it != j.end()) {
             k.evse_maximum_discharge_power = it->get<float>();
         }
-        it = it = j.find("evse_minimum_discharge_power");
+        it = j.find("evse_minimum_discharge_power");
         if (it != j.end()) {
             k.evse_minimum_discharge_power = it->get<float>();
         }
@@ -1279,6 +1274,14 @@ struct DCChargeParametersObj {
     std::optional<float> evse_maximum_discharge_power;   ///< evse_maximum_discharge_power
     std::optional<float> evse_minimum_discharge_current; ///< evse_minimum_discharge_current
     std::optional<float> evse_minimum_discharge_power;   ///< evse_minimum_discharge_power
+    std::optional<float> ev_maximum_charge_current;      ///< ev_maximum_charge_current
+    std::optional<float> ev_maximum_charge_power;        ///< ev_maximum_charge_power
+    std::optional<float> ev_maximum_voltage;             ///< ev_maximum_voltage
+    std::optional<float> ev_minimum_charge_current;      ///< ev_minimum_charge_current
+    std::optional<float> ev_minimum_charge_power;        ///< ev_minimum_charge_power
+    std::optional<float> ev_maximum_discharge_current;   ///< ev_maximum_discharge_current
+    std::optional<float> ev_maximum_discharge_power;     ///< ev_maximum_discharge_power
+    std::optional<float> ev_minimum_discharge_power;     ///< ev_minimum_discharge_power
 
     /// \brief Conversion from a given DCChargeParametersObj \p k to a given json object \p j
     friend void to_json(json& j, const DCChargeParametersObj& k) {
@@ -1307,6 +1310,30 @@ struct DCChargeParametersObj {
         if (k.evse_minimum_discharge_power) {
             j.emplace("evse_minimum_discharge_power", *k.evse_minimum_discharge_power);
         }
+        if (k.ev_maximum_charge_current) {
+            j.emplace("ev_maximum_charge_current", *k.ev_maximum_charge_current);
+        }
+        if (k.ev_maximum_charge_power) {
+            j.emplace("ev_maximum_charge_power", *k.ev_maximum_charge_power);
+        }
+        if (k.ev_maximum_voltage) {
+            j.emplace("ev_maximum_voltage", *k.ev_maximum_voltage);
+        }
+        if (k.ev_minimum_charge_current) {
+            j.emplace("ev_minimum_charge_current", *k.ev_minimum_charge_current);
+        }
+        if (k.ev_minimum_charge_power) {
+            j.emplace("ev_minimum_charge_power", *k.ev_minimum_charge_power);
+        }
+        if (k.ev_maximum_discharge_current) {
+            j.emplace("ev_maximum_discharge_current", *k.ev_maximum_discharge_current);
+        }
+        if (k.ev_maximum_discharge_power) {
+            j.emplace("ev_maximum_discharge_power", *k.ev_maximum_discharge_power);
+        }
+        if (k.ev_minimum_discharge_power) {
+            j.emplace("ev_minimum_discharge_power", *k.ev_minimum_discharge_power);
+        }
     }
 
     /// \brief Conversion from a given json object \p j to a given DCChargeParametersObj \p k
@@ -1320,41 +1347,76 @@ struct DCChargeParametersObj {
         k.evse_minimum_voltage = j.at("evse_minimum_voltage");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("evse_energy_to_be_delivered");
+        auto it = j.find("evse_energy_to_be_delivered");
         if (it != j.end()) {
             k.evse_energy_to_be_delivered = it->get<float>();
         }
-        it = it = j.find("evse_maximum_discharge_current");
+        it = j.find("evse_maximum_discharge_current");
         if (it != j.end()) {
             k.evse_maximum_discharge_current = it->get<float>();
         }
-        it = it = j.find("evse_maximum_discharge_power");
+        it = j.find("evse_maximum_discharge_power");
         if (it != j.end()) {
             k.evse_maximum_discharge_power = it->get<float>();
         }
-        it = it = j.find("evse_minimum_discharge_current");
+        it = j.find("evse_minimum_discharge_current");
         if (it != j.end()) {
             k.evse_minimum_discharge_current = it->get<float>();
         }
-        it = it = j.find("evse_minimum_discharge_power");
+        it = j.find("evse_minimum_discharge_power");
         if (it != j.end()) {
             k.evse_minimum_discharge_power = it->get<float>();
+        }
+        it = j.find("ev_maximum_charge_current");
+        if (it != j.end()) {
+            k.ev_maximum_charge_current = it->get<float>();
+        }
+        it = j.find("ev_maximum_charge_power");
+        if (it != j.end()) {
+            k.ev_maximum_charge_power = it->get<float>();
+        }
+        it = j.find("ev_maximum_voltage");
+        if (it != j.end()) {
+            k.ev_maximum_voltage = it->get<float>();
+        }
+        it = j.find("ev_minimum_charge_current");
+        if (it != j.end()) {
+            k.ev_minimum_charge_current = it->get<float>();
+        }
+        it = j.find("ev_minimum_charge_power");
+        if (it != j.end()) {
+            k.ev_minimum_charge_power = it->get<float>();
+        }
+        it = j.find("ev_maximum_discharge_current");
+        if (it != j.end()) {
+            k.ev_maximum_discharge_current = it->get<float>();
+        }
+        it = j.find("ev_maximum_discharge_power");
+        if (it != j.end()) {
+            k.ev_maximum_discharge_power = it->get<float>();
+        }
+        it = j.find("ev_minimum_discharge_power");
+        if (it != j.end()) {
+            k.ev_minimum_discharge_power = it->get<float>();
         }
     }
 
     /// \brief Compares objects of type DCChargeParametersObj for equality
     friend constexpr bool operator==(const DCChargeParametersObj& k, const DCChargeParametersObj& l) {
-        const auto& lhs_tuple =
-            std::tie(k.evse_maximum_charge_current, k.evse_maximum_charge_power, k.evse_maximum_voltage,
-                     k.evse_minimum_charge_current, k.evse_minimum_charge_power, k.evse_minimum_voltage,
-                     k.evse_energy_to_be_delivered, k.evse_maximum_discharge_current, k.evse_maximum_discharge_power,
-                     k.evse_minimum_discharge_current, k.evse_minimum_discharge_power);
-        const auto& rhs_tuple =
-            std::tie(l.evse_maximum_charge_current, l.evse_maximum_charge_power, l.evse_maximum_voltage,
-                     l.evse_minimum_charge_current, l.evse_minimum_charge_power, l.evse_minimum_voltage,
-                     l.evse_energy_to_be_delivered, l.evse_maximum_discharge_current, l.evse_maximum_discharge_power,
-                     l.evse_minimum_discharge_current, l.evse_minimum_discharge_power);
+        const auto& lhs_tuple = std::tie(
+            k.evse_maximum_charge_current, k.evse_maximum_charge_power, k.evse_maximum_voltage,
+            k.evse_minimum_charge_current, k.evse_minimum_charge_power, k.evse_minimum_voltage,
+            k.evse_energy_to_be_delivered, k.evse_maximum_discharge_current, k.evse_maximum_discharge_power,
+            k.evse_minimum_discharge_current, k.evse_minimum_discharge_power, k.ev_maximum_charge_current,
+            k.ev_maximum_charge_power, k.ev_maximum_voltage, k.ev_minimum_charge_current, k.ev_minimum_charge_power,
+            k.ev_maximum_discharge_current, k.ev_maximum_discharge_power, k.ev_minimum_discharge_power);
+        const auto& rhs_tuple = std::tie(
+            l.evse_maximum_charge_current, l.evse_maximum_charge_power, l.evse_maximum_voltage,
+            l.evse_minimum_charge_current, l.evse_minimum_charge_power, l.evse_minimum_voltage,
+            l.evse_energy_to_be_delivered, l.evse_maximum_discharge_current, l.evse_maximum_discharge_power,
+            l.evse_minimum_discharge_current, l.evse_minimum_discharge_power, l.ev_maximum_charge_current,
+            l.ev_maximum_charge_power, l.ev_maximum_voltage, l.ev_minimum_charge_current, l.ev_minimum_charge_power,
+            l.ev_maximum_discharge_current, l.ev_maximum_discharge_power, l.ev_minimum_discharge_power);
         return lhs_tuple == rhs_tuple;
     }
 
@@ -1386,9 +1448,6 @@ struct ACChargeStatusObj {
     friend void from_json(const json& j, ACChargeStatusObj& k) {
         // the required parts of the type
         k.evse_active_phase_count = j.at("evse_active_phase_count");
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type ACChargeStatusObj for equality
@@ -1438,9 +1497,6 @@ struct DCChargeStatusObj {
         k.evse_power_limit_achieved = j.at("evse_power_limit_achieved");
         k.evse_current_limit_achieved = j.at("evse_current_limit_achieved");
         k.evse_voltage_limit_achieved = j.at("evse_voltage_limit_achieved");
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type DCChargeStatusObj for equality
@@ -1522,48 +1578,47 @@ struct DisplayParametersObj {
         // the required parts of the type
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("start_soc");
+        auto it = j.find("start_soc");
         if (it != j.end()) {
             k.start_soc = it->get<int32_t>();
         }
-        it = it = j.find("present_soc");
+        it = j.find("present_soc");
         if (it != j.end()) {
             k.present_soc = it->get<int32_t>();
         }
-        it = it = j.find("minimum_soc");
+        it = j.find("minimum_soc");
         if (it != j.end()) {
             k.minimum_soc = it->get<int32_t>();
         }
-        it = it = j.find("target_soc");
+        it = j.find("target_soc");
         if (it != j.end()) {
             k.target_soc = it->get<int32_t>();
         }
-        it = it = j.find("maximum_soc");
+        it = j.find("maximum_soc");
         if (it != j.end()) {
             k.maximum_soc = it->get<int32_t>();
         }
-        it = it = j.find("remaining_time_to_minimum_soc");
+        it = j.find("remaining_time_to_minimum_soc");
         if (it != j.end()) {
             k.remaining_time_to_minimum_soc = it->get<int32_t>();
         }
-        it = it = j.find("remaining_time_to_target_soc");
+        it = j.find("remaining_time_to_target_soc");
         if (it != j.end()) {
             k.remaining_time_to_target_soc = it->get<int32_t>();
         }
-        it = it = j.find("remaining_time_to_maximum_soc");
+        it = j.find("remaining_time_to_maximum_soc");
         if (it != j.end()) {
             k.remaining_time_to_maximum_soc = it->get<int32_t>();
         }
-        it = it = j.find("charging_complete");
+        it = j.find("charging_complete");
         if (it != j.end()) {
             k.charging_complete = it->get<bool>();
         }
-        it = it = j.find("battery_energy_capacity");
+        it = j.find("battery_energy_capacity");
         if (it != j.end()) {
             k.battery_energy_capacity = it->get<float>();
         }
-        it = it = j.find("inlet_hot");
+        it = j.find("inlet_hot");
         if (it != j.end()) {
             k.inlet_hot = it->get<bool>();
         }
@@ -1634,9 +1689,6 @@ struct HardwareCapabilitiesObj {
         k.min_phase_count_export = j.at("min_phase_count_export");
         k.min_phase_count_import = j.at("min_phase_count_import");
         k.phase_switch_during_charging = j.at("phase_switch_during_charging");
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type HardwareCapabilitiesObj for equality
@@ -1698,8 +1750,7 @@ struct EVSEInfoObj {
             j.at("supported_energy_transfer_modes").get<std::vector<types::json_rpc_api::EnergyTransferModeEnum>>());
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("description");
+        auto it = j.find("description");
         if (it != j.end()) {
             k.description = it->get<std::string>();
         }
@@ -1788,24 +1839,23 @@ struct EVSEStatusObj {
         k.state = types::json_rpc_api::string_to_evsestate_enum(j.at("state"));
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("ac_charge_param");
+        auto it = j.find("ac_charge_param");
         if (it != j.end()) {
             k.ac_charge_param = it->get<types::json_rpc_api::ACChargeParametersObj>();
         }
-        it = it = j.find("dc_charge_param");
+        it = j.find("dc_charge_param");
         if (it != j.end()) {
             k.dc_charge_param = it->get<types::json_rpc_api::DCChargeParametersObj>();
         }
-        it = it = j.find("ac_charge_status");
+        it = j.find("ac_charge_status");
         if (it != j.end()) {
             k.ac_charge_status = it->get<types::json_rpc_api::ACChargeStatusObj>();
         }
-        it = it = j.find("dc_charge_status");
+        it = j.find("dc_charge_status");
         if (it != j.end()) {
             k.dc_charge_status = it->get<types::json_rpc_api::DCChargeStatusObj>();
         }
-        it = it = j.find("display_parameters");
+        it = j.find("display_parameters");
         if (it != j.end()) {
             k.display_parameters = it->get<types::json_rpc_api::DisplayParametersObj>();
         }
@@ -1866,20 +1916,19 @@ struct Current_A {
         // the required parts of the type
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("L1");
+        auto it = j.find("L1");
         if (it != j.end()) {
             k.L1 = it->get<float>();
         }
-        it = it = j.find("L2");
+        it = j.find("L2");
         if (it != j.end()) {
             k.L2 = it->get<float>();
         }
-        it = it = j.find("L3");
+        it = j.find("L3");
         if (it != j.end()) {
             k.L3 = it->get<float>();
         }
-        it = it = j.find("N");
+        it = j.find("N");
         if (it != j.end()) {
             k.N = it->get<float>();
         }
@@ -1934,16 +1983,15 @@ struct Energy_Wh_import {
         k.total = j.at("total");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("L1");
+        auto it = j.find("L1");
         if (it != j.end()) {
             k.L1 = it->get<float>();
         }
-        it = it = j.find("L2");
+        it = j.find("L2");
         if (it != j.end()) {
             k.L2 = it->get<float>();
         }
-        it = it = j.find("L3");
+        it = j.find("L3");
         if (it != j.end()) {
             k.L3 = it->get<float>();
         }
@@ -1998,16 +2046,15 @@ struct Energy_Wh_export {
         k.total = j.at("total");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("L1");
+        auto it = j.find("L1");
         if (it != j.end()) {
             k.L1 = it->get<float>();
         }
-        it = it = j.find("L2");
+        it = j.find("L2");
         if (it != j.end()) {
             k.L2 = it->get<float>();
         }
-        it = it = j.find("L3");
+        it = j.find("L3");
         if (it != j.end()) {
             k.L3 = it->get<float>();
         }
@@ -2058,12 +2105,11 @@ struct Frequency_Hz {
         k.L1 = j.at("L1");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("L2");
+        auto it = j.find("L2");
         if (it != j.end()) {
             k.L2 = it->get<float>();
         }
-        it = it = j.find("L3");
+        it = j.find("L3");
         if (it != j.end()) {
             k.L3 = it->get<float>();
         }
@@ -2118,16 +2164,15 @@ struct Power_W {
         k.total = j.at("total");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("L1");
+        auto it = j.find("L1");
         if (it != j.end()) {
             k.L1 = it->get<float>();
         }
-        it = it = j.find("L2");
+        it = j.find("L2");
         if (it != j.end()) {
             k.L2 = it->get<float>();
         }
-        it = it = j.find("L3");
+        it = j.find("L3");
         if (it != j.end()) {
             k.L3 = it->get<float>();
         }
@@ -2178,16 +2223,15 @@ struct Voltage_V {
         // the required parts of the type
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("L1");
+        auto it = j.find("L1");
         if (it != j.end()) {
             k.L1 = it->get<float>();
         }
-        it = it = j.find("L2");
+        it = j.find("L2");
         if (it != j.end()) {
             k.L2 = it->get<float>();
         }
-        it = it = j.find("L3");
+        it = j.find("L3");
         if (it != j.end()) {
             k.L3 = it->get<float>();
         }
@@ -2266,36 +2310,35 @@ struct MeterDataObj {
         k.timestamp = j.at("timestamp");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("current_A");
+        auto it = j.find("current_A");
         if (it != j.end()) {
             k.current_A = it->get<Current_A>();
         }
-        it = it = j.find("energy_Wh_export");
+        it = j.find("energy_Wh_export");
         if (it != j.end()) {
             k.energy_Wh_export = it->get<Energy_Wh_export>();
         }
-        it = it = j.find("frequency_Hz");
+        it = j.find("frequency_Hz");
         if (it != j.end()) {
             k.frequency_Hz = it->get<Frequency_Hz>();
         }
-        it = it = j.find("meter_id");
+        it = j.find("meter_id");
         if (it != j.end()) {
             k.meter_id = it->get<std::string>();
         }
-        it = it = j.find("serial_number");
+        it = j.find("serial_number");
         if (it != j.end()) {
             k.serial_number = it->get<std::string>();
         }
-        it = it = j.find("phase_seq_error");
+        it = j.find("phase_seq_error");
         if (it != j.end()) {
             k.phase_seq_error = it->get<bool>();
         }
-        it = it = j.find("power_W");
+        it = j.find("power_W");
         if (it != j.end()) {
             k.power_W = it->get<Power_W>();
         }
-        it = it = j.find("voltage_V");
+        it = j.find("voltage_V");
         if (it != j.end()) {
             k.voltage_V = it->get<Voltage_V>();
         }
@@ -2355,8 +2398,7 @@ struct HelloResObj {
         k.charger_info = j.at("charger_info");
 
         // the optional parts of the type
-        auto it = j.end();
-        it = it = j.find("authenticated");
+        auto it = j.find("authenticated");
         if (it != j.end()) {
             k.authenticated = it->get<bool>();
         }
@@ -2402,9 +2444,6 @@ struct ChargePointGetEVSEInfosResObj {
         // the required parts of the type
         k.infos = std::move(j.at("infos").get<std::vector<types::json_rpc_api::EVSEInfoObj>>());
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type ChargePointGetEVSEInfosResObj for equality
@@ -2445,9 +2484,6 @@ struct ChargePointGetActiveErrorsResObj {
         // the required parts of the type
         k.active_errors = std::move(j.at("active_errors").get<std::vector<types::json_rpc_api::ErrorObj>>());
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type ChargePointGetActiveErrorsResObj for equality
@@ -2490,9 +2526,6 @@ struct EVSEGetInfoResObj {
         // the required parts of the type
         k.info = j.at("info");
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEGetInfoResObj for equality
@@ -2533,9 +2566,6 @@ struct EVSEGetStatusResObj {
         // the required parts of the type
         k.status = j.at("status");
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEGetStatusResObj for equality
@@ -2576,9 +2606,6 @@ struct EVSEGetHardwareCapabilitiesResObj {
         // the required parts of the type
         k.hardware_capabilities = j.at("hardware_capabilities");
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEGetHardwareCapabilitiesResObj for equality
@@ -2621,9 +2648,6 @@ struct EVSEGetMeterDataResObj {
         // the required parts of the type
         k.meter_data = j.at("meter_data");
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEGetMeterDataResObj for equality
@@ -2661,9 +2685,6 @@ struct ErrorResObj {
     friend void from_json(const json& j, ErrorResObj& k) {
         // the required parts of the type
         k.error = types::json_rpc_api::string_to_response_error_enum(j.at("error"));
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type ErrorResObj for equality
@@ -2701,9 +2722,6 @@ struct ChargePointActiveErrorsChangedObj {
     friend void from_json(const json& j, ChargePointActiveErrorsChangedObj& k) {
         // the required parts of the type
         k.active_errors = std::move(j.at("active_errors").get<std::vector<types::json_rpc_api::ErrorObj>>());
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type ChargePointActiveErrorsChangedObj for equality
@@ -2746,9 +2764,6 @@ struct EVSEHardwareCapabilitiesChangedObj {
         // the required parts of the type
         k.evse_index = j.at("evse_index");
         k.hardware_capabilities = j.at("hardware_capabilities");
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEHardwareCapabilitiesChangedObj for equality
@@ -2791,9 +2806,6 @@ struct EVSEStatusChangedObj {
         // the required parts of the type
         k.evse_index = j.at("evse_index");
         k.evse_status = j.at("evse_status");
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEStatusChangedObj for equality
@@ -2834,9 +2846,6 @@ struct EVSEMeterDataChangedObj {
         // the required parts of the type
         k.evse_index = j.at("evse_index");
         k.meter_data = j.at("meter_data");
-
-        // the optional parts of the type
-        auto it = j.end();
     }
 
     /// \brief Compares objects of type EVSEMeterDataChangedObj for equality
