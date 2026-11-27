@@ -47,6 +47,30 @@ TEST(AcSessionConfigurationStoreTest, RejectsInvalidMacFiltersWithoutChangingExi
     EXPECT_FALSE(store.get("AA:BB:CC:11:22:33").configuration.allow_isod2_fake_dc);
 }
 
+TEST(AcSessionConfigurationStoreTest, EmptyMacPolicyKeepsHlcForNegotiation) {
+    AcSessionConfigurationStore store(make_configuration(false, false, false));
+    const auto empty_protocols = store.protocols_for(store.get_default(), false);
+    EXPECT_FALSE(store.requires_hlc(store.get_default(), "", empty_protocols, true));
+
+    auto mac_policy = make_configuration(false, false, false);
+    mac_policy.mac_filter = std::vector<std::string>{"AA:BB:CC"};
+    ASSERT_TRUE(store.set(mac_policy));
+    EXPECT_TRUE(store.requires_hlc(store.get_default(), "", empty_protocols, true));
+    EXPECT_FALSE(store.requires_hlc(store.get_default(), "", empty_protocols, false));
+
+    const auto matched = store.get("AA:BB:CC:11:22:33");
+    EXPECT_TRUE(store.is_mac_only(matched, "AA:BB:CC:11:22:33", empty_protocols));
+    EXPECT_TRUE(store.requires_hlc(matched, "AA:BB:CC:11:22:33", empty_protocols, false));
+    const auto unmatched = store.get("DD:EE:FF:11:22:33");
+    EXPECT_FALSE(store.is_mac_only(unmatched, "DD:EE:FF:11:22:33", empty_protocols));
+    EXPECT_FALSE(store.requires_hlc(unmatched, "DD:EE:FF:11:22:33", empty_protocols, false));
+}
+
+TEST(AcSessionConfigurationStoreTest, MacOnlyPolicyDoesNotReinitializeBeforeSapWhenDefaultIsFakeDc) {
+    EXPECT_FALSE(AcSessionConfigurationStore::requires_session_reinit(true, false, true, false, true));
+    EXPECT_TRUE(AcSessionConfigurationStore::requires_session_reinit(true, false, true, false, false));
+}
+
 TEST(AcSessionConfigurationStoreTest, RejectsUnsupportedProtocolPolicyWithoutChangingDefault) {
     AcSessionConfigurationStore store(make_configuration(false, true, false));
     types::iso15118::SupportedAppProtocols available;

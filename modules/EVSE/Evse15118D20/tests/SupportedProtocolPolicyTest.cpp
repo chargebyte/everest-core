@@ -9,7 +9,20 @@ namespace {
 
 using iso15118::ProtocolId;
 using module::charger::compute_supported_protocols;
+using module::charger::filter_runtime_protocol_offer;
 using module::charger::SupportedProtocolPolicyOptions;
+
+TEST(SupportedProtocolPolicyTest, early_runtime_offer_is_applied_to_available_protocols) {
+    const std::vector<ProtocolId> available{ProtocolId::ISO15118_20, ProtocolId::ISO15118_2, ProtocolId::DIN70121};
+    types::iso15118::SupportedAppProtocols requested;
+
+    EXPECT_EQ(filter_runtime_protocol_offer(available, std::nullopt), available);
+    EXPECT_TRUE(filter_runtime_protocol_offer(available, requested).empty());
+
+    requested.app_protocols.push_back(types::iso15118::SupportedAppProtocol::ISO15118D2);
+    EXPECT_EQ(filter_runtime_protocol_offer(available, requested), (std::vector<ProtocolId>{ProtocolId::ISO15118_2}));
+    EXPECT_TRUE(filter_runtime_protocol_offer({ProtocolId::ISO15118_20}, requested).empty());
+}
 
 SupportedProtocolPolicyOptions fake_dc_ac_options() {
     SupportedProtocolPolicyOptions options;

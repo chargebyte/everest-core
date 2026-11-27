@@ -47,12 +47,20 @@ AC charging with SoC
 
 ``ac_with_soc`` enables the manifest-default Fake-DC policy. It temporarily offers a Fake-DC HLC session to retrieve
 the vehicle's SoC, then returns to Basic AC charging. The 60-second fallback starts when the Fake-DC attempt begins,
-normally when SLAC reports D-LINK_READY. This also covers attempts that never select an HLC protocol. If no SoC
-arrives before it expires, EvseManager requests the HLC session to stop and returns to Basic AC after the data link
-closes. If no HLC link is in use, it returns to Basic AC directly and terminates the SLAC data link. The attempt
-does not restart automatically during the same plug-in; an explicit session reinitialization can start a new attempt.
-A Fake-DC SessionStop(Pause) also ends the attempt instead of
-leaving a resumable HLC session. The option applies only when ``charge_mode`` is ``AC``; in DC mode it is ignored.
+normally when SLAC reports D-LINK_READY. This also covers attempts that never select an HLC protocol. When SoC
+arrives, or the fallback expires, EvseManager requests HLC stop if a link is active and waits for SLAC to report
+UNMATCHED before applying the configured CP reinitialization. EvseManager applies the Basic AC setup during that
+reinitialization, before normal negotiation restarts. The transition uses the active session's reinitialization method
+and duration, including settings selected by a MAC rule. An HLC data-link error, terminate, or pause during a Fake-DC
+attempt follows the same fallback path. If reinitialization cannot be started, EvseManager waits for UNMATCHED before
+applying Basic AC, without running the configured CP reinitialization. Normal HLC link-error recovery remains active.
+If SLAC does not report UNMATCHED, the fallback remains pending; it has no separate timeout. If the normal stopping
+timeout expires after the CP-retain hold, the Charger removes the power
+permissive and requests a SLAC reset. If the hold is still active, the normal link teardown is awaited. If no HLC link
+is in use, EvseManager terminates the SLAC data link so UNMATCHED can arrive. The
+attempt does not restart automatically during the same plug-in; an explicit session reinitialization can start a new
+attempt. A Fake-DC SessionStop(Pause) also ends the attempt instead of leaving a resumable HLC session. The option
+applies only when ``charge_mode`` is ``AC``; in DC mode it is ignored.
 
 The ``set_ac_charging_session_configuration`` command can override this policy at runtime. The command accepts
 ``allow_isod20``, ``allow_isod2`` and ``allow_isod2_fake_dc`` flags, optional reinitialization and phase-switch
@@ -62,6 +70,12 @@ prefix wins, and unmatched vehicles use the default. MAC rules require the SLAC 
 address. Rules can be overwritten but not removed until restart. Fake DC offers DIN 70121 when the HLC module
 supports it and optionally ISO 15118-2 according to ``allow_isod2``; ISO 15118-20 is excluded during Fake DC.
 Configuration is applied before the next HLC negotiation and is not persisted across a restart.
+For a matching MAC rule with all protocol flags disabled, HLC remains active through SupportedAppProtocol.
+The HLC module rejects the negotiation, closes the connection, and the configured reinitialization leads to Basic AC.
+With MAC rules and all protocol flags disabled in the default configuration, unmatched vehicles first use HLC for MAC
+discovery and then apply the default CP reinitialization before Basic AC. If no MAC arrives within 500 ms, that same
+default policy is selected. With no MAC rules and all protocol flags disabled in the default configuration, the session
+starts in Basic AC.
 
 Captive cable mode
 ~~~~~~~~~~~~~~~~~~

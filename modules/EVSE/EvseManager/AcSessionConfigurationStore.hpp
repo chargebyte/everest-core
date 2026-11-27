@@ -82,6 +82,26 @@ public:
         return !mac_policies.empty();
     }
 
+    bool requires_hlc(const Policy& policy, const std::string& mac,
+                      const types::iso15118::SupportedAppProtocols& protocols, bool discover_mac) const {
+        return !protocols.app_protocols.empty() || is_mac_only(policy, mac, protocols) ||
+               (discover_mac && has_mac_rules());
+    }
+
+    static bool is_mac_only(const Policy& policy, const std::string& mac,
+                            const types::iso15118::SupportedAppProtocols& protocols) {
+        const auto& configuration = policy.configuration;
+        return protocols.app_protocols.empty() && !configuration.allow_isod20 && !configuration.allow_isod2 &&
+               !configuration.allow_isod2_fake_dc && !mac.empty() && configuration.mac_filter.has_value() &&
+               !configuration.mac_filter->empty();
+    }
+
+    static bool requires_session_reinit(bool fake_dc_enabled, bool run_fake_dc, bool needs_hlc,
+                                        bool basic_ac_mode_active, bool mac_only) {
+        return (not mac_only and fake_dc_enabled != run_fake_dc) or (not needs_hlc and not basic_ac_mode_active) or
+               (needs_hlc and not run_fake_dc and basic_ac_mode_active);
+    }
+
     void set_available_protocols(const types::iso15118::SupportedAppProtocols& protocols) {
         std::scoped_lock lock(mutex);
         available_protocols = protocols;

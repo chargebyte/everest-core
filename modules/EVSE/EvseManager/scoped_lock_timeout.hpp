@@ -39,6 +39,7 @@ enum class MutexDescription {
     Charger_set_current_drawn_by_vehicle,
     Charger_request_error_sequence,
     Charger_set_matching_started,
+    Charger_set_slac_unmatched,
     Charger_set_dlink_ready,
     Charger_notify_currentdemand_started,
     Charger_inform_new_evse_max_hlc_limits,
@@ -149,6 +150,8 @@ static std::string to_string(MutexDescription d) {
         return "Charger.cpp: request_error_sequence";
     case MutexDescription::Charger_set_matching_started:
         return "Charger.cpp: set_matching_started";
+    case MutexDescription::Charger_set_slac_unmatched:
+        return "Charger.cpp: set_slac_unmatched";
     case MutexDescription::Charger_set_dlink_ready:
         return "Charger.cpp: set_dlink_ready";
     case MutexDescription::Charger_notify_currentdemand_started:

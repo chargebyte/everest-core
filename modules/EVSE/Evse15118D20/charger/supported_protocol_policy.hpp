@@ -3,12 +3,44 @@
 #pragma once
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 #include <vector>
 
+#include <generated/types/iso15118.hpp>
 #include <iso15118/session/protocol.hpp>
 
 namespace module::charger {
+
+inline std::vector<iso15118::ProtocolId>
+filter_runtime_protocol_offer(std::vector<iso15118::ProtocolId> available,
+                              const std::optional<types::iso15118::SupportedAppProtocols>& runtime_offer) {
+    if (not runtime_offer) {
+        return available;
+    }
+    const auto& requested = runtime_offer->app_protocols;
+    const auto is_requested = [&](iso15118::ProtocolId protocol) {
+        types::iso15118::SupportedAppProtocol requested_protocol;
+        switch (protocol) {
+        case iso15118::ProtocolId::ISO15118_20:
+            requested_protocol = types::iso15118::SupportedAppProtocol::ISO15118D20;
+            break;
+        case iso15118::ProtocolId::ISO15118_2:
+            requested_protocol = types::iso15118::SupportedAppProtocol::ISO15118D2;
+            break;
+        case iso15118::ProtocolId::DIN70121:
+            requested_protocol = types::iso15118::SupportedAppProtocol::DIN70121;
+            break;
+        default:
+            return false;
+        }
+        return std::find(requested.begin(), requested.end(), requested_protocol) != requested.end();
+    };
+    available.erase(
+        std::remove_if(available.begin(), available.end(), [&](auto protocol) { return not is_requested(protocol); }),
+        available.end());
+    return available;
+}
 
 struct SupportedProtocolPolicyResult {
     std::vector<iso15118::ProtocolId> protocols;

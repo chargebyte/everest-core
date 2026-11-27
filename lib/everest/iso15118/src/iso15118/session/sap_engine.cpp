@@ -34,7 +34,7 @@ SapEngine::SapEngine(io::StreamOutputView output_view_, const session::SessionCo
         return services;
     }()),
     selecting_sap_based_on_energy_service(config.selecting_sap_based_on_energy_service),
-    custom_protocol(config.fake_dc_enabled ? std::nullopt : config.custom_protocol),
+    custom_protocol(config.fake_dc_enabled or config.reject_custom_protocol ? std::nullopt : config.custom_protocol),
     tls_active(tls_active_) {
 }
 

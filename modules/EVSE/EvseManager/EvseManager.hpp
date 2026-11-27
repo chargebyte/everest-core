@@ -313,7 +313,14 @@ public:
     std::atomic_bool ev_plugged_in{false};
     std::atomic_bool basic_ac_mode_active{false};
     std::atomic_bool basic_ac_fallback_latched{false};
+    bool mac_only_hlc_attempt_active{false};
     std::atomic_bool fake_dc_rearm_requested{false};
+    std::atomic_bool fake_dc_fallback_pending{false};
+    std::atomic_bool fake_dc_fallback_without_reinit{false};
+    std::atomic_bool fake_dc_stop_hlc_pending{false};
+    std::atomic_bool fake_dc_terminate_slac_pending{false};
+    std::atomic_bool fake_dc_apply_basic_ac_pending{false};
+    std::atomic_bool ac_policy_reinit_pending{false};
 
     std::atomic_bool sae_bidi_active{false};
 
@@ -415,7 +422,7 @@ private:
                                                                  bool log_warnings = false);
     types::power_supply_DC::Capabilities apply_external_derating(types::power_supply_DC::Capabilities caps);
     void push_powersupply_capabilities_to_hlc();
-    bool apply_ac_session_configuration(const std::string& ev_mac);
+    bool apply_ac_session_configuration(const std::string& ev_mac, bool reinit_ready = false);
 
     Everest::timed_mutex_traceable power_mutex;
     types::powermeter::Powermeter latest_powermeter_data_billing;
@@ -551,7 +558,8 @@ private:
     void handle_dlink_ready(bool value);
 
     // special funtion to switch mode while session is active
-    void switch_AC_mode();
+    void switch_AC_mode(bool link_termination_already_requested = false);
+    void complete_fake_dc_fallback_cleanup();
     void switch_DC_mode();
 
     // DC handlers

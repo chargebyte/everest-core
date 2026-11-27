@@ -614,7 +614,6 @@ static void* connection_handle_tcp(void* data) {
         dlog(DLOG_LEVEL_INFO, "TCP connection closed gracefully");
     }
 
-    conn->ctx->connection_initiated = false;
     if (conn->ctx->telemetry_publisher) {
         conn->ctx->telemetry_publisher->update_transport([&](V2gTransportTracker& transport) {
             transport.set(&telemetry_types::V2gTransport::tcp_connection_established, false);
@@ -627,6 +626,7 @@ static void* connection_handle_tcp(void* data) {
         /* cleanup and notify lower layers */
         connection_teardown(conn);
     }
+    conn->ctx->connection_initiated = false;
 
     free(conn);
 

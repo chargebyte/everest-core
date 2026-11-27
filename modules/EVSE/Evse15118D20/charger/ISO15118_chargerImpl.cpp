@@ -648,7 +648,7 @@ void ISO15118_chargerImpl::ready() {
 
     {
         std::scoped_lock lock(GEL);
-        configured_protocol_offer = supported_protocols;
+        configured_protocol_offer = filter_runtime_protocol_offer(supported_protocols, requested_protocol_offer);
         apply_supported_protocols();
     }
 
@@ -1075,6 +1075,14 @@ iso15118::session::feedback::Callbacks ISO15118_chargerImpl::create_callbacks() 
     // DIN SPEC 70121 / ISO 15118-2 only: the EV's DC_EVStatus, above all its state of charge, which the
     // -20 charge loop instead reports through DisplayParameters.
     callbacks.dc_ev_status = [this](const feedback::DcEvStatus& ev_status) {
+        bool log_fake_dc_status;
+        {
+            std::scoped_lock lock(GEL);
+            log_fake_dc_status = fake_dc_requested;
+        }
+        if (log_fake_dc_status) {
+            EVLOG_info << fmt::format("Fake-DC received DIN/ISO 15118-2 EV status: SoC {}.", ev_status.ress_soc);
+        }
         publish_dc_ev_status(convert_dc_ev_status(ev_status));
     };
 
@@ -1925,6 +1933,7 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
         std::scoped_lock lock(GEL);
         configured_protocol_offer.clear();
         supported_protocol_offer_was_updated = true;
+        requested_protocol_offer = supported_app_protocols;
         apply_supported_protocols();
         return true;
     }
@@ -1944,6 +1953,7 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
     // interface exists so a test setup can switch a protocol off). Kept in priority order -- ISO 15118-20,
     // ISO 15118-2, DIN SPEC 70121 -- regardless of the order requested. Takes effect at the next session,
     // as with EvseV2G. A protocol that is not configured cannot be switched on here.
+    std::scoped_lock lock(GEL);
     bool all_supported{true};
     const auto requested = [&](types::iso15118::SupportedAppProtocol protocol) {
         return std::find(supported_app_protocols.app_protocols.begin(), supported_app_protocols.app_protocols.end(),
@@ -1974,16 +1984,16 @@ bool ISO15118_chargerImpl::handle_update_supported_app_protocols(
 
     if (offered.empty()) {
         EVLOG_warning << "None of the requested app protocols is configured; rejecting protocol negotiation";
-        std::scoped_lock lock(GEL);
         configured_protocol_offer.clear();
         supported_protocol_offer_was_updated = true;
+        requested_protocol_offer = supported_app_protocols;
         apply_supported_protocols();
         return false;
     }
 
-    std::scoped_lock lock(GEL);
     configured_protocol_offer = offered;
     supported_protocol_offer_was_updated = true;
+    requested_protocol_offer = supported_app_protocols;
     apply_supported_protocols();
     const SupportedProtocolPolicyOptions options{fake_dc_requested, ac_energy_transfer_mode,
                                                  mod->config.supported_ISO15118_2, mod->config.supported_DIN70121,
@@ -2001,6 +2011,7 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
         EVLOG_warning << "Fake-DC was requested, but neither ISO 15118-2 nor DIN SPEC 70121 is usable";
     }
     setup_config.fake_dc_enabled = fake_dc_requested;
+    setup_config.reject_custom_protocol = supported_protocol_offer_was_updated and configured_protocol_offer.empty();
 
     // ready() builds the offer only after the TLS chain lookup, while EvseManager may deliver its first energy-mode
     // update concurrently. Filter the setup snapshot as well, so an early session cannot negotiate ISO 15118-20 before
@@ -2008,7 +2019,8 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
     if (configured_protocol_offer.empty() and supported_protocol_offer_was_updated) {
         setup_config.supported_protocols.clear();
         if (controller) {
-            controller->update_fake_dc_config(fake_dc_requested, setup_config.supported_protocols);
+            controller->update_fake_dc_config(fake_dc_requested, setup_config.supported_protocols,
+                                              setup_config.reject_custom_protocol);
         }
         return;
     }
@@ -2017,7 +2029,8 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
         if (fake_dc_requested) {
             setup_config.supported_protocols = std::move(policy.protocols);
             if (controller) {
-                controller->update_fake_dc_config(fake_dc_requested, setup_config.supported_protocols);
+                controller->update_fake_dc_config(fake_dc_requested, setup_config.supported_protocols,
+                                                  setup_config.reject_custom_protocol);
             }
         }
         return;
@@ -2028,7 +2041,7 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
     if (offered == setup_config.supported_protocols) {
         // Nothing changed; stay quiet (the energy transfer modes are updated during every session setup).
         if (controller) {
-            controller->update_fake_dc_config(fake_dc_requested, offered);
+            controller->update_fake_dc_config(fake_dc_requested, offered, setup_config.reject_custom_protocol);
         }
         return;
     }
@@ -2050,7 +2063,7 @@ void ISO15118_chargerImpl::apply_supported_protocols() {
 
     setup_config.supported_protocols = offered;
     if (controller) {
-        controller->update_fake_dc_config(fake_dc_requested, offered);
+        controller->update_fake_dc_config(fake_dc_requested, offered, setup_config.reject_custom_protocol);
     }
 }
 

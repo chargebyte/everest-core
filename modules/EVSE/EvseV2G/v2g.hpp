@@ -401,7 +401,7 @@ struct v2g_context {
 
     std::vector<std::vector<uint16_t>> supported_vas_services_per_provider;
 
-    bool connection_initiated;
+    std::atomic_bool connection_initiated{false};
 
     bool sdp_dlink_ready{false};
     std::atomic<long long int> sdp_dlink_ready_time{0};

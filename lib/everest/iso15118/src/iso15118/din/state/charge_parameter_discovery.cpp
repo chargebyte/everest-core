@@ -104,12 +104,18 @@ message_din::ChargeParameterDiscoveryResponse handle_request(const message_din::
 
     // [V2G-DC-398]: a DC session must not carry AC_EVChargeParameter.
     if (req.ac_ev_charge_parameter_present) {
+        if (config.fake_dc_enabled) {
+            logf_warning("Fake-DC DIN CPD rejected: AC_EVChargeParameter is present");
+        }
         return response_with_code(res, dt::ResponseCode::FAILED_WrongChargeParameter);
     }
 
     // Without it there are no EV limits to provision the power supply with, and nothing to report as the
     // EV's charging needs.
     if (not req.dc_ev_charge_parameter.has_value()) {
+        if (config.fake_dc_enabled) {
+            logf_warning("Fake-DC DIN CPD rejected: DC_EVChargeParameter is missing");
+        }
         return response_with_code(res, dt::ResponseCode::FAILED_WrongChargeParameter);
     }
 
@@ -118,6 +124,10 @@ message_din::ChargeParameterDiscoveryResponse handle_request(const message_din::
     const auto& evp = req.dc_ev_charge_parameter.value();
     if (evp.ev_maximum_current_limit < 0.0 or evp.ev_maximum_voltage_limit < 0.0 or
         (evp.ev_maximum_power_limit.has_value() and evp.ev_maximum_power_limit.value() < 0.0)) {
+        if (config.fake_dc_enabled) {
+            logf_warning("Fake-DC DIN CPD rejected: negative EV maximum limit (current=%f, voltage=%f)",
+                         evp.ev_maximum_current_limit, evp.ev_maximum_voltage_limit);
+        }
         return response_with_code(res, dt::ResponseCode::FAILED_WrongChargeParameter);
     }
 
@@ -125,6 +135,13 @@ message_din::ChargeParameterDiscoveryResponse handle_request(const message_din::
     // overlap -- so answer wrong charge parameter with the EVSE announcing that it shuts down.
     if (evp.ev_maximum_current_limit <= config.evse_minimum_current_limit or
         evp.ev_maximum_voltage_limit <= config.evse_minimum_voltage_limit) {
+        if (config.fake_dc_enabled) {
+            logf_warning("Fake-DC DIN CPD rejected: EV range does not exceed EVSE minimum "
+                         "(EV max current=%f A, EVSE min current=%f A, EV max voltage=%f V, "
+                         "EVSE min voltage=%f V)",
+                         evp.ev_maximum_current_limit, config.evse_minimum_current_limit, evp.ev_maximum_voltage_limit,
+                         config.evse_minimum_voltage_limit);
+        }
         res.dc_evse_charge_parameter->dc_evse_status.evse_status_code = dt::DcEvseStatusCode::EVSE_Shutdown;
         return response_with_code(res, dt::ResponseCode::FAILED_WrongChargeParameter);
     }
@@ -152,10 +169,20 @@ void ChargeParameterDiscovery::enter() {
 
 Result ChargeParameterDiscovery::on_request(const message_din::Variant& received) {
     if (const auto req = received.get_if<message_din::ChargeParameterDiscoveryRequest>()) {
+        const bool fake_dc_request = m_ctx.session_config.fake_dc_enabled;
+        if (fake_dc_request) {
+            if (req->dc_ev_charge_parameter.has_value()) {
+                logf_info("Fake-DC DIN CPD request: transfer_mode=%d, EVRESSOC=%d",
+                          static_cast<int>(req->ev_requested_energy_transfer_type),
+                          static_cast<int>(req->dc_ev_charge_parameter->dc_ev_status.ev_ress_soc));
+            } else {
+                logf_warning("Fake-DC DIN CPD request has no DC_EVChargeParameter");
+            }
+        }
+
         // EIM/SIL: the DC parameters are available immediately, so EVSEProcessing finishes at once.
         auto res = handle_request(*req, m_ctx.session_config, true, m_ctx.get_session_id(),
                                   m_ctx.evse().charger_stop_requested, m_ctx.error_status_code());
-        const bool fake_dc_request = m_ctx.session_config.fake_dc_enabled;
         if (fake_dc_request and m_ctx.fake_dc_shutdown_pending) {
             auto& status = res.dc_evse_charge_parameter->dc_evse_status;
             status.evse_notification = dt::EvseNotification::StopCharging;
@@ -181,6 +208,10 @@ Result ChargeParameterDiscovery::on_request(const message_din::Variant& received
                 m_ctx.fake_dc_shutdown_pending = true;
             }
         }
+        if (fake_dc_request) {
+            logf_info("Fake-DC DIN CPD response: response_code=%d, shutdown_pending=%d",
+                      static_cast<int>(res.response_code), m_ctx.fake_dc_shutdown_pending);
+        }
         m_ctx.respond(res);
 
         if (res.response_code >= dt::ResponseCode::FAILED) {
@@ -189,6 +220,8 @@ Result ChargeParameterDiscovery::on_request(const message_din::Variant& received
         }
 
         if (fake_dc_request and m_ctx.fake_dc_shutdown_pending) {
+            logf_info("Fake-DC DIN CPD forwarding EVRESSOC=%d",
+                      static_cast<int>(req->dc_ev_charge_parameter->dc_ev_status.ev_ress_soc));
             m_ctx.report_ev_status(req->dc_ev_charge_parameter->dc_ev_status);
             return {};
         }

@@ -28,9 +28,10 @@ public:
     SapEngineHelper(std::vector<ProtocolId> supported_protocols, bool tls_active, bool fake_dc = false,
                     std::optional<std::string> custom_protocol = std::nullopt,
                     std::vector<message_20::datatypes::ServiceCategory> supported_energy_services = {},
-                    bool selecting_sap_based_on_energy_service = false) :
+                    bool selecting_sap_based_on_energy_service = false, bool reject_custom_protocol = false) :
         config(make_config(std::move(supported_protocols), fake_dc, std::move(custom_protocol),
-                           std::move(supported_energy_services), selecting_sap_based_on_energy_service)),
+                           std::move(supported_energy_services), selecting_sap_based_on_energy_service,
+                           reject_custom_protocol)),
         engine(io::StreamOutputView{buffer.data(), buffer.size()}, config, make_callbacks(), tls_active) {
         io::set_logging_callback([this](LogLevel level, const std::string& message) {
             if (level == LogLevel::Error) {
@@ -83,11 +84,12 @@ private:
     static session::SessionConfig
     make_config(std::vector<ProtocolId> supported_protocols, bool fake_dc, std::optional<std::string> custom_protocol,
                 std::vector<message_20::datatypes::ServiceCategory> supported_energy_services,
-                bool selecting_sap_based_on_energy_service) {
+                bool selecting_sap_based_on_energy_service, bool reject_custom_protocol) {
         session::EvseSetupConfig setup;
         setup.supported_protocols = std::move(supported_protocols);
         setup.fake_dc_enabled = fake_dc;
         setup.custom_protocol = std::move(custom_protocol);
+        setup.reject_custom_protocol = reject_custom_protocol;
         setup.supported_energy_services = std::move(supported_energy_services);
         setup.selecting_sap_based_on_energy_service = selecting_sap_based_on_energy_service;
         return session::SessionConfig{std::move(setup)};
@@ -115,6 +117,44 @@ private:
 };
 
 } // namespace
+
+TEST_CASE("SapEngine rejects all standard offers when no protocols are enabled") {
+    SapEngineHelper helper{{}, false, false, std::nullopt, {}, false, true};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(ISO20_AC_PROTOCOL_NAMESPACE, 1, 0, 1, 1));
+    request.app_protocol.push_back(make_protocol(ISO2_NAMESPACE, 2, 0, 2, 2));
+    request.app_protocol.push_back(make_protocol(DIN70121_NAMESPACE, 2, 0, 3, 3));
+
+    helper.feed(request);
+
+    REQUIRE(helper.take_response().response_code ==
+            message_20::SupportedAppProtocolResponse::ResponseCode::Failed_NoNegotiation);
+    REQUIRE(helper.selected_protocols.empty());
+}
+
+TEST_CASE("SapEngine rejects custom namespace when the protocol offer was explicitly disabled") {
+    constexpr auto custom_namespace = "urn:iso:std:iso:15118:-20:AABB";
+    SapEngineHelper helper{{}, false, false, custom_namespace, {}, false, true};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(custom_namespace, 1, 0, 1, 1));
+
+    helper.feed(request);
+
+    REQUIRE(helper.take_response().response_code ==
+            message_20::SupportedAppProtocolResponse::ResponseCode::Failed_NoNegotiation);
+}
+
+TEST_CASE("SapEngine retains custom-only configuration without an explicit empty offer") {
+    constexpr auto custom_namespace = "urn:iso:std:iso:15118:-20:AABB";
+    SapEngineHelper helper{{}, false, false, custom_namespace};
+    message_20::SupportedAppProtocolRequest request;
+    request.app_protocol.push_back(make_protocol(custom_namespace, 1, 0, 1, 1));
+
+    helper.feed(request);
+
+    REQUIRE(helper.take_response().response_code ==
+            message_20::SupportedAppProtocolResponse::ResponseCode::OK_SuccessfulNegotiation);
+}
 
 TEST_CASE("SapEngine refuses a custom ISO 15118-20 namespace during Fake DC") {
     constexpr auto custom_namespace = "urn:iso:std:iso:15118:-20:AABB";

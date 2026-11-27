@@ -477,10 +477,12 @@ void TbdController::update_pre20_energy_transfer_modes(const std::vector<shared_
     evse_setup.handle()->pre20_energy_transfer_modes = modes;
 }
 
-void TbdController::update_fake_dc_config(bool enabled, const std::vector<ProtocolId>& protocols) {
+void TbdController::update_fake_dc_config(bool enabled, const std::vector<ProtocolId>& protocols,
+                                          bool reject_custom_protocol) {
     auto setup = evse_setup.handle();
     setup->fake_dc_enabled = enabled;
     setup->supported_protocols = protocols;
+    setup->reject_custom_protocol = reject_custom_protocol;
 }
 
 void TbdController::update_ac_setup_config(const d20::AcSetupConfig& ac_setup_config) {

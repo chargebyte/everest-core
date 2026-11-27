@@ -162,7 +162,9 @@ public:
     // trigger replug sequence while charging to switch number of phases
     bool switch_three_phases_while_charging(bool n);
     bool start_reinit();
+    bool start_fake_dc_reinit(bool hlc_link_active);
     bool start_reinit(const types::evse_manager::ReinitConfiguration& configuration);
+    bool start_reinit(const types::evse_manager::ReinitConfiguration& configuration, bool wait_for_ready_notification);
 
     bool pause_charging();
     bool resume_charging();
@@ -205,6 +207,7 @@ public:
 
     void set_matching_started(bool m);
     void set_slac_matched(bool matched);
+    void set_slac_unmatched(bool unmatched);
     void set_dlink_ready(bool ready);
 
     void notify_currentdemand_started();
@@ -539,6 +542,8 @@ private:
         EvseState last_state_detect_state_change;
         EvseState last_state;
         bool reinit_ready_notification_pending{false};
+        bool reinit_ready_hold{false};
+        std::uint64_t reinit_ready_generation{0};
 
         bool pp_warning_printed{false};
         bool no_energy_warning_printed{false};
@@ -569,6 +574,8 @@ private:
         bool dc_statistics_printed{false};
         bool stopping_charging_timeout_handled{false};
         bool reinit_slac_reset_requested{false};
+        bool fake_dc_reinit{false};
+        bool slac_unmatched{false};
 
         types::evse_manager::ChargingPausedEVSEReasons last_charging_paused_evse_reasons;
 

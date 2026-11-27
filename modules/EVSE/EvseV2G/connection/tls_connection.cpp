@@ -66,9 +66,9 @@ void process_connection_thread(std::shared_ptr<tls::ServerConnection> con, struc
     }
 
     connection->tls_handshake_failed = !tls_accepted;
-    connection->ctx->connection_initiated = false;
 
     ::connection_teardown(connection.get());
+    connection->ctx->connection_initiated = false;
 }
 
 void handle_new_connection_cb(tls::Server::ConnectionPtr&& con, struct v2g_context* ctx) {

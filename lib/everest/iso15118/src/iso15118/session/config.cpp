@@ -253,6 +253,7 @@ SessionConfig::SessionConfig(EvseSetupConfig config) :
     powersupply_limits(config.powersupply_limits),
     supported_control_mobility_modes(std::move(config.control_mobility_modes)),
     custom_protocol(std::move(config.custom_protocol)),
+    reject_custom_protocol(config.reject_custom_protocol),
     selecting_sap_based_on_energy_service(config.selecting_sap_based_on_energy_service),
     supported_protocols(std::move(config.supported_protocols)),
     iso2_pnc_enabled(config.iso2_pnc_enabled),

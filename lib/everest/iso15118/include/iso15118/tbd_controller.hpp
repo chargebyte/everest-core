@@ -100,7 +100,7 @@ public:
     // session; the -20 service categories above stay the ISO 15118-20 view.
     void update_pre20_energy_transfer_modes(const std::vector<shared_datatypes::EnergyTransferMode>&);
     // Updates the Fake-DC policy and protocol offer together for a consistent next-session snapshot.
-    void update_fake_dc_config(bool enabled, const std::vector<ProtocolId>& protocols);
+    void update_fake_dc_config(bool enabled, const std::vector<ProtocolId>& protocols, bool reject_custom_protocol);
     // The value-added services external providers offer, for the ISO 15118-2 ServiceList (name, scope,
     // free flag per service; the -20 view stays update_supported_vas_services). Applied to the next session.
     void update_pre20_vas_services(const std::vector<session::VasService>&);

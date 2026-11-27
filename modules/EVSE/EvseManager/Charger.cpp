@@ -129,6 +129,7 @@ void Charger::main_thread() {
         }
 
         bool notify_reinit_ready = false;
+        std::uint64_t reinit_ready_generation = 0;
         {
             Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_mainloop);
             // update power limits
@@ -137,10 +138,14 @@ void Charger::main_thread() {
             // to be done on regular intervals independent from events)
             run_state_machine();
             notify_reinit_ready = internal_context.reinit_ready_notification_pending;
-            internal_context.reinit_ready_notification_pending = false;
+            reinit_ready_generation = internal_context.reinit_ready_generation;
         }
         if (notify_reinit_ready) {
             signal_reinit_ready();
+            Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_mainloop);
+            if (reinit_ready_generation == internal_context.reinit_ready_generation) {
+                internal_context.reinit_ready_notification_pending = false;
+            }
         }
         check_ac_with_soc_timeout();
     }
@@ -196,6 +201,7 @@ void Charger::run_state_machine() {
 
         if (initialize_state and shared_context.current_state == EvseState::Reinit) {
             internal_context.reinit_ready_notification_pending = true;
+            ++internal_context.reinit_ready_generation;
         }
 
         if (initialize_state) {
@@ -254,6 +260,9 @@ void Charger::run_state_machine() {
         case EvseState::Idle:
             // make sure we signal availability to potential new cars
             if (initialize_state) {
+                internal_context.fake_dc_reinit = false;
+                internal_context.reinit_ready_hold = false;
+                internal_context.slac_unmatched = false;
                 bcb_toggle_reset();
                 shared_context.iec_allow_close_contactor = false;
                 if (config_context.charge_mode == ChargeMode::AC) {
@@ -800,7 +809,9 @@ void Charger::run_state_machine() {
                     break;
                 }
             }
-            if (not initialize_state and internal_context.reinit_deadline.has_value() &&
+            if (not initialize_state and
+                (not internal_context.reinit_ready_hold or not internal_context.reinit_ready_notification_pending) and
+                internal_context.reinit_deadline.has_value() &&
                 std::chrono::steady_clock::now() >= internal_context.reinit_deadline.value()) {
                 internal_context.reinit_deadline.reset();
                 session_log.evse(false, "Restarting charging negotiation after reinitialization");
@@ -810,6 +821,8 @@ void Charger::run_state_machine() {
                     signal_slac_start();
                 }
                 shared_context.hlc_charging_active = config_context.charge_mode == ChargeMode::DC;
+                internal_context.fake_dc_reinit = false;
+                internal_context.reinit_ready_hold = false;
                 set_state(EvseState::WaitingForAuthentication);
             }
             break;
@@ -1314,7 +1327,8 @@ void Charger::run_state_machine() {
                         signal_hlc_stop_charging();
                         internal_context.stopping_hlc_stop_requested = true;
                     }
-                } else if (not reinit or not internal_context.session_stop_pwm_off_deadline.has_value()) {
+                } else if (not reinit or (not internal_context.fake_dc_reinit and
+                                          not internal_context.session_stop_pwm_off_deadline.has_value())) {
                     cp_state_X1();
                 }
             }
@@ -1348,6 +1362,7 @@ void Charger::run_state_machine() {
 
             if (internal_context.stopping_charging_timeout_handled and
                 shared_context.stopping_charging_target_state == EvseState::Reinit &&
+                not internal_context.fake_dc_reinit and
                 (shared_context.matching_started or shared_context.slac_matched) and
                 time_in_current_state > internal_context.stopping_charging_timeout_ms + STOPPING_CHARGING_TIMEOUT_MS) {
                 EVLOG_warning << "StoppingCharging: SLAC did not become unmatched after reinitialization timeout.";
@@ -1365,7 +1380,14 @@ void Charger::run_state_machine() {
                 internal_context.stopping_charging_timeout_handled = true;
                 if (shared_context.stopping_charging_target_state == EvseState::Reinit) {
                     if (not internal_context.session_stop_pwm_off_deadline.has_value()) {
-                        cp_state_X1();
+                        if (internal_context.fake_dc_reinit) {
+                            if (not internal_context.reinit_slac_reset_requested) {
+                                internal_context.reinit_slac_reset_requested = true;
+                                signal_slac_reset();
+                            }
+                        } else {
+                            cp_state_X1();
+                        }
                     }
                     shared_context.hlc_charging_active = false;
                     shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Unknown;
@@ -1380,6 +1402,8 @@ void Charger::run_state_machine() {
             }
 
             if (shared_context.stopping_charging_target_state == EvseState::Finished) {
+                internal_context.fake_dc_reinit = false;
+                internal_context.reinit_ready_hold = false;
                 shared_context.stopping_charging_target_state.reset();
                 set_state(EvseState::Finished);
                 break;
@@ -1387,14 +1411,16 @@ void Charger::run_state_machine() {
 
             if (shared_context.stopping_charging_target_state == EvseState::Reinit) {
                 const bool reinit_hlc_stopped =
-                    !shared_context.hlc_charging_active ||
+                    internal_context.fake_dc_reinit || !shared_context.hlc_charging_active ||
                     shared_context.hlc_charging_terminate_pause != HlcTerminatePause::Unknown;
 
                 const bool retain_time_elapsed = not internal_context.session_stop_pwm_off_deadline.has_value();
 
-                const bool slac_active = shared_context.matching_started or shared_context.slac_matched;
-                if (reinit_hlc_stopped and retain_time_elapsed and slac_active and
-                    not internal_context.reinit_slac_reset_requested) {
+                const bool slac_active = internal_context.fake_dc_reinit
+                                             ? not internal_context.slac_unmatched
+                                             : shared_context.matching_started or shared_context.slac_matched;
+                if (not internal_context.fake_dc_reinit and reinit_hlc_stopped and retain_time_elapsed and
+                    slac_active and not internal_context.reinit_slac_reset_requested) {
                     internal_context.reinit_slac_reset_requested = true;
                     signal_slac_reset();
                 }
@@ -2038,9 +2064,39 @@ bool Charger::start_reinit() {
     return start_reinit(types::evse_manager::ReinitConfiguration{});
 }
 
-bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& configuration) {
+bool Charger::start_fake_dc_reinit(bool hlc_link_active) {
     Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
-    return start_reinit_locked(configuration);
+    const auto hlc_was_active = shared_context.hlc_charging_active;
+    const auto hlc_termination = shared_context.hlc_charging_terminate_pause;
+    const auto stop_was_requested = internal_context.stopping_hlc_stop_requested;
+    if (not hlc_link_active) {
+        shared_context.hlc_charging_active = false;
+        shared_context.hlc_charging_terminate_pause = HlcTerminatePause::Terminate;
+        internal_context.stopping_hlc_stop_requested = true;
+    }
+    if (not start_reinit_locked({})) {
+        shared_context.hlc_charging_active = hlc_was_active;
+        shared_context.hlc_charging_terminate_pause = hlc_termination;
+        internal_context.stopping_hlc_stop_requested = stop_was_requested;
+        return false;
+    }
+    internal_context.fake_dc_reinit = true;
+    internal_context.reinit_ready_hold = true;
+    return true;
+}
+
+bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& configuration) {
+    return start_reinit(configuration, false);
+}
+
+bool Charger::start_reinit(const types::evse_manager::ReinitConfiguration& configuration,
+                           bool wait_for_ready_notification) {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_start_reinit);
+    if (not start_reinit_locked(configuration)) {
+        return false;
+    }
+    internal_context.reinit_ready_hold = wait_for_ready_notification;
+    return true;
 }
 
 bool Charger::start_reinit_locked(const types::evse_manager::ReinitConfiguration& configuration) {
@@ -2082,6 +2138,7 @@ bool Charger::start_reinit_locked(const types::evse_manager::ReinitConfiguration
 
     shared_context.reinit_configuration = {resolved_configuration.state_transition, resolved_configuration.duration};
     internal_context.reinit_slac_reset_requested = false;
+    internal_context.reinit_ready_hold = false;
     if (shared_context.current_state == EvseState::StoppingCharging) {
         const bool hlc_stop_already_requested = internal_context.stopping_hlc_stop_requested;
         shared_context.stopping_charging_target_state = EvseState::Reinit;
@@ -2761,6 +2818,11 @@ void Charger::set_slac_matched(bool matched) {
     shared_context.matching_started = matched or shared_context.matching_started;
 }
 
+void Charger::set_slac_unmatched(bool unmatched) {
+    Everest::scoped_lock_timeout lock(state_machine_mutex, Everest::MutexDescription::Charger_set_slac_unmatched);
+    internal_context.slac_unmatched = unmatched;
+}
+
 void Charger::reset_dc_enforce_target_limits_timer() {
     last_dc_enforce_target_limits = std::chrono::steady_clock::now();
 }
@@ -2858,7 +2920,8 @@ bool Charger::dlink_terminate() {
         }
         if (not link_lost_during_setup) {
             shared_context.hlc_allow_close_contactor = false;
-            if (not internal_context.session_stop_pwm_off_deadline.has_value()) {
+            if (not internal_context.fake_dc_reinit and
+                not internal_context.session_stop_pwm_off_deadline.has_value()) {
                 // Same retain-timer guard as dlink_pause() above.
                 cp_state_X1();
             }
@@ -2946,7 +3009,8 @@ void Charger::dlink_error() {
                 signal_dc_supply_off();
             }
             bsp->allow_power_on(false, types::evse_board_support::Reason::PowerOff);
-            if (not internal_context.session_stop_pwm_off_deadline.has_value()) {
+            if (not internal_context.fake_dc_reinit and
+                not internal_context.session_stop_pwm_off_deadline.has_value()) {
                 cp_state_X1();
             }
             return;
