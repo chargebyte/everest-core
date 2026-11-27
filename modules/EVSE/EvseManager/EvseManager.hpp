@@ -126,6 +126,7 @@ struct Conf {
     int cable_check_relays_closed_timeout_s;
     int cable_check_measurement_timeout_s;
     bool cable_check_wait_below_60V_before_finish;
+    bool allow_dc_charging_during_renegotiation;
     bool hack_skoda_enyaq;
     int hack_present_current_offset;
     std::string ev_side_voltage_source;
@@ -590,6 +591,7 @@ private:
     static constexpr double CABLECHECK_VOLTAGE_REACHED_WINDOW_V{10.};
 
     std::atomic_bool current_demand_active{false};
+    std::atomic_bool renegotiation_while_charging{false};
     std::atomic_bool slac_unmatched{false};
     // Running count of Control-Pilot B->C transitions in the current session. Incremented on every B->C
     // edge and pushed to the SLAC module via count_bc() so EvseSlac can detect BCB toggles for
