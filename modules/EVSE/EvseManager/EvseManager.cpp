@@ -2144,7 +2144,7 @@ void EvseManager::handle_dlink_ready(bool value) {
         if (not value) {
             hlc_link_in_use = false;
             fake_dc_stop_hlc_pending = false;
-            mac_only_hlc_attempt_active = false;
+            // SLAC can report UNMATCHED before HLC reports that its connection has closed.
         }
         detail::begin_fake_dc_attempt_on_dlink_ready(
             value, fake_dc_enabled.load(), fake_dc_attempt_consumed, fake_dc_attempt_active, fake_dc_attempt_generation,
