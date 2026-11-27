@@ -70,11 +70,11 @@ prefix wins, and unmatched vehicles use the default. MAC rules require the SLAC 
 address. Rules can be overwritten but not removed until restart. Fake DC offers DIN 70121 when the HLC module
 supports it and optionally ISO 15118-2 according to ``allow_isod2``; ISO 15118-20 is excluded during Fake DC.
 Configuration is applied before the next HLC negotiation and is not persisted across a restart.
-With MAC rules, HLC remains enabled during initial SLAC matching even if the default protocols are disabled. A matching
-MAC rule with all protocol flags disabled keeps HLC active through SAP, where negotiation is rejected before the
-configured reinitialization leads to Basic AC. An unmatched MAC, or no MAC within 500 ms, selects the default policy;
-when all default protocol flags are disabled, the charger reinitializes to Basic AC without SAP. With no MAC rules and
-all protocol flags disabled, the session starts in Basic AC.
+At unplug, MAC rules keep HLC enabled during initial SLAC matching even if the default protocols are disabled. A
+matching MAC rule with all protocol flags disabled keeps HLC active through SupportedAppProtocol (SAP), where
+negotiation is rejected. After HLC reports teardown, the configured reinitialization leads to Basic AC. If no MAC
+arrives within 500 ms, the default policy applies; with all default protocol flags disabled, the charger reinitializes
+to Basic AC without SAP. With no MAC rules and all protocol flags disabled, the session starts in Basic AC.
 
 Captive cable mode
 ~~~~~~~~~~~~~~~~~~

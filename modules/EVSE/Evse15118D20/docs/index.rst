@@ -37,6 +37,18 @@ pending stop. In ISO 15118-2, Fake-DC accepts only ``DC_core`` and
 A configured custom protocol namespace is not negotiated while Fake-DC is
 active. Changes to the Fake-DC setting apply to the next session.
 
+Runtime protocol offer
+~~~~~~~~~~~~~~~~~~~~~~
+
+EvseManager can narrow the module's protocol offer for the next session with
+``update_supported_app_protocols``. Protocols not enabled in the module
+configuration remain unavailable. An explicit empty offer rejects
+SupportedAppProtocol with ``Failed_NoNegotiation`` and also disables configured
+custom protocol namespaces for that handshake. If the command arrives before
+the module has finished preparing its TLS-backed protocol offer, the request is
+retained and filtered against the protocols available when the controller is
+ready.
+
 TLS and SECC leaf certificates
 ==============================
 

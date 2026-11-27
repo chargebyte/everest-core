@@ -166,9 +166,11 @@ cmds:
       Update the supported charging protocols (DIN70121, ISO15118-2, ISO15118-20). Defaults are typically
       configured already; if this command is not called, the module keeps its default set of supported protocols.
       This command can be used to apply session-specific protocol policies, including AC policies selected by EV MAC.
+      An empty app_protocols list disables all protocol offers; the next SupportedAppProtocol request must be rejected
+      with Failed_NoNegotiation, including requests for custom protocol namespaces.
     arguments:
       supported_app_protocols:
-        description: Supported communication protocols advertised by the EVSE
+        description: Supported communication protocols advertised by the EVSE; an empty list explicitly offers none
         type: object
         $ref: /iso15118#/SupportedAppProtocols
     result:
