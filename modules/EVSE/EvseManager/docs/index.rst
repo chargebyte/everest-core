@@ -72,10 +72,10 @@ supports it and optionally ISO 15118-2 according to ``allow_isod2``; ISO 15118-2
 Configuration is applied before the next HLC negotiation and is not persisted across a restart.
 For a matching MAC rule with all protocol flags disabled, HLC remains active through SupportedAppProtocol.
 The HLC module rejects the negotiation, closes the connection, and the configured reinitialization leads to Basic AC.
-With MAC rules and all protocol flags disabled in the default configuration, unmatched vehicles first use HLC for MAC
-discovery and then apply the default CP reinitialization before Basic AC. If no MAC arrives within 500 ms, that same
-default policy is selected. With no MAC rules and all protocol flags disabled in the default configuration, the session
-starts in Basic AC.
+Before SLAC supplies a MAC, the default policy applies. A matching MAC rule overrides it; unmatched vehicles use the
+default policy, as do sessions where no MAC arrives within 500 ms. When the selected MAC rule disables all protocols,
+HLC remains active through SAP rejection, after which the configured reinitialization leads to Basic AC. With no MAC
+rules and all protocol flags disabled in the default configuration, the session starts in Basic AC.
 
 Captive cable mode
 ~~~~~~~~~~~~~~~~~~
