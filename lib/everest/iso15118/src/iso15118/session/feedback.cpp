@@ -25,6 +25,10 @@ void Feedback::dc_max_limits(const feedback::DcMaximumLimits& max_limits) const 
     call_if_available(callbacks.dc_max_limits, max_limits);
 }
 
+void Feedback::dc_evse_adjusted_limits(const d20::DcTransferLimits& adjusted_limits) const {
+    call_if_available(callbacks.dc_evse_adjusted_limits, adjusted_limits);
+}
+
 void Feedback::dc_ev_status(const feedback::DcEvStatus& ev_status) const {
     call_if_available(callbacks.dc_ev_status, ev_status);
 }
@@ -90,6 +94,10 @@ void Feedback::ev_termination(const std::string& ev_termination_code,
 
 void Feedback::session_stop_res_sent(feedback::SessionStopAction action) const {
     call_if_available(callbacks.session_stop_res_sent, action);
+}
+
+void Feedback::response_code(const iso15118::message_20::datatypes::ResponseCode& code) const {
+    call_if_available(callbacks.response_code, code);
 }
 
 std::optional<dt::ServiceParameterList> Feedback::get_vas_parameters(uint16_t vas_id) const {

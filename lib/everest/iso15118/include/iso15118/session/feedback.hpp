@@ -166,6 +166,7 @@ struct Callbacks {
     std::function<void(float)> dc_pre_charge_target_voltage;
     std::function<void(const DcChargeLoopReq&)> dc_charge_loop_req;
     std::function<void(const DcMaximumLimits&)> dc_max_limits;
+    std::function<void(const d20::DcTransferLimits&)> dc_evse_adjusted_limits;
 
     // Emitted on change only, since the EV repeats it in every DC request.
     std::function<void(const DcEvStatus&)> dc_ev_status;
@@ -197,7 +198,6 @@ struct Callbacks {
     std::function<void(const dt::VasSelectedServiceList&)> selected_vas_services;
     std::function<void(const AcLimits&)> ac_limits;
     std::function<void(const std::string&, const std::string&)> ev_termination;
-
     // Anchors the CP-oscillator retain time [V2G-DC-968]; does NOT imply link teardown.
     std::function<void(SessionStopAction)> session_stop_res_sent;
 
@@ -207,6 +207,7 @@ struct Callbacks {
     std::function<void(const std::string& emaid, const std::string& contract_chain_pem)> require_auth_pnc;
 
     std::function<void(const CertificateRequest&)> certificate_request;
+    std::function<void(const iso15118::message_20::datatypes::ResponseCode&)> response_code;
 };
 
 } // namespace feedback
@@ -219,6 +220,7 @@ public:
     void dc_pre_charge_target_voltage(float) const;
     void dc_charge_loop_req(const feedback::DcChargeLoopReq&) const;
     void dc_max_limits(const feedback::DcMaximumLimits&) const;
+    void dc_evse_adjusted_limits(const d20::DcTransferLimits&) const;
     void dc_ev_status(const feedback::DcEvStatus&) const;
     void ev_charge_parameters(const feedback::EvChargeParameters&) const;
     void dc_ev_charge_progress(const feedback::DcEvChargeProgress&) const;
@@ -245,6 +247,7 @@ public:
     void selected_payment_option(shared_datatypes::PaymentOption) const;
     void require_auth_pnc(const std::string& emaid, const std::string& contract_chain_pem) const;
     void certificate_request(const feedback::CertificateRequest&) const;
+    void response_code(const iso15118::message_20::datatypes::ResponseCode&) const;
 
 private:
     feedback::Callbacks callbacks;
